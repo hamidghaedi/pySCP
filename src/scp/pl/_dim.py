@@ -145,8 +145,16 @@ def cell_dim_plot(
     frame = pd.DataFrame(
         {"x": emb[:, xi], "y": emb[:, yi]}, index=pd.Index(adata.obs_names)
     )
+    # Capture the level order HERE, while the Categorical still exists.
+    # Storing `.to_numpy()` flattens it to an object array, and re-deriving the
+    # levels from those values later yields first-appearance-in-data order
+    # rather than the column's declared order -- which silently shifts every
+    # palette index and legend position.
+    group_levels: dict[str, list[str]] = {}
     for g in groups:
-        frame[g] = as_ordered_categorical(obs[g], show_na=show_na).to_numpy()
+        cat = as_ordered_categorical(obs[g], show_na=show_na)
+        group_levels[g] = [str(lv) for lv in cat.cat.categories]
+        frame[g] = cat.to_numpy()
     split_levels: list[str | None]
     if split_by is None:
         split_levels = [None]
@@ -188,8 +196,7 @@ def cell_dim_plot(
 
     seen_legend: set[str] = set()
     for g in groups:
-        cat = as_ordered_categorical(pd.Series(frame[g], index=frame.index), show_na=show_na)
-        levels = list(cat.cat.categories)
+        levels = group_levels[g]
         colors = discrete_palette(levels, palette=palette, palcolor=palcolor)
 
         for s in split_levels:

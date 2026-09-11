@@ -72,3 +72,24 @@ def test_force_guard_raises_instead_of_prompting(adata):
 def test_unimplemented_overlays_raise_with_a_pointer(adata, kw):
     with pytest.raises(NotImplementedError, match="milestones"):
         scp.pl.cell_dim_plot(adata, "leiden", **kw)
+
+
+def test_declared_level_order_survives(adata):
+    """A column's declared level order must drive the legend, not the order the
+    values happen to appear in.
+
+    Regression: the frame stored `as_ordered_categorical(...).to_numpy()`, which
+    drops the Categorical, so the levels were re-derived from raw values further
+    down and came back in first-appearance order. Every palette index and legend
+    position shifted by that permutation.
+    """
+    import pandas as pd
+
+    ad = adata.copy()
+    declared = ["D", "C", "B", "A"]  # deliberately not the data's appearance order
+    ad.obs["ordered"] = pd.Categorical(ad.obs["leiden"].astype(str), categories=declared)
+
+    fig = scp.pl.cell_dim_plot(ad, "ordered")
+    # show_stat is on by default, so labels read "D(141)"; compare the level only.
+    labels = [t.get_text().split("(")[0] for t in fig.legends[0].get_texts()]
+    assert labels == declared, f"legend followed appearance order, not declared: {labels}"
