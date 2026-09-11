@@ -1,0 +1,4972 @@
+{
+ "BrBG": {
+  "type": "continuous",
+  "colors": [
+   "#003C30",
+   "#01665E",
+   "#35978F",
+   "#80CDC1",
+   "#C7EAE5",
+   "#F5F5F5",
+   "#F6E8C3",
+   "#DFC27D",
+   "#BF812D",
+   "#8C510A",
+   "#543005"
+  ]
+ },
+ "PiYG": {
+  "type": "continuous",
+  "colors": [
+   "#276419",
+   "#4D9221",
+   "#7FBC41",
+   "#B8E186",
+   "#E6F5D0",
+   "#F7F7F7",
+   "#FDE0EF",
+   "#F1B6DA",
+   "#DE77AE",
+   "#C51B7D",
+   "#8E0152"
+  ]
+ },
+ "PRGn": {
+  "type": "continuous",
+  "colors": [
+   "#00441B",
+   "#1B7837",
+   "#5AAE61",
+   "#A6DBA0",
+   "#D9F0D3",
+   "#F7F7F7",
+   "#E7D4E8",
+   "#C2A5CF",
+   "#9970AB",
+   "#762A83",
+   "#40004B"
+  ]
+ },
+ "PuOr": {
+  "type": "continuous",
+  "colors": [
+   "#2D004B",
+   "#542788",
+   "#8073AC",
+   "#B2ABD2",
+   "#D8DAEB",
+   "#F7F7F7",
+   "#FEE0B6",
+   "#FDB863",
+   "#E08214",
+   "#B35806",
+   "#7F3B08"
+  ]
+ },
+ "RdBu": {
+  "type": "continuous",
+  "colors": [
+   "#053061",
+   "#2166AC",
+   "#4393C3",
+   "#92C5DE",
+   "#D1E5F0",
+   "#F7F7F7",
+   "#FDDBC7",
+   "#F4A582",
+   "#D6604D",
+   "#B2182B",
+   "#67001F"
+  ]
+ },
+ "RdGy": {
+  "type": "continuous",
+  "colors": [
+   "#1A1A1A",
+   "#4D4D4D",
+   "#878787",
+   "#BABABA",
+   "#E0E0E0",
+   "#FFFFFF",
+   "#FDDBC7",
+   "#F4A582",
+   "#D6604D",
+   "#B2182B",
+   "#67001F"
+  ]
+ },
+ "RdYlBu": {
+  "type": "continuous",
+  "colors": [
+   "#313695",
+   "#4575B4",
+   "#74ADD1",
+   "#ABD9E9",
+   "#E0F3F8",
+   "#FFFFBF",
+   "#FEE090",
+   "#FDAE61",
+   "#F46D43",
+   "#D73027",
+   "#A50026"
+  ]
+ },
+ "RdYlGn": {
+  "type": "continuous",
+  "colors": [
+   "#006837",
+   "#1A9850",
+   "#66BD63",
+   "#A6D96A",
+   "#D9EF8B",
+   "#FFFFBF",
+   "#FEE08B",
+   "#FDAE61",
+   "#F46D43",
+   "#D73027",
+   "#A50026"
+  ]
+ },
+ "Spectral": {
+  "type": "continuous",
+  "colors": [
+   "#5E4FA2",
+   "#3288BD",
+   "#66C2A5",
+   "#ABDDA4",
+   "#E6F598",
+   "#FFFFBF",
+   "#FEE08B",
+   "#FDAE61",
+   "#F46D43",
+   "#D53E4F",
+   "#9E0142"
+  ]
+ },
+ "Accent": {
+  "type": "discrete",
+  "colors": [
+   "#7FC97F",
+   "#BEAED4",
+   "#FDC086",
+   "#FFFF99",
+   "#386CB0",
+   "#F0027F",
+   "#BF5B17",
+   "#666666"
+  ]
+ },
+ "Dark2": {
+  "type": "discrete",
+  "colors": [
+   "#1B9E77",
+   "#D95F02",
+   "#7570B3",
+   "#E7298A",
+   "#66A61E",
+   "#E6AB02",
+   "#A6761D",
+   "#666666"
+  ]
+ },
+ "Paired": {
+  "type": "discrete",
+  "colors": [
+   "#A6CEE3",
+   "#1F78B4",
+   "#B2DF8A",
+   "#33A02C",
+   "#FDBF6F",
+   "#FF7F00",
+   "#FB9A99",
+   "#E31A1C",
+   "#CAB2D6",
+   "#6A3D9A",
+   "#FFFF99",
+   "#B15928"
+  ]
+ },
+ "Pastel1": {
+  "type": "discrete",
+  "colors": [
+   "#FBB4AE",
+   "#B3CDE3",
+   "#CCEBC5",
+   "#DECBE4",
+   "#FED9A6",
+   "#FFFFCC",
+   "#E5D8BD",
+   "#FDDAEC",
+   "#F2F2F2"
+  ]
+ },
+ "Pastel2": {
+  "type": "discrete",
+  "colors": [
+   "#B3E2CD",
+   "#FDCDAC",
+   "#CBD5E8",
+   "#F4CAE4",
+   "#E6F5C9",
+   "#FFF2AE",
+   "#F1E2CC",
+   "#CCCCCC"
+  ]
+ },
+ "Set1": {
+  "type": "discrete",
+  "colors": [
+   "#E41A1C",
+   "#377EB8",
+   "#4DAF4A",
+   "#984EA3",
+   "#FF7F00",
+   "#FFFF33",
+   "#A65628",
+   "#F781BF",
+   "#999999"
+  ]
+ },
+ "Set2": {
+  "type": "discrete",
+  "colors": [
+   "#66C2A5",
+   "#FC8D62",
+   "#8DA0CB",
+   "#E78AC3",
+   "#A6D854",
+   "#FFD92F",
+   "#E5C494",
+   "#B3B3B3"
+  ]
+ },
+ "Set3": {
+  "type": "discrete",
+  "colors": [
+   "#8DD3C7",
+   "#FFFFB3",
+   "#BEBADA",
+   "#FB8072",
+   "#80B1D3",
+   "#FDB462",
+   "#B3DE69",
+   "#FCCDE5",
+   "#D9D9D9",
+   "#BC80BD",
+   "#CCEBC5",
+   "#FFED6F"
+  ]
+ },
+ "Blues": {
+  "type": "continuous",
+  "colors": [
+   "#F7FBFF",
+   "#DEEBF7",
+   "#C6DBEF",
+   "#9ECAE1",
+   "#6BAED6",
+   "#4292C6",
+   "#2171B5",
+   "#08519C",
+   "#08306B"
+  ]
+ },
+ "BuGn": {
+  "type": "continuous",
+  "colors": [
+   "#F7FCFD",
+   "#E5F5F9",
+   "#CCECE6",
+   "#99D8C9",
+   "#66C2A4",
+   "#41AE76",
+   "#238B45",
+   "#006D2C",
+   "#00441B"
+  ]
+ },
+ "BuPu": {
+  "type": "continuous",
+  "colors": [
+   "#F7FCFD",
+   "#E0ECF4",
+   "#BFD3E6",
+   "#9EBCDA",
+   "#8C96C6",
+   "#8C6BB1",
+   "#88419D",
+   "#810F7C",
+   "#4D004B"
+  ]
+ },
+ "GnBu": {
+  "type": "continuous",
+  "colors": [
+   "#F7FCF0",
+   "#E0F3DB",
+   "#CCEBC5",
+   "#A8DDB5",
+   "#7BCCC4",
+   "#4EB3D3",
+   "#2B8CBE",
+   "#0868AC",
+   "#084081"
+  ]
+ },
+ "Greens": {
+  "type": "continuous",
+  "colors": [
+   "#F7FCF5",
+   "#E5F5E0",
+   "#C7E9C0",
+   "#A1D99B",
+   "#74C476",
+   "#41AB5D",
+   "#238B45",
+   "#006D2C",
+   "#00441B"
+  ]
+ },
+ "Greys": {
+  "type": "continuous",
+  "colors": [
+   "#FFFFFF",
+   "#F0F0F0",
+   "#D9D9D9",
+   "#BDBDBD",
+   "#969696",
+   "#737373",
+   "#525252",
+   "#252525",
+   "#000000"
+  ]
+ },
+ "Oranges": {
+  "type": "continuous",
+  "colors": [
+   "#FFF5EB",
+   "#FEE6CE",
+   "#FDD0A2",
+   "#FDAE6B",
+   "#FD8D3C",
+   "#F16913",
+   "#D94801",
+   "#A63603",
+   "#7F2704"
+  ]
+ },
+ "OrRd": {
+  "type": "continuous",
+  "colors": [
+   "#FFF7EC",
+   "#FEE8C8",
+   "#FDD49E",
+   "#FDBB84",
+   "#FC8D59",
+   "#EF6548",
+   "#D7301F",
+   "#B30000",
+   "#7F0000"
+  ]
+ },
+ "PuBu": {
+  "type": "continuous",
+  "colors": [
+   "#FFF7FB",
+   "#ECE7F2",
+   "#D0D1E6",
+   "#A6BDDB",
+   "#74A9CF",
+   "#3690C0",
+   "#0570B0",
+   "#045A8D",
+   "#023858"
+  ]
+ },
+ "PuBuGn": {
+  "type": "continuous",
+  "colors": [
+   "#FFF7FB",
+   "#ECE2F0",
+   "#D0D1E6",
+   "#A6BDDB",
+   "#67A9CF",
+   "#3690C0",
+   "#02818A",
+   "#016C59",
+   "#014636"
+  ]
+ },
+ "PuRd": {
+  "type": "continuous",
+  "colors": [
+   "#F7F4F9",
+   "#E7E1EF",
+   "#D4B9DA",
+   "#C994C7",
+   "#DF65B0",
+   "#E7298A",
+   "#CE1256",
+   "#980043",
+   "#67001F"
+  ]
+ },
+ "Purples": {
+  "type": "continuous",
+  "colors": [
+   "#FCFBFD",
+   "#EFEDF5",
+   "#DADAEB",
+   "#BCBDDC",
+   "#9E9AC8",
+   "#807DBA",
+   "#6A51A3",
+   "#54278F",
+   "#3F007D"
+  ]
+ },
+ "RdPu": {
+  "type": "continuous",
+  "colors": [
+   "#FFF7F3",
+   "#FDE0DD",
+   "#FCC5C0",
+   "#FA9FB5",
+   "#F768A1",
+   "#DD3497",
+   "#AE017E",
+   "#7A0177",
+   "#49006A"
+  ]
+ },
+ "Reds": {
+  "type": "continuous",
+  "colors": [
+   "#FFF5F0",
+   "#FEE0D2",
+   "#FCBBA1",
+   "#FC9272",
+   "#FB6A4A",
+   "#EF3B2C",
+   "#CB181D",
+   "#A50F15",
+   "#67000D"
+  ]
+ },
+ "YlGn": {
+  "type": "continuous",
+  "colors": [
+   "#FFFFE5",
+   "#F7FCB9",
+   "#D9F0A3",
+   "#ADDD8E",
+   "#78C679",
+   "#41AB5D",
+   "#238443",
+   "#006837",
+   "#004529"
+  ]
+ },
+ "YlGnBu": {
+  "type": "continuous",
+  "colors": [
+   "#FFFFD9",
+   "#EDF8B1",
+   "#C7E9B4",
+   "#7FCDBB",
+   "#41B6C4",
+   "#1D91C0",
+   "#225EA8",
+   "#253494",
+   "#081D58"
+  ]
+ },
+ "YlOrBr": {
+  "type": "continuous",
+  "colors": [
+   "#FFFFE5",
+   "#FFF7BC",
+   "#FEE391",
+   "#FEC44F",
+   "#FE9929",
+   "#EC7014",
+   "#CC4C02",
+   "#993404",
+   "#662506"
+  ]
+ },
+ "YlOrRd": {
+  "type": "continuous",
+  "colors": [
+   "#FFFFCC",
+   "#FFEDA0",
+   "#FED976",
+   "#FEB24C",
+   "#FD8D3C",
+   "#FC4E2A",
+   "#E31A1C",
+   "#BD0026",
+   "#800026"
+  ]
+ },
+ "npg": {
+  "type": "discrete",
+  "colors": [
+   "#E64B35",
+   "#4DBBD5",
+   "#00A087",
+   "#3C5488",
+   "#F39B7F",
+   "#8491B4",
+   "#91D1C2",
+   "#DC0000",
+   "#7E6148",
+   "#B09C85"
+  ],
+  "names": [
+   "Cinnabar",
+   "Shakespeare",
+   "PersianGreen",
+   "Chambray",
+   "Apricot",
+   "WildBlueYonder",
+   "MonteCarlo",
+   "Monza",
+   "RomanCoffee",
+   "Sandrift"
+  ]
+ },
+ "aaas": {
+  "type": "discrete",
+  "colors": [
+   "#3B4992",
+   "#EE0000",
+   "#008B45",
+   "#631879",
+   "#008280",
+   "#BB0021",
+   "#5F559B",
+   "#A20056",
+   "#808180",
+   "#1B1919"
+  ],
+  "names": [
+   "Chambray",
+   "Red",
+   "FunGreen",
+   "HoneyFlower",
+   "Teal",
+   "Monza",
+   "ButterflyBush",
+   "FreshEggplant",
+   "Stack",
+   "CodGray"
+  ]
+ },
+ "nejm": {
+  "type": "discrete",
+  "colors": [
+   "#BC3C29",
+   "#0072B5",
+   "#E18727",
+   "#20854E",
+   "#7876B1",
+   "#6F99AD",
+   "#FFDC91",
+   "#EE4C97"
+  ],
+  "names": [
+   "TallPoppy",
+   "DeepCerulean",
+   "Zest",
+   "Eucalyptus",
+   "WildBlueYonder",
+   "Gothic",
+   "Salomie",
+   "FrenchRose"
+  ]
+ },
+ "lancet": {
+  "type": "discrete",
+  "colors": [
+   "#00468B",
+   "#ED0000",
+   "#42B540",
+   "#0099B4",
+   "#925E9F",
+   "#FDAF91",
+   "#AD002A",
+   "#ADB6B6",
+   "#1B1919"
+  ],
+  "names": [
+   "CongressBlue",
+   "Red",
+   "Apple",
+   "BondiBlue",
+   "TrendyPink",
+   "MonaLisa",
+   "Carmine",
+   "Edward",
+   "CodGray"
+  ]
+ },
+ "jama": {
+  "type": "discrete",
+  "colors": [
+   "#374E55",
+   "#DF8F44",
+   "#00A1D5",
+   "#B24745",
+   "#79AF97",
+   "#6A6599",
+   "#80796B"
+  ],
+  "names": [
+   "Limed Spruce",
+   "Anzac",
+   "Cerulean",
+   "Apple Blossom",
+   "Acapulco",
+   "Kimberly",
+   "Makara"
+  ]
+ },
+ "jco": {
+  "type": "discrete",
+  "colors": [
+   "#0073C2",
+   "#EFC000",
+   "#868686",
+   "#CD534C",
+   "#7AA6DC",
+   "#003C67",
+   "#8F7700",
+   "#3B3B3B",
+   "#A73030",
+   "#4A6990"
+  ],
+  "names": [
+   "Lochmara",
+   "Corn",
+   "Gray",
+   "ChestnutRose",
+   "Danube",
+   "RegalBlue",
+   "Olive",
+   "MineShaft",
+   "WellRead",
+   "KashmirBlue"
+  ]
+ },
+ "ucscgb": {
+  "type": "discrete",
+  "colors": [
+   "#FF0000",
+   "#FF9900",
+   "#FFCC00",
+   "#00FF00",
+   "#6699FF",
+   "#CC33FF",
+   "#99991E",
+   "#999999",
+   "#FF00CC",
+   "#CC0000",
+   "#FFCCCC",
+   "#FFFF00",
+   "#CCFF00",
+   "#358000",
+   "#0000CC",
+   "#99CCFF",
+   "#00FFFF",
+   "#CCFFFF",
+   "#9900CC",
+   "#CC99FF",
+   "#996600",
+   "#666600",
+   "#666666",
+   "#CCCCCC",
+   "#79CC3D",
+   "#CCCC99"
+  ],
+  "names": [
+   "chr5",
+   "chr8",
+   "chr9",
+   "chr12",
+   "chr15",
+   "chr20",
+   "chr3",
+   "chrX",
+   "chr6",
+   "chr4",
+   "chr7",
+   "chr10",
+   "chr11",
+   "chr13",
+   "chr14",
+   "chr16",
+   "chr17",
+   "chr18",
+   "chr19",
+   "chr21",
+   "chr1",
+   "chr2",
+   "chr22",
+   "chrY",
+   "chrUn",
+   "chrM"
+  ]
+ },
+ "d3-category10": {
+  "type": "discrete",
+  "colors": [
+   "#1F77B4",
+   "#FF7F0E",
+   "#2CA02C",
+   "#D62728",
+   "#9467BD",
+   "#8C564B",
+   "#E377C2",
+   "#7F7F7F",
+   "#BCBD22",
+   "#17BECF"
+  ],
+  "names": [
+   "Matisse",
+   "Flamenco",
+   "ForestGreen",
+   "Punch",
+   "Wisteria",
+   "SpicyMix",
+   "Orchid",
+   "Gray",
+   "KeyLimePie",
+   "Java"
+  ]
+ },
+ "d3-category20": {
+  "type": "discrete",
+  "colors": [
+   "#1F77B4",
+   "#FF7F0E",
+   "#2CA02C",
+   "#D62728",
+   "#9467BD",
+   "#8C564B",
+   "#E377C2",
+   "#7F7F7F",
+   "#BCBD22",
+   "#17BECF",
+   "#AEC7E8",
+   "#FFBB78",
+   "#98DF8A",
+   "#FF9896",
+   "#C5B0D5",
+   "#C49C94",
+   "#F7B6D2",
+   "#C7C7C7",
+   "#DBDB8D",
+   "#9EDAE5"
+  ],
+  "names": [
+   "Matisse",
+   "Flamenco",
+   "ForestGreen",
+   "Punch",
+   "Wisteria",
+   "SpicyMix",
+   "Orchid",
+   "Gray",
+   "KeyLimePie",
+   "Java",
+   "Spindle",
+   "MaC",
+   "Feijoa",
+   "MonaLisa",
+   "LavenderGray",
+   "Quicksand",
+   "Chantilly",
+   "Silver",
+   "Deco",
+   "RegentStBlue"
+  ]
+ },
+ "d3-category20b": {
+  "type": "discrete",
+  "colors": [
+   "#393B79",
+   "#637939",
+   "#8C6D31",
+   "#843C39",
+   "#7B4173",
+   "#5254A3",
+   "#8CA252",
+   "#BD9E39",
+   "#AD494A",
+   "#A55194",
+   "#6B6ECF",
+   "#B5CF6B",
+   "#E7BA52",
+   "#D6616B",
+   "#CE6DBD",
+   "#9C9EDE",
+   "#CEDB9C",
+   "#E7CB94",
+   "#E7969C",
+   "#DE9ED6"
+  ],
+  "names": [
+   "EastBay",
+   "ChaletGreen",
+   "Pesto",
+   "Lotus",
+   "CannonPink",
+   "ButterflyBush",
+   "ChelseaCucumber",
+   "Tussock",
+   "AppleBlossom",
+   "Tapestry",
+   "MoodyBlue",
+   "WildWillow",
+   "Ronchi",
+   "ChestnutRose",
+   "Hopbush",
+   "ColdPurple",
+   "Deco",
+   "Putty",
+   "TonysPink",
+   "LightOrchid"
+  ]
+ },
+ "d3-category20c": {
+  "type": "discrete",
+  "colors": [
+   "#3182BD",
+   "#E6550D",
+   "#31A354",
+   "#756BB1",
+   "#636363",
+   "#6BAED6",
+   "#FD8D3C",
+   "#74C476",
+   "#9E9AC8",
+   "#969696",
+   "#9ECAE1",
+   "#FDAE6B",
+   "#A1D99B",
+   "#BCBDDC",
+   "#BDBDBD",
+   "#C6DBEF",
+   "#FDD0A2",
+   "#C7E9C0",
+   "#DADAEB",
+   "#D9D9D9"
+  ],
+  "names": [
+   "BostonBlue",
+   "Christine",
+   "SeaGreen",
+   "Deluge",
+   "DoveGray",
+   "Danube",
+   "NeonCarrot",
+   "DeYork",
+   "BlueBell",
+   "DustyGray",
+   "RegentStBlue",
+   "Koromiko",
+   "MossGreen",
+   "LavenderGray",
+   "Silver",
+   "Spindle",
+   "Flesh",
+   "Celadon",
+   "Snuff",
+   "Alto"
+  ]
+ },
+ "igv": {
+  "type": "discrete",
+  "colors": [
+   "#5050FF",
+   "#CE3D32",
+   "#749B58",
+   "#F0E685",
+   "#466983",
+   "#BA6338",
+   "#5DB1DD",
+   "#802268",
+   "#6BD76B",
+   "#D595A7",
+   "#924822",
+   "#837B8D",
+   "#C75127",
+   "#D58F5C",
+   "#7A65A5",
+   "#E4AF69",
+   "#3B1B53",
+   "#CDDEB7",
+   "#612A79",
+   "#AE1F63",
+   "#E7C76F",
+   "#5A655E",
+   "#CC9900",
+   "#99CC00",
+   "#A9A9A9",
+   "#CC9900",
+   "#99CC00",
+   "#33CC00",
+   "#00CC33",
+   "#00CC99",
+   "#0099CC",
+   "#0A47FF",
+   "#4775FF",
+   "#FFC20A",
+   "#FFD147",
+   "#990033",
+   "#991A00",
+   "#996600",
+   "#809900",
+   "#339900",
+   "#00991A",
+   "#009966",
+   "#008099",
+   "#003399",
+   "#1A0099",
+   "#660099",
+   "#990080",
+   "#D60047",
+   "#FF1463",
+   "#00D68F",
+   "#14FFB1"
+  ],
+  "names": [
+   "chr1",
+   "chr2",
+   "chr3",
+   "chr4",
+   "chr5",
+   "chr6",
+   "chr7",
+   "chr8",
+   "chr9",
+   "chr10",
+   "chr11",
+   "chr12",
+   "chr13",
+   "chr14",
+   "chr15",
+   "chr16",
+   "chr17",
+   "chr18",
+   "chr19",
+   "chr20",
+   "chr21",
+   "chr22",
+   "chrX",
+   "chrY",
+   "chrUn",
+   "chr23",
+   "chr24",
+   "chr25",
+   "chr26",
+   "chr27",
+   "chr28",
+   "chr29",
+   "chr30",
+   "chr31",
+   "chr32",
+   "chr33",
+   "chr34",
+   "chr35",
+   "chr36",
+   "chr37",
+   "chr38",
+   "chr39",
+   "chr40",
+   "chr41",
+   "chr42",
+   "chr43",
+   "chr44",
+   "chr45",
+   "chr46",
+   "chr47",
+   "chr48"
+  ]
+ },
+ "locuszoom": {
+  "type": "discrete",
+  "colors": [
+   "#D43F3A",
+   "#EEA236",
+   "#5CB85C",
+   "#46B8DA",
+   "#357EBD",
+   "#9632B8",
+   "#B8B8B8"
+  ],
+  "names": [
+   "0.8to1.0",
+   "0.6to0.8",
+   "0.4to0.6",
+   "0.2to0.4",
+   "0.0to0.2",
+   "LDRefVar",
+   "nodata"
+  ]
+ },
+ "uchicago-default": {
+  "type": "discrete",
+  "colors": [
+   "#800000",
+   "#767676",
+   "#FFA319",
+   "#8A9045",
+   "#155F83",
+   "#C16622",
+   "#8F3931",
+   "#58593F",
+   "#350E20"
+  ],
+  "names": [
+   "Maroon",
+   "DarkGray",
+   "Yellow",
+   "LightGreen",
+   "Blue",
+   "Orange",
+   "Red",
+   "DarkGreen",
+   "Violet"
+  ]
+ },
+ "uchicago-light": {
+  "type": "discrete",
+  "colors": [
+   "#800000",
+   "#D6D6CE",
+   "#FFB547",
+   "#ADB17D",
+   "#5B8FA8",
+   "#D49464",
+   "#B1746F",
+   "#8A8B79",
+   "#725663"
+  ],
+  "names": [
+   "Maroon",
+   "LightGray",
+   "Yellow",
+   "LightGreen",
+   "Blue",
+   "Orange",
+   "Red",
+   "DarkGreen",
+   "Violet"
+  ]
+ },
+ "uchicago-dark": {
+  "type": "discrete",
+  "colors": [
+   "#800000",
+   "#767676",
+   "#CC8214",
+   "#616530",
+   "#0F425C",
+   "#9A5324",
+   "#642822",
+   "#3E3E23",
+   "#350E20"
+  ],
+  "names": [
+   "Maroon",
+   "DarkGray",
+   "Yellow",
+   "LightGreen",
+   "Blue",
+   "Orange",
+   "Red",
+   "DarkGreen",
+   "Violet"
+  ]
+ },
+ "cosmic": {
+  "type": "discrete",
+  "colors": [
+   "#171717",
+   "#7D0226",
+   "#300049",
+   "#165459",
+   "#3F2327",
+   "#0B1948",
+   "#E71012",
+   "#555555",
+   "#193006",
+   "#A8450C"
+  ],
+  "names": [
+   "Invasion and Metastasis",
+   "Escaping Immunic Response to Cancer",
+   "Change of Cellular Energetics",
+   "Cell Replicative Immortality",
+   "Suppression of Growth",
+   "Genome Instability and Mutations",
+   "Angiogenesis",
+   "Escaping Programmed Cell Death",
+   "Proliferative Signaling",
+   "Tumour Promoting Inflammation"
+  ]
+ },
+ "simpsons": {
+  "type": "discrete",
+  "colors": [
+   "#FED439",
+   "#709AE1",
+   "#8A9197",
+   "#D2AF81",
+   "#FD7446",
+   "#D5E4A2",
+   "#197EC0",
+   "#F05C3B",
+   "#46732E",
+   "#71D0F5",
+   "#370335",
+   "#075149",
+   "#C80813",
+   "#91331F",
+   "#1A9993",
+   "#FD8CC1"
+  ],
+  "names": [
+   "HomerYellow",
+   "HomerBlue",
+   "HomerGrey",
+   "HomerBrown",
+   "BartOrange",
+   "MargeGreen",
+   "MargeBlue",
+   "LisaOrange",
+   "NedGreen",
+   "MaggieBlue",
+   "BurnsPurple",
+   "BurnsGreen",
+   "DuffRed",
+   "KentRed",
+   "BobGreen",
+   "FrinkPink"
+  ]
+ },
+ "futurama": {
+  "type": "discrete",
+  "colors": [
+   "#FF6F00",
+   "#C71000",
+   "#008EA0",
+   "#8A4198",
+   "#5A9599",
+   "#FF6348",
+   "#84D7E1",
+   "#FF95A8",
+   "#3D3B25",
+   "#ADE2D0",
+   "#1A5354",
+   "#3F4041"
+  ],
+  "names": [
+   "FryOrange",
+   "FryRed",
+   "FryBlue",
+   "LeelaPurple",
+   "BenderIron",
+   "ZoidbergRed",
+   "ZoidbergBlue",
+   "AmyPink",
+   "HermesGreen",
+   "ProfessorBlue",
+   "ScruffyGreen",
+   "LeelaGrey"
+  ]
+ },
+ "rickandmorty": {
+  "type": "discrete",
+  "colors": [
+   "#FAFD7C",
+   "#82491E",
+   "#24325F",
+   "#B7E4F9",
+   "#FB6467",
+   "#526E2D",
+   "#E762D7",
+   "#E89242",
+   "#FAE48B",
+   "#A6EEE6",
+   "#917C5D",
+   "#69C8EC"
+  ],
+  "names": [
+   "MortyYellow",
+   "MortyBrown",
+   "MortyBlue",
+   "RickBlue",
+   "BethRed",
+   "JerryGreen",
+   "SummerPink",
+   "SummerOrange",
+   "BethYellow",
+   "RickGreen",
+   "RickBrown",
+   "MeeseeksBlue"
+  ]
+ },
+ "startrek": {
+  "type": "discrete",
+  "colors": [
+   "#CC0C00",
+   "#5C88DA",
+   "#84BD00",
+   "#FFCD00",
+   "#7C878E",
+   "#00B5E2",
+   "#00AF66"
+  ],
+  "names": [
+   "Engineering",
+   "Sciences",
+   "Senior",
+   "Command",
+   "Teal",
+   "Cerulean",
+   "Jade"
+  ]
+ },
+ "tron": {
+  "type": "discrete",
+  "colors": [
+   "#FF410D",
+   "#6EE2FF",
+   "#F7C530",
+   "#95CC5E",
+   "#D0DFE6",
+   "#F79D1E",
+   "#748AA6"
+  ],
+  "names": [
+   "BlackGuard",
+   "Sam",
+   "Clu",
+   "Underclass",
+   "KevinFlynn",
+   "CluFollower",
+   "Underclass2"
+  ]
+ },
+ "frontiers": {
+  "type": "discrete",
+  "colors": [
+   "#D51317",
+   "#F39200",
+   "#EFD500",
+   "#95C11F",
+   "#007B3D",
+   "#31B7BC",
+   "#0094CD",
+   "#164194",
+   "#6F286A",
+   "#706F6F"
+  ],
+  "names": [
+   "Crimson",
+   "Tangerine",
+   "SchoolBus",
+   "Citron",
+   "FunGreen",
+   "Pelorous",
+   "PacificBlue",
+   "ToryBlue",
+   "Plum",
+   "DoveGrey"
+  ]
+ },
+ "flatui": {
+  "type": "discrete",
+  "colors": [
+   "#c0392b",
+   "#d35400",
+   "#f39c12",
+   "#27ae60",
+   "#16a085",
+   "#2980b9",
+   "#8e44ad",
+   "#2c3e50",
+   "#7f8c8d",
+   "#bdc3c7"
+  ],
+  "names": [
+   "Pomegranate",
+   "Pumkin",
+   "Orange",
+   "Nephritis",
+   "GreenSea",
+   "BelizeHole",
+   "Wisteria",
+   "Midnight",
+   "Asbestos",
+   "Silver"
+  ]
+ },
+ "gsea": {
+  "type": "continuous",
+  "colors": [
+   "#4500AD",
+   "#2700D1",
+   "#6B58EF",
+   "#8888FF",
+   "#C7C1FF",
+   "#D5D5FF",
+   "#FFC0E5",
+   "#FF8989",
+   "#FF7080",
+   "#FF5A5A",
+   "#EF4040",
+   "#D60C00"
+  ],
+  "names": [
+   "Purple",
+   "DarkBlue",
+   "RoyalBlue",
+   "Malibu",
+   "Melrose",
+   "Fog",
+   "CottonCandy",
+   "VividTangerine",
+   "BrinkPink",
+   "Persimmon",
+   "Flamingo",
+   "GuardsmanRed"
+  ]
+ },
+ "material-red": {
+  "type": "continuous",
+  "colors": [
+   "#FFEBEE",
+   "#FFCDD2",
+   "#EF9A9A",
+   "#E57373",
+   "#EF5350",
+   "#F44336",
+   "#E53935",
+   "#D32F2F",
+   "#C62828",
+   "#B71C1C"
+  ],
+  "names": [
+   "Red50",
+   "Red100",
+   "Red200",
+   "Red300",
+   "Red400",
+   "Red500",
+   "Red600",
+   "Red700",
+   "Red800",
+   "Red900"
+  ]
+ },
+ "material-pink": {
+  "type": "continuous",
+  "colors": [
+   "#FCE4EC",
+   "#F8BBD0",
+   "#F48FB1",
+   "#F06292",
+   "#EC407A",
+   "#E91E63",
+   "#D81B60",
+   "#C2185B",
+   "#AD1457",
+   "#880E4F"
+  ],
+  "names": [
+   "Pink50",
+   "Pink100",
+   "Pink200",
+   "Pink300",
+   "Pink400",
+   "Pink500",
+   "Pink600",
+   "Pink700",
+   "Pink800",
+   "Pink900"
+  ]
+ },
+ "material-purple": {
+  "type": "continuous",
+  "colors": [
+   "#F3E5F5",
+   "#E1BEE7",
+   "#CE93D8",
+   "#BA68C8",
+   "#AB47BC",
+   "#9C27B0",
+   "#8E24AA",
+   "#7B1FA2",
+   "#6A1B9A",
+   "#4A148C"
+  ],
+  "names": [
+   "Purple50",
+   "Purple100",
+   "Purple200",
+   "Purple300",
+   "Purple400",
+   "Purple500",
+   "Purple600",
+   "Purple700",
+   "Purple800",
+   "Purple900"
+  ]
+ },
+ "material-deep-purple": {
+  "type": "continuous",
+  "colors": [
+   "#EDE7F6",
+   "#D1C4E9",
+   "#B39DDB",
+   "#9575CD",
+   "#7E57C2",
+   "#673AB7",
+   "#5E35B1",
+   "#512DA8",
+   "#4527A0",
+   "#311B92"
+  ],
+  "names": [
+   "DeepPurple50",
+   "DeepPurple100",
+   "DeepPurple200",
+   "DeepPurple300",
+   "DeepPurple400",
+   "DeepPurple500",
+   "DeepPurple600",
+   "DeepPurple700",
+   "DeepPurple800",
+   "DeepPurple900"
+  ]
+ },
+ "material-indigo": {
+  "type": "continuous",
+  "colors": [
+   "#E8EAF6",
+   "#C5CAE9",
+   "#9FA8DA",
+   "#7986CB",
+   "#5C6BC0",
+   "#3F51B5",
+   "#3949AB",
+   "#303F9F",
+   "#283593",
+   "#1A237E"
+  ],
+  "names": [
+   "Indigo50",
+   "Indigo100",
+   "Indigo200",
+   "Indigo300",
+   "Indigo400",
+   "Indigo500",
+   "Indigo600",
+   "Indigo700",
+   "Indigo800",
+   "Indigo900"
+  ]
+ },
+ "material-blue": {
+  "type": "continuous",
+  "colors": [
+   "#E3F2FD",
+   "#BBDEFB",
+   "#90CAF9",
+   "#64B5F6",
+   "#42A5F5",
+   "#2196F3",
+   "#1E88E5",
+   "#1976D2",
+   "#1565C0",
+   "#0D47A1"
+  ],
+  "names": [
+   "Blue50",
+   "Blue100",
+   "Blue200",
+   "Blue300",
+   "Blue400",
+   "Blue500",
+   "Blue600",
+   "Blue700",
+   "Blue800",
+   "Blue900"
+  ]
+ },
+ "material-light-blue": {
+  "type": "continuous",
+  "colors": [
+   "#E1F5FE",
+   "#B3E5FC",
+   "#81D4FA",
+   "#4FC3F7",
+   "#29B6F6",
+   "#03A9F4",
+   "#039BE5",
+   "#0288D1",
+   "#0277BD",
+   "#01579B"
+  ],
+  "names": [
+   "LightBlue50",
+   "LightBlue100",
+   "LightBlue200",
+   "LightBlue300",
+   "LightBlue400",
+   "LightBlue500",
+   "LightBlue600",
+   "LightBlue700",
+   "LightBlue800",
+   "LightBlue900"
+  ]
+ },
+ "material-cyan": {
+  "type": "continuous",
+  "colors": [
+   "#E0F7FA",
+   "#B2EBF2",
+   "#80DEEA",
+   "#4DD0E1",
+   "#26C6DA",
+   "#00BCD4",
+   "#00ACC1",
+   "#0097A7",
+   "#00838F",
+   "#006064"
+  ],
+  "names": [
+   "Cyan50",
+   "Cyan100",
+   "Cyan200",
+   "Cyan300",
+   "Cyan400",
+   "Cyan500",
+   "Cyan600",
+   "Cyan700",
+   "Cyan800",
+   "Cyan900"
+  ]
+ },
+ "material-teal": {
+  "type": "continuous",
+  "colors": [
+   "#E0F2F1",
+   "#B2DFDB",
+   "#80CBC4",
+   "#4DB6AC",
+   "#26A69A",
+   "#009688",
+   "#00897B",
+   "#00796B",
+   "#00695C",
+   "#004D40"
+  ],
+  "names": [
+   "Teal50",
+   "Teal100",
+   "Teal200",
+   "Teal300",
+   "Teal400",
+   "Teal500",
+   "Teal600",
+   "Teal700",
+   "Teal800",
+   "Teal900"
+  ]
+ },
+ "material-green": {
+  "type": "continuous",
+  "colors": [
+   "#E8F5E9",
+   "#C8E6C9",
+   "#A5D6A7",
+   "#81C784",
+   "#66BB6A",
+   "#4CAF50",
+   "#43A047",
+   "#388E3C",
+   "#2E7D32",
+   "#1B5E20"
+  ],
+  "names": [
+   "Green50",
+   "Green100",
+   "Green200",
+   "Green300",
+   "Green400",
+   "Green500",
+   "Green600",
+   "Green700",
+   "Green800",
+   "Green900"
+  ]
+ },
+ "material-light-green": {
+  "type": "continuous",
+  "colors": [
+   "#F1F8E9",
+   "#DCEDC8",
+   "#C5E1A5",
+   "#AED581",
+   "#9CCC65",
+   "#8BC34A",
+   "#7CB342",
+   "#689F38",
+   "#558B2F",
+   "#33691E"
+  ],
+  "names": [
+   "LightGreen50",
+   "LightGreen100",
+   "LightGreen200",
+   "LightGreen300",
+   "LightGreen400",
+   "LightGreen500",
+   "LightGreen600",
+   "LightGreen700",
+   "LightGreen800",
+   "LightGreen900"
+  ]
+ },
+ "material-lime": {
+  "type": "continuous",
+  "colors": [
+   "#F9FBE7",
+   "#F0F4C3",
+   "#E6EE9C",
+   "#DCE775",
+   "#D4E157",
+   "#CDDC39",
+   "#C0CA33",
+   "#AFB42B",
+   "#9E9D24",
+   "#827717"
+  ],
+  "names": [
+   "Lime50",
+   "Lime100",
+   "Lime200",
+   "Lime300",
+   "Lime400",
+   "Lime500",
+   "Lime600",
+   "Lime700",
+   "Lime800",
+   "Lime900"
+  ]
+ },
+ "material-yellow": {
+  "type": "continuous",
+  "colors": [
+   "#FFFDE7",
+   "#FFF9C4",
+   "#FFF59D",
+   "#FFF176",
+   "#FFEE58",
+   "#FFEB3B",
+   "#FDD835",
+   "#FBC02D",
+   "#F9A825",
+   "#F57F17"
+  ],
+  "names": [
+   "Yellow50",
+   "Yellow100",
+   "Yellow200",
+   "Yellow300",
+   "Yellow400",
+   "Yellow500",
+   "Yellow600",
+   "Yellow700",
+   "Yellow800",
+   "Yellow900"
+  ]
+ },
+ "material-amber": {
+  "type": "continuous",
+  "colors": [
+   "#FFF8E1",
+   "#FFECB3",
+   "#FFE082",
+   "#FFD54F",
+   "#FFCA28",
+   "#FFC107",
+   "#FFB300",
+   "#FFA000",
+   "#FF8F00",
+   "#FF6F00"
+  ],
+  "names": [
+   "Amber50",
+   "Amber100",
+   "Amber200",
+   "Amber300",
+   "Amber400",
+   "Amber500",
+   "Amber600",
+   "Amber700",
+   "Amber800",
+   "Amber900"
+  ]
+ },
+ "material-orange": {
+  "type": "continuous",
+  "colors": [
+   "#FFF3E0",
+   "#FFE0B2",
+   "#FFCC80",
+   "#FFB74D",
+   "#FFA726",
+   "#FF9800",
+   "#FB8C00",
+   "#F57C00",
+   "#EF6C00",
+   "#E65100"
+  ],
+  "names": [
+   "Orange50",
+   "Orange100",
+   "Orange200",
+   "Orange300",
+   "Orange400",
+   "Orange500",
+   "Orange600",
+   "Orange700",
+   "Orange800",
+   "Orange900"
+  ]
+ },
+ "material-deep-orange": {
+  "type": "continuous",
+  "colors": [
+   "#FBE9E7",
+   "#FFCCBC",
+   "#FFAB91",
+   "#FF8A65",
+   "#FF7043",
+   "#FF5722",
+   "#F4511E",
+   "#E64A19",
+   "#D84315",
+   "#BF360C"
+  ],
+  "names": [
+   "DeepOrange50",
+   "DeepOrange100",
+   "DeepOrange200",
+   "DeepOrange300",
+   "DeepOrange400",
+   "DeepOrange500",
+   "DeepOrange600",
+   "DeepOrange700",
+   "DeepOrange800",
+   "DeepOrange900"
+  ]
+ },
+ "material-brown": {
+  "type": "continuous",
+  "colors": [
+   "#EFEBE9",
+   "#D7CCC8",
+   "#BCAAA4",
+   "#A1887F",
+   "#8D6E63",
+   "#795548",
+   "#6D4C41",
+   "#5D4037",
+   "#4E342E",
+   "#3E2723"
+  ],
+  "names": [
+   "Brown50",
+   "Brown100",
+   "Brown200",
+   "Brown300",
+   "Brown400",
+   "Brown500",
+   "Brown600",
+   "Brown700",
+   "Brown800",
+   "Brown900"
+  ]
+ },
+ "material-grey": {
+  "type": "continuous",
+  "colors": [
+   "#FAFAFA",
+   "#F5F5F5",
+   "#EEEEEE",
+   "#E0E0E0",
+   "#BDBDBD",
+   "#9E9E9E",
+   "#757575",
+   "#616161",
+   "#424242",
+   "#212121"
+  ],
+  "names": [
+   "Grey50",
+   "Grey100",
+   "Grey200",
+   "Grey300",
+   "Grey400",
+   "Grey500",
+   "Grey600",
+   "Grey700",
+   "Grey800",
+   "Grey900"
+  ]
+ },
+ "material-blue-grey": {
+  "type": "continuous",
+  "colors": [
+   "#ECEFF1",
+   "#CFD8DC",
+   "#B0BEC5",
+   "#90A4AE",
+   "#78909C",
+   "#607D8B",
+   "#546E7A",
+   "#455A64",
+   "#37474F",
+   "#263238"
+  ],
+  "names": [
+   "BlueGrey50",
+   "BlueGrey100",
+   "BlueGrey200",
+   "BlueGrey300",
+   "BlueGrey400",
+   "BlueGrey500",
+   "BlueGrey600",
+   "BlueGrey700",
+   "BlueGrey800",
+   "BlueGrey900"
+  ]
+ },
+ "dPBIYlBu": {
+  "type": "continuous",
+  "colors": [
+   "#456A76",
+   "#689FB0",
+   "#A1DDEF",
+   "#B9E5F3",
+   "#D0EEF7",
+   "#F5F5F5",
+   "#FAE9A0",
+   "#F7DE70",
+   "#F5D341",
+   "#B6960D",
+   "#796409"
+  ]
+ },
+ "dPBIYlPu": {
+  "type": "continuous",
+  "colors": [
+   "#53354D",
+   "#7D4F73",
+   "#B887AD",
+   "#CAA5C2",
+   "#DBC3D6",
+   "#F5F5F5",
+   "#FAE9A0",
+   "#F7DE70",
+   "#F5D341",
+   "#B6960D",
+   "#796409"
+  ]
+ },
+ "dPBIPuGn": {
+  "type": "continuous",
+  "colors": [
+   "#005C55",
+   "#008A80",
+   "#33C6BB",
+   "#66D4CC",
+   "#99E3DD",
+   "#F5F5F5",
+   "#DBC3D6",
+   "#CAA5C2",
+   "#B887AD",
+   "#7D4F73",
+   "#53354D"
+  ]
+ },
+ "dPBIPuOr": {
+  "type": "continuous",
+  "colors": [
+   "#7F4B33",
+   "#BF714D",
+   "#FEAB85",
+   "#FEC0A3",
+   "#FFD5C2",
+   "#F5F5F5",
+   "#DBC3D6",
+   "#CAA5C2",
+   "#B887AD",
+   "#7D4F73",
+   "#53354D"
+  ]
+ },
+ "dPBIRdBu": {
+  "type": "continuous",
+  "colors": [
+   "#456A76",
+   "#689FB0",
+   "#A1DDEF",
+   "#B9E5F3",
+   "#D0EEF7",
+   "#F5F5F5",
+   "#FEC0BF",
+   "#FEA19E",
+   "#FD817E",
+   "#BE4A47",
+   "#7F312F"
+  ]
+ },
+ "dPBIRdGy": {
+  "type": "continuous",
+  "colors": [
+   "#1C2325",
+   "#293537",
+   "#5F6B6D",
+   "#879092",
+   "#AFB5B6",
+   "#F5F5F5",
+   "#FEC0BF",
+   "#FEA19E",
+   "#FD817E",
+   "#BE4A47",
+   "#7F312F"
+  ]
+ },
+ "dPBIRdGn": {
+  "type": "continuous",
+  "colors": [
+   "#005C55",
+   "#008A80",
+   "#33C6BB",
+   "#66D4CC",
+   "#99E3DD",
+   "#F5F5F5",
+   "#FEC0BF",
+   "#FEA19E",
+   "#FD817E",
+   "#BE4A47",
+   "#7F312F"
+  ]
+ },
+ "qMSOStd": {
+  "type": "discrete",
+  "colors": [
+   "#C00000",
+   "#FF0000",
+   "#FFC000",
+   "#FFFF00",
+   "#92D050",
+   "#00B050",
+   "#00B0F0",
+   "#0070C0",
+   "#002060",
+   "#7030A0"
+  ]
+ },
+ "qMSO12": {
+  "type": "discrete",
+  "colors": [
+   "#EEECE1",
+   "#1F497D",
+   "#4F81BD",
+   "#C0504D",
+   "#9BBB59",
+   "#8064A2",
+   "#4BACC6",
+   "#F79646"
+  ]
+ },
+ "qMSO15": {
+  "type": "discrete",
+  "colors": [
+   "#E7E6E6",
+   "#44546A",
+   "#5B9BD5",
+   "#ED7D31",
+   "#A5A5A5",
+   "#FFC000",
+   "#4472C4",
+   "#70AD47"
+  ]
+ },
+ "qMSOBuWarm": {
+  "type": "discrete",
+  "colors": [
+   "#ACCBF9",
+   "#242852",
+   "#4A66AC",
+   "#629DD1",
+   "#297FD5",
+   "#7F8FA9",
+   "#5AA2AE",
+   "#9D90A0"
+  ]
+ },
+ "qMSOBu": {
+  "type": "discrete",
+  "colors": [
+   "#DBEFF9",
+   "#17406D",
+   "#0F6FC6",
+   "#009DD9",
+   "#0BD0D9",
+   "#10CF9B",
+   "#7CCA62",
+   "#A5C249"
+  ]
+ },
+ "qMSOBu2": {
+  "type": "discrete",
+  "colors": [
+   "#DFE3E5",
+   "#335B74",
+   "#1CADE4",
+   "#2683C6",
+   "#27CED7",
+   "#42BA97",
+   "#3E8853",
+   "#62A39F"
+  ]
+ },
+ "qMSOBuGn": {
+  "type": "discrete",
+  "colors": [
+   "#CEDBE6",
+   "#373545",
+   "#3494BA",
+   "#58B6C0",
+   "#75BDA7",
+   "#7A8C8E",
+   "#84ACB6",
+   "#2683C6"
+  ]
+ },
+ "qMSOGn": {
+  "type": "discrete",
+  "colors": [
+   "#E3DED1",
+   "#455F51",
+   "#549E39",
+   "#8AB833",
+   "#C0CF3A",
+   "#029676",
+   "#4AB5C4",
+   "#098975"
+  ]
+ },
+ "qMSOGnYl": {
+  "type": "discrete",
+  "colors": [
+   "#E2DFCC",
+   "#455F51",
+   "#99CB38",
+   "#63A537",
+   "#37A76F",
+   "#44C1A3",
+   "#4EB3CF",
+   "#51C3F9"
+  ]
+ },
+ "qMSOYl": {
+  "type": "discrete",
+  "colors": [
+   "#E5DEDB",
+   "#39302A",
+   "#E1CA08",
+   "#F8931D",
+   "#CE8D3E",
+   "#EC7016",
+   "#E64823",
+   "#9C6A6A"
+  ]
+ },
+ "qMSOYlOr": {
+  "type": "discrete",
+  "colors": [
+   "#FBEEC9",
+   "#4E3B30",
+   "#F0A22E",
+   "#A5644E",
+   "#B58B80",
+   "#C3986D",
+   "#A19574",
+   "#C17529"
+  ]
+ },
+ "qMSOOr": {
+  "type": "discrete",
+  "colors": [
+   "#CCDDEA",
+   "#637052",
+   "#E48312",
+   "#BD582C",
+   "#865640",
+   "#9B8357",
+   "#C2BC80",
+   "#94A088"
+  ]
+ },
+ "qMSOOrRd": {
+  "type": "discrete",
+  "colors": [
+   "#E9E5DC",
+   "#696464",
+   "#D34917",
+   "#9B2D1F",
+   "#A28E6A",
+   "#956251",
+   "#918485",
+   "#855D5D"
+  ]
+ },
+ "qMSORdOr": {
+  "type": "discrete",
+  "colors": [
+   "#EEECE1",
+   "#505046",
+   "#E84C22",
+   "#E1BD47",
+   "#B64926",
+   "#FF8427",
+   "#CC9900",
+   "#B22600"
+  ]
+ },
+ "qMSORd": {
+  "type": "discrete",
+  "colors": [
+   "#E5C243",
+   "#323232",
+   "#A5300F",
+   "#D55816",
+   "#E19825",
+   "#B19C7D",
+   "#7F5F52",
+   "#B27D49"
+  ]
+ },
+ "qMSORdPu": {
+  "type": "discrete",
+  "colors": [
+   "#D8D9DC",
+   "#454551",
+   "#E32D91",
+   "#C830CC",
+   "#4EA6DC",
+   "#4775E7",
+   "#8971E1",
+   "#D54773"
+  ]
+ },
+ "qMSOPu": {
+  "type": "discrete",
+  "colors": [
+   "#DCD8DC",
+   "#373545",
+   "#AD84C6",
+   "#8784C7",
+   "#5D739A",
+   "#6997AF",
+   "#84ACB6",
+   "#6F8183"
+  ]
+ },
+ "qMSOPu2": {
+  "type": "discrete",
+  "colors": [
+   "#EAE5EB",
+   "#632E62",
+   "#92278F",
+   "#9B57D3",
+   "#755DD9",
+   "#665EB8",
+   "#45A5ED",
+   "#5982DB"
+  ]
+ },
+ "qMSOMed": {
+  "type": "discrete",
+  "colors": [
+   "#EBDDC3",
+   "#775F55",
+   "#94B6D2",
+   "#DD8047",
+   "#A5AB81",
+   "#D8B25C",
+   "#7BA79D",
+   "#968C8C"
+  ]
+ },
+ "qMSOPap": {
+  "type": "discrete",
+  "colors": [
+   "#FEFAC9",
+   "#444D26",
+   "#A5B592",
+   "#F3A447",
+   "#E7BC29",
+   "#D092A7",
+   "#9C85C0",
+   "#809EC2"
+  ]
+ },
+ "qMSOMrq": {
+  "type": "discrete",
+  "colors": [
+   "#DDDDDD",
+   "#5E5E5E",
+   "#418AB3",
+   "#A6B727",
+   "#F69200",
+   "#838383",
+   "#FEC306",
+   "#DF5327"
+  ]
+ },
+ "qMSOSlp": {
+  "type": "discrete",
+  "colors": [
+   "#B4DCFA",
+   "#212745",
+   "#4E67C8",
+   "#5ECCF3",
+   "#A7EA52",
+   "#5DCEAF",
+   "#FF8021",
+   "#F14124"
+  ]
+ },
+ "qMSOAsp": {
+  "type": "discrete",
+  "colors": [
+   "#E3DED1",
+   "#323232",
+   "#F07F09",
+   "#9F2936",
+   "#1B587C",
+   "#4E8542",
+   "#604878",
+   "#C19859"
+  ]
+ },
+ "qPBI": {
+  "type": "discrete",
+  "colors": [
+   "#00B8AA",
+   "#374649",
+   "#FD625E",
+   "#F2C811",
+   "#5F6B6D",
+   "#8AD4EB",
+   "#FE9666",
+   "#A66999"
+  ]
+ },
+ "sPBIGn": {
+  "type": "continuous",
+  "colors": [
+   "#E9F8F6",
+   "#CCE5E2",
+   "#AFD1CE",
+   "#92BEBA",
+   "#75AAA6",
+   "#579791",
+   "#3A837D",
+   "#1D7069",
+   "#005C55"
+  ]
+ },
+ "sPBIGy1": {
+  "type": "continuous",
+  "colors": [
+   "#EDEEEE",
+   "#D3D5D5",
+   "#B9BBBC",
+   "#9FA2A3",
+   "#85898A",
+   "#6A6F70",
+   "#505657",
+   "#363C3E",
+   "#1C2325"
+  ]
+ },
+ "sPBIRd": {
+  "type": "continuous",
+  "colors": [
+   "#FEF2F1",
+   "#EEDAD9",
+   "#DEC2C1",
+   "#CEAAA8",
+   "#BF9290",
+   "#AF7978",
+   "#9F6160",
+   "#8F4947",
+   "#7F312F"
+  ]
+ },
+ "sPBIYl": {
+  "type": "continuous",
+  "colors": [
+   "#FCF9EA",
+   "#ECE6CE",
+   "#DBD4B2",
+   "#CBC196",
+   "#BBAF7A",
+   "#AA9C5D",
+   "#9A8941",
+   "#897725",
+   "#796409"
+  ]
+ },
+ "sPBIGy2": {
+  "type": "continuous",
+  "colors": [
+   "#F0F1F2",
+   "#D8DADB",
+   "#C0C2C3",
+   "#A8ABAC",
+   "#909495",
+   "#787C7D",
+   "#606566",
+   "#484D4E",
+   "#303637"
+  ]
+ },
+ "sPBIBu": {
+  "type": "continuous",
+  "colors": [
+   "#F4FAFC",
+   "#DEE8EB",
+   "#C8D6DB",
+   "#B2C4CA",
+   "#9DB2B9",
+   "#87A0A8",
+   "#718E98",
+   "#5B7C87",
+   "#456A76"
+  ]
+ },
+ "sPBIOr": {
+  "type": "continuous",
+  "colors": [
+   "#FDF5F1",
+   "#EDE0D9",
+   "#DECBC2",
+   "#CEB5AA",
+   "#BEA092",
+   "#AE8B7A",
+   "#9F7663",
+   "#8F604B",
+   "#7F4B33"
+  ]
+ },
+ "sPBIPu": {
+  "type": "continuous",
+  "colors": [
+   "#F6F1F5",
+   "#E2DAE0",
+   "#CDC2CB",
+   "#B9ABB6",
+   "#A593A1",
+   "#907C8C",
+   "#7C6477",
+   "#674D62",
+   "#53354D"
+  ]
+ },
+ "sPBIYlGn": {
+  "type": "continuous",
+  "colors": [
+   "#FAE9A0",
+   "#DBD797",
+   "#BCC68D",
+   "#9CB484",
+   "#7DA37B",
+   "#5E9171",
+   "#3F7F68",
+   "#1F6E5E",
+   "#005C55"
+  ]
+ },
+ "sPBIRdPu": {
+  "type": "continuous",
+  "colors": [
+   "#FEC0BF",
+   "#E9AFB1",
+   "#D39DA3",
+   "#BE8C94",
+   "#A97B86",
+   "#936978",
+   "#7E586A",
+   "#68465B",
+   "#53354D"
+  ]
+ },
+ "ag_GrnYl": {
+  "type": "continuous",
+  "colors": [
+   "#245668",
+   "#0F7279",
+   "#0D8F81",
+   "#39AB7E",
+   "#6EC574",
+   "#A9DC67",
+   "#EDEF5D"
+  ]
+ },
+ "ag_Sunset": {
+  "type": "continuous",
+  "colors": [
+   "#4B2991",
+   "#872CA2",
+   "#C0369D",
+   "#EA4F88",
+   "#FA7876",
+   "#F6A97A",
+   "#EDD9A3"
+  ]
+ },
+ "ArmyRose": {
+  "type": "continuous",
+  "colors": [
+   "#798234",
+   "#A3AD62",
+   "#D0D3A2",
+   "#FDFBE4",
+   "#F0C6C3",
+   "#DF91A3",
+   "#D46780"
+  ]
+ },
+ "Earth": {
+  "type": "continuous",
+  "colors": [
+   "#A16928",
+   "#BD925A",
+   "#D6BD8D",
+   "#EDEAC2",
+   "#B5C8B8",
+   "#79A7AC",
+   "#2887A1"
+  ]
+ },
+ "Fall": {
+  "type": "continuous",
+  "colors": [
+   "#3D5941",
+   "#778868",
+   "#B5B991",
+   "#F6EDBD",
+   "#EDBB8A",
+   "#DE8A5A",
+   "#CA562C"
+  ]
+ },
+ "Geyser": {
+  "type": "continuous",
+  "colors": [
+   "#008080",
+   "#70A494",
+   "#B4C8A8",
+   "#F6EDBD",
+   "#EDBB8A",
+   "#DE8A5A",
+   "#CA562C"
+  ]
+ },
+ "TealRose": {
+  "type": "continuous",
+  "colors": [
+   "#009392",
+   "#72AAA1",
+   "#B1C7B3",
+   "#F1EAC8",
+   "#E5B9AD",
+   "#D98994",
+   "#D0587E"
+  ]
+ },
+ "Temps": {
+  "type": "continuous",
+  "colors": [
+   "#009392",
+   "#39B185",
+   "#9CCB86",
+   "#E9E29C",
+   "#EEB479",
+   "#E88471",
+   "#CF597E"
+  ]
+ },
+ "Tropic": {
+  "type": "continuous",
+  "colors": [
+   "#009B9E",
+   "#42B7B9",
+   "#A7D3D4",
+   "#F1F1F1",
+   "#E4C1D9",
+   "#D691C1",
+   "#C75DAB"
+  ]
+ },
+ "Antique": {
+  "type": "continuous",
+  "colors": [
+   "#855C75",
+   "#D9AF6B",
+   "#AF6458",
+   "#736F4C",
+   "#526A83",
+   "#625377",
+   "#68855C",
+   "#9C9C5E",
+   "#A06177",
+   "#8C785D",
+   "#467378",
+   "#7C7C7C"
+  ]
+ },
+ "Bold": {
+  "type": "continuous",
+  "colors": [
+   "#7F3C8D",
+   "#11A579",
+   "#3969AC",
+   "#F2B701",
+   "#E73F74",
+   "#80BA5A",
+   "#E68310",
+   "#008695",
+   "#CF1C90",
+   "#F97B72",
+   "#4B4B8F",
+   "#A5AA99"
+  ]
+ },
+ "Pastel": {
+  "type": "continuous",
+  "colors": [
+   "#66C5CC",
+   "#F6CF71",
+   "#F89C74",
+   "#DCB0F2",
+   "#87C55F",
+   "#9EB9F3",
+   "#FE88B1",
+   "#C9DB74",
+   "#8BE0A4",
+   "#B497E7",
+   "#D3B484",
+   "#B3B3B3"
+  ]
+ },
+ "Prism": {
+  "type": "continuous",
+  "colors": [
+   "#5F4690",
+   "#1D6996",
+   "#38A6A5",
+   "#0F8554",
+   "#73AF48",
+   "#EDAD08",
+   "#E17C05",
+   "#CC503E",
+   "#94346E",
+   "#6F4070",
+   "#994E95",
+   "#666666"
+  ]
+ },
+ "Safe": {
+  "type": "continuous",
+  "colors": [
+   "#88CCEE",
+   "#CC6677",
+   "#DDCC77",
+   "#117733",
+   "#332288",
+   "#AA4499",
+   "#44AA99",
+   "#999933",
+   "#882255",
+   "#661100",
+   "#6699CC",
+   "#888888"
+  ]
+ },
+ "Vivid": {
+  "type": "continuous",
+  "colors": [
+   "#E58606",
+   "#5D69B1",
+   "#52BCA3",
+   "#99C945",
+   "#CC61B0",
+   "#24796C",
+   "#DAA51B",
+   "#2F8AC4",
+   "#764E9F",
+   "#ED645A",
+   "#CC3A8E",
+   "#A5AA99"
+  ]
+ },
+ "BluGrn": {
+  "type": "continuous",
+  "colors": [
+   "#C4E6C3",
+   "#96D2A4",
+   "#6DBC90",
+   "#4DA284",
+   "#36877A",
+   "#266B6E",
+   "#1D4F60"
+  ]
+ },
+ "BluYl": {
+  "type": "continuous",
+  "colors": [
+   "#F7FEAE",
+   "#B7E6A5",
+   "#7CCBA2",
+   "#46AEA0",
+   "#089099",
+   "#00718B",
+   "#045275"
+  ]
+ },
+ "BrwnYl": {
+  "type": "continuous",
+  "colors": [
+   "#EDE5CF",
+   "#E0C2A2",
+   "#D39C83",
+   "#C1766F",
+   "#A65461",
+   "#813753",
+   "#541F3F"
+  ]
+ },
+ "Burg": {
+  "type": "continuous",
+  "colors": [
+   "#FFC6C4",
+   "#F4A3A8",
+   "#E38191",
+   "#CC607D",
+   "#AD466C",
+   "#8B3058",
+   "#672044"
+  ]
+ },
+ "BurgYl": {
+  "type": "continuous",
+  "colors": [
+   "#FBE6C5",
+   "#F5BA98",
+   "#EE8A82",
+   "#DC7176",
+   "#C8586C",
+   "#9C3F5D",
+   "#70284A"
+  ]
+ },
+ "DarkMint": {
+  "type": "continuous",
+  "colors": [
+   "#D2FBD4",
+   "#A5DBC2",
+   "#7BBCB0",
+   "#559C9E",
+   "#3A7C89",
+   "#235D72",
+   "#123F5A"
+  ]
+ },
+ "Emrld": {
+  "type": "continuous",
+  "colors": [
+   "#D3F2A3",
+   "#97E196",
+   "#6CC08B",
+   "#4C9B82",
+   "#217A79",
+   "#105965",
+   "#074050"
+  ]
+ },
+ "Magenta": {
+  "type": "continuous",
+  "colors": [
+   "#F3CBD3",
+   "#EAA9BD",
+   "#DD88AC",
+   "#CA699D",
+   "#B14D8E",
+   "#91357D",
+   "#6C2167"
+  ]
+ },
+ "Mint": {
+  "type": "continuous",
+  "colors": [
+   "#E4F1E1",
+   "#B4D9CC",
+   "#89C0B6",
+   "#63A6A0",
+   "#448C8A",
+   "#287274",
+   "#0D585F"
+  ]
+ },
+ "OrYel": {
+  "type": "continuous",
+  "colors": [
+   "#ECDA9A",
+   "#EFC47E",
+   "#F3AD6A",
+   "#F7945D",
+   "#F97B57",
+   "#F66356",
+   "#EE4D5A"
+  ]
+ },
+ "Peach": {
+  "type": "continuous",
+  "colors": [
+   "#FDE0C5",
+   "#FACBA6",
+   "#F8B58B",
+   "#F59E72",
+   "#F2855D",
+   "#EF6A4C",
+   "#EB4A40"
+  ]
+ },
+ "PinkYl": {
+  "type": "continuous",
+  "colors": [
+   "#FEF6B5",
+   "#FFDD9A",
+   "#FFC285",
+   "#FFA679",
+   "#FA8A76",
+   "#F16D7A",
+   "#E15383"
+  ]
+ },
+ "Purp": {
+  "type": "continuous",
+  "colors": [
+   "#F3E0F7",
+   "#E4C7F1",
+   "#D1AFE8",
+   "#B998DD",
+   "#9F82CE",
+   "#826DBA",
+   "#63589F"
+  ]
+ },
+ "PurpOr": {
+  "type": "continuous",
+  "colors": [
+   "#F9DDDA",
+   "#F2B9C4",
+   "#E597B9",
+   "#CE78B3",
+   "#AD5FAD",
+   "#834BA0",
+   "#573B88"
+  ]
+ },
+ "RedOr": {
+  "type": "continuous",
+  "colors": [
+   "#F6D2A9",
+   "#F5B78E",
+   "#F19C7C",
+   "#EA8171",
+   "#DD686C",
+   "#CA5268",
+   "#B13F64"
+  ]
+ },
+ "Sunset": {
+  "type": "continuous",
+  "colors": [
+   "#F3E79B",
+   "#FAC484",
+   "#F8A07E",
+   "#EB7F86",
+   "#CE6693",
+   "#A059A0",
+   "#5C53A5"
+  ]
+ },
+ "SunsetDark": {
+  "type": "continuous",
+  "colors": [
+   "#FCDE9C",
+   "#FAA476",
+   "#F0746E",
+   "#E34F6F",
+   "#DC3977",
+   "#B9257A",
+   "#7C1D6F"
+  ]
+ },
+ "Teal": {
+  "type": "continuous",
+  "colors": [
+   "#D1EEEA",
+   "#A8DBD9",
+   "#85C4C9",
+   "#68ABB8",
+   "#4F90A6",
+   "#3B738F",
+   "#2A5674"
+  ]
+ },
+ "TealGrn": {
+  "type": "continuous",
+  "colors": [
+   "#B0F2BC",
+   "#89E8AC",
+   "#67DBA5",
+   "#4CC8A3",
+   "#38B2A3",
+   "#2C98A0",
+   "#257D98"
+  ]
+ },
+ "polarnight": {
+  "type": "discrete",
+  "colors": [
+   "#2E3440",
+   "#3B4252",
+   "#434C5E",
+   "#4C566A"
+  ]
+ },
+ "snowstorm": {
+  "type": "discrete",
+  "colors": [
+   "#D8DEE9",
+   "#E5E9F0",
+   "#ECEFF4"
+  ]
+ },
+ "frost": {
+  "type": "discrete",
+  "colors": [
+   "#8FBCBB",
+   "#88C0D0",
+   "#81A1C1",
+   "#5E81AC"
+  ]
+ },
+ "aurora": {
+  "type": "discrete",
+  "colors": [
+   "#BF616A",
+   "#D08770",
+   "#EBCB8B",
+   "#A3BE8C",
+   "#B48EAD"
+  ]
+ },
+ "lumina": {
+  "type": "discrete",
+  "colors": [
+   "#EDDAEB",
+   "#AD8CAE",
+   "#4F93B8",
+   "#306489",
+   "#222B4C"
+  ]
+ },
+ "mountain_forms": {
+  "type": "discrete",
+  "colors": [
+   "#184860",
+   "#486078",
+   "#d8d8d8",
+   "#484860",
+   "#181830"
+  ]
+ },
+ "silver_mine": {
+  "type": "discrete",
+  "colors": [
+   "#4B644B",
+   "#647D4B",
+   "#E1E1E1",
+   "#7D96AF",
+   "#647D96"
+  ]
+ },
+ "lake_superior": {
+  "type": "discrete",
+  "colors": [
+   "#7D4B19",
+   "#C89664",
+   "#C87d4B",
+   "#4B647D",
+   "#324B64",
+   "#19324B"
+  ]
+ },
+ "victory_bonds": {
+  "type": "discrete",
+  "colors": [
+   "#AF1900",
+   "#C83200",
+   "#E19600",
+   "#193264",
+   "#001964"
+  ]
+ },
+ "halifax_harbor": {
+  "type": "discrete",
+  "colors": [
+   "#E1C8AF",
+   "#C8AF96",
+   "#AF967D",
+   "#967D7D",
+   "#644B64",
+   "#4B324b"
+  ]
+ },
+ "moose_pond": {
+  "type": "discrete",
+  "colors": [
+   "#4B3232",
+   "#7D4B32",
+   "#966432",
+   "#AF7D32",
+   "#E19632",
+   "#E1AF4B",
+   "#C8C896",
+   "#4B4B4B"
+  ]
+ },
+ "algoma_forest": {
+  "type": "discrete",
+  "colors": [
+   "#4B4B4B",
+   "#967D4B",
+   "#AFAF7D",
+   "#C89632",
+   "#647D64",
+   "#96AFAF",
+   "#7D96AF"
+  ]
+ },
+ "rocky_mountain": {
+  "type": "discrete",
+  "colors": [
+   "#BEBEBE",
+   "#C8C8C8",
+   "#DCD2C8",
+   "#D2C8C8",
+   "#BEBEC8",
+   "#B4B4BE"
+  ]
+ },
+ "red_mountain": {
+  "type": "discrete",
+  "colors": [
+   "#7D3232",
+   "#7D4B4B",
+   "#7D6464",
+   "#AF967D",
+   "#FAC87D",
+   "#E1AF64",
+   "#C8964B",
+   "#32324B"
+  ]
+ },
+ "baie_mouton": {
+  "type": "discrete",
+  "colors": [
+   "#304890",
+   "#7890A8",
+   "#90A8C0",
+   "#A8A8A8",
+   "#C0C0A8",
+   "#6A7E4F",
+   "#304848"
+  ]
+ },
+ "afternoon_prarie": {
+  "type": "discrete",
+  "colors": [
+   "#486090",
+   "#6078A8",
+   "#7890A8",
+   "#90A8C0",
+   "#F0D8C0",
+   "#D6BBCF",
+   "#A8C0C0",
+   "#C0D8D8",
+   "#A8A890"
+  ]
+ },
+ "magma": {
+  "type": "continuous",
+  "colors": [
+   "#000004FF",
+   "#010107FF",
+   "#02020BFF",
+   "#030311FF",
+   "#050417FF",
+   "#07061CFF",
+   "#090721FF",
+   "#0C0926FF",
+   "#0F0B2CFF",
+   "#120D32FF",
+   "#150E37FF",
+   "#180F3EFF",
+   "#1C1044FF",
+   "#1F114AFF",
+   "#221150FF",
+   "#261257FF",
+   "#2A115DFF",
+   "#2F1163FF",
+   "#331068FF",
+   "#38106CFF",
+   "#3C0F71FF",
+   "#400F74FF",
+   "#451077FF",
+   "#491078FF",
+   "#4E117BFF",
+   "#51127CFF",
+   "#56147DFF",
+   "#5A167EFF",
+   "#5D177FFF",
+   "#611980FF",
+   "#661A80FF",
+   "#6A1C81FF",
+   "#6D1D81FF",
+   "#721F81FF",
+   "#762181FF",
+   "#792282FF",
+   "#7D2482FF",
+   "#822581FF",
+   "#862781FF",
+   "#8A2981FF",
+   "#8E2A81FF",
+   "#922B80FF",
+   "#962C80FF",
+   "#9B2E7FFF",
+   "#9F2F7FFF",
+   "#A3307EFF",
+   "#A7317DFF",
+   "#AB337CFF",
+   "#AF357BFF",
+   "#B3367AFF",
+   "#B83779FF",
+   "#BC3978FF",
+   "#C03A76FF",
+   "#C43C75FF",
+   "#C83E73FF",
+   "#CD4071FF",
+   "#D0416FFF",
+   "#D5446DFF",
+   "#D8456CFF",
+   "#DC4869FF",
+   "#DF4B68FF",
+   "#E34E65FF",
+   "#E65163FF",
+   "#E95562FF",
+   "#EC5860FF",
+   "#EE5C5EFF",
+   "#F1605DFF",
+   "#F2655CFF",
+   "#F4695CFF",
+   "#F66D5CFF",
+   "#F7735CFF",
+   "#F9785DFF",
+   "#F97C5DFF",
+   "#FA815FFF",
+   "#FB8661FF",
+   "#FC8A62FF",
+   "#FC9065FF",
+   "#FD9567FF",
+   "#FD9A6AFF",
+   "#FE9E6CFF",
+   "#FEA36FFF",
+   "#FEA873FF",
+   "#FEAC76FF",
+   "#FEB27AFF",
+   "#FEB67DFF",
+   "#FEBB81FF",
+   "#FEC085FF",
+   "#FEC488FF",
+   "#FEC98DFF",
+   "#FECD90FF",
+   "#FED395FF",
+   "#FED799FF",
+   "#FDDC9EFF",
+   "#FDE1A2FF",
+   "#FDE5A7FF",
+   "#FDEBABFF",
+   "#FCEFB1FF",
+   "#FCF4B6FF",
+   "#FCF8BAFF",
+   "#FCFDBFFF"
+  ]
+ },
+ "inferno": {
+  "type": "continuous",
+  "colors": [
+   "#000004FF",
+   "#010107FF",
+   "#02020CFF",
+   "#040311FF",
+   "#050418FF",
+   "#08051DFF",
+   "#0A0723FF",
+   "#0D0829FF",
+   "#110A2FFF",
+   "#140B35FF",
+   "#180C3BFF",
+   "#1B0C42FF",
+   "#1F0C48FF",
+   "#230C4DFF",
+   "#280B53FF",
+   "#2C0B58FF",
+   "#310A5CFF",
+   "#360961FF",
+   "#3A0963FF",
+   "#3E0966FF",
+   "#430A68FF",
+   "#470B6AFF",
+   "#4B0C6BFF",
+   "#500D6CFF",
+   "#540F6DFF",
+   "#58106EFF",
+   "#5C126EFF",
+   "#60136EFF",
+   "#64156EFF",
+   "#69166EFF",
+   "#6C186EFF",
+   "#71196EFF",
+   "#741A6EFF",
+   "#781C6DFF",
+   "#7D1E6DFF",
+   "#801F6CFF",
+   "#85216BFF",
+   "#88226AFF",
+   "#8D2369FF",
+   "#912568FF",
+   "#952667FF",
+   "#992766FF",
+   "#9D2964FF",
+   "#A22B62FF",
+   "#A52C60FF",
+   "#A92E5EFF",
+   "#AD305CFF",
+   "#B1325AFF",
+   "#B53458FF",
+   "#B93556FF",
+   "#BD3853FF",
+   "#C03A51FF",
+   "#C43C4EFF",
+   "#C73F4BFF",
+   "#CB4149FF",
+   "#CF4446FF",
+   "#D24644FF",
+   "#D54A41FF",
+   "#D84C3EFF",
+   "#DB503BFF",
+   "#DF5237FF",
+   "#E15635FF",
+   "#E45A32FF",
+   "#E65D2FFF",
+   "#E9612BFF",
+   "#EB6529FF",
+   "#ED6925FF",
+   "#EF6D22FF",
+   "#F1711FFF",
+   "#F3751BFF",
+   "#F47918FF",
+   "#F67E14FF",
+   "#F78311FF",
+   "#F8870EFF",
+   "#F98C0AFF",
+   "#FA9008FF",
+   "#FB9606FF",
+   "#FB9A06FF",
+   "#FC9F07FF",
+   "#FCA409FF",
+   "#FCA80DFF",
+   "#FCAD12FF",
+   "#FCB216FF",
+   "#FBB81CFF",
+   "#FBBD22FF",
+   "#FAC228FF",
+   "#F9C72EFF",
+   "#F9CB35FF",
+   "#F7D03CFF",
+   "#F6D544FF",
+   "#F5DB4BFF",
+   "#F4E054FF",
+   "#F3E55DFF",
+   "#F2E967FF",
+   "#F1ED71FF",
+   "#F2F27CFF",
+   "#F3F587FF",
+   "#F5F991FF",
+   "#F9FB9BFF",
+   "#FCFFA4FF"
+  ]
+ },
+ "plasma": {
+  "type": "continuous",
+  "colors": [
+   "#0D0887FF",
+   "#150789FF",
+   "#1B068DFF",
+   "#220690FF",
+   "#270591FF",
+   "#2C0594FF",
+   "#300597FF",
+   "#350498FF",
+   "#39049AFF",
+   "#3E049CFF",
+   "#43039EFF",
+   "#47039FFF",
+   "#4B03A1FF",
+   "#4F02A2FF",
+   "#5302A3FF",
+   "#5701A4FF",
+   "#5B01A5FF",
+   "#6001A6FF",
+   "#6300A7FF",
+   "#6700A8FF",
+   "#6B00A8FF",
+   "#6F00A8FF",
+   "#7301A8FF",
+   "#7701A8FF",
+   "#7B02A8FF",
+   "#7F03A8FF",
+   "#8305A7FF",
+   "#8707A6FF",
+   "#8A09A5FF",
+   "#8E0CA4FF",
+   "#910EA3FF",
+   "#9511A1FF",
+   "#99149FFF",
+   "#9C179EFF",
+   "#9F1A9DFF",
+   "#A21D9AFF",
+   "#A62098FF",
+   "#A92296FF",
+   "#AC2694FF",
+   "#AF2892FF",
+   "#B22B8FFF",
+   "#B52F8CFF",
+   "#B7318AFF",
+   "#BB3488FF",
+   "#BD3786FF",
+   "#C03A83FF",
+   "#C23D81FF",
+   "#C5407EFF",
+   "#C8437BFF",
+   "#CA457AFF",
+   "#CC4977FF",
+   "#CE4B75FF",
+   "#D14E72FF",
+   "#D35271FF",
+   "#D5546EFF",
+   "#D8576BFF",
+   "#DA5A6AFF",
+   "#DC5D67FF",
+   "#DE6065FF",
+   "#E06363FF",
+   "#E26560FF",
+   "#E4695EFF",
+   "#E66C5CFF",
+   "#E76F5AFF",
+   "#E97257FF",
+   "#EB7556FF",
+   "#ED7953FF",
+   "#EF7B51FF",
+   "#F07F4FFF",
+   "#F1824CFF",
+   "#F3864BFF",
+   "#F48948FF",
+   "#F58C46FF",
+   "#F79044FF",
+   "#F89441FF",
+   "#F9973FFF",
+   "#FA9B3DFF",
+   "#FA9E3BFF",
+   "#FBA238FF",
+   "#FCA536FF",
+   "#FCA934FF",
+   "#FDAD32FF",
+   "#FDB130FF",
+   "#FDB52EFF",
+   "#FEB92CFF",
+   "#FEBD2AFF",
+   "#FDC129FF",
+   "#FDC527FF",
+   "#FDC926FF",
+   "#FCCD25FF",
+   "#FCD225FF",
+   "#FBD624FF",
+   "#FADA24FF",
+   "#F8DE25FF",
+   "#F7E225FF",
+   "#F6E726FF",
+   "#F5EC27FF",
+   "#F3F027FF",
+   "#F1F426FF",
+   "#F0F921FF"
+  ]
+ },
+ "viridis": {
+  "type": "continuous",
+  "colors": [
+   "#440154FF",
+   "#450558FF",
+   "#46085CFF",
+   "#470D60FF",
+   "#471063FF",
+   "#481467FF",
+   "#481769FF",
+   "#481B6DFF",
+   "#481E70FF",
+   "#482173FF",
+   "#482576FF",
+   "#482878FF",
+   "#472C7AFF",
+   "#472F7CFF",
+   "#46327EFF",
+   "#453581FF",
+   "#453882FF",
+   "#443B84FF",
+   "#433E85FF",
+   "#424186FF",
+   "#404587FF",
+   "#3F4788FF",
+   "#3E4A89FF",
+   "#3D4D8AFF",
+   "#3C508BFF",
+   "#3B528BFF",
+   "#39558CFF",
+   "#38598CFF",
+   "#375B8DFF",
+   "#355E8DFF",
+   "#34608DFF",
+   "#33638DFF",
+   "#32658EFF",
+   "#31688EFF",
+   "#2F6B8EFF",
+   "#2E6D8EFF",
+   "#2D708EFF",
+   "#2C718EFF",
+   "#2B748EFF",
+   "#2A768EFF",
+   "#29798EFF",
+   "#287C8EFF",
+   "#277E8EFF",
+   "#26818EFF",
+   "#26828EFF",
+   "#25858EFF",
+   "#24878EFF",
+   "#238A8DFF",
+   "#228D8DFF",
+   "#218F8DFF",
+   "#20928CFF",
+   "#20938CFF",
+   "#1F968BFF",
+   "#1F998AFF",
+   "#1E9B8AFF",
+   "#1F9E89FF",
+   "#1FA088FF",
+   "#1FA287FF",
+   "#20A486FF",
+   "#22A785FF",
+   "#24AA83FF",
+   "#25AC82FF",
+   "#28AE80FF",
+   "#2BB07FFF",
+   "#2EB37CFF",
+   "#31B67BFF",
+   "#35B779FF",
+   "#39BA76FF",
+   "#3DBC74FF",
+   "#41BE71FF",
+   "#47C06FFF",
+   "#4CC26CFF",
+   "#51C56AFF",
+   "#56C667FF",
+   "#5BC863FF",
+   "#61CA60FF",
+   "#67CC5CFF",
+   "#6DCD59FF",
+   "#73D056FF",
+   "#78D152FF",
+   "#7FD34EFF",
+   "#85D54AFF",
+   "#8CD646FF",
+   "#92D741FF",
+   "#99D83DFF",
+   "#A0DA39FF",
+   "#A7DB35FF",
+   "#ADDC30FF",
+   "#B4DE2CFF",
+   "#BBDE28FF",
+   "#C2DF23FF",
+   "#C9E020FF",
+   "#D0E11CFF",
+   "#D7E219FF",
+   "#DDE318FF",
+   "#E4E419FF",
+   "#EBE51AFF",
+   "#F1E51DFF",
+   "#F7E620FF",
+   "#FDE725FF"
+  ]
+ },
+ "cividis": {
+  "type": "continuous",
+  "colors": [
+   "#00204DFF",
+   "#002251FF",
+   "#002455FF",
+   "#002659FF",
+   "#00275FFF",
+   "#002A63FF",
+   "#002C68FF",
+   "#002D6CFF",
+   "#002F6FFF",
+   "#00306FFF",
+   "#00326FFF",
+   "#00336FFF",
+   "#01366EFF",
+   "#0D386EFF",
+   "#15396DFF",
+   "#1C3B6DFF",
+   "#213D6DFF",
+   "#263F6CFF",
+   "#2A406CFF",
+   "#2E436CFF",
+   "#31456BFF",
+   "#35466BFF",
+   "#39486BFF",
+   "#3B4A6BFF",
+   "#3F4C6BFF",
+   "#414D6BFF",
+   "#444F6BFF",
+   "#48526BFF",
+   "#4A536BFF",
+   "#4D556CFF",
+   "#4F576CFF",
+   "#52596CFF",
+   "#545A6CFF",
+   "#575C6DFF",
+   "#595F6DFF",
+   "#5B606EFF",
+   "#5E626EFF",
+   "#60646FFF",
+   "#63666FFF",
+   "#646770FF",
+   "#676970FF",
+   "#6A6C71FF",
+   "#6C6D72FF",
+   "#6E6F73FF",
+   "#707173FF",
+   "#727374FF",
+   "#747475FF",
+   "#777776FF",
+   "#797977FF",
+   "#7B7A78FF",
+   "#7E7D78FF",
+   "#807E79FF",
+   "#838079FF",
+   "#848379FF",
+   "#878479FF",
+   "#8A8779FF",
+   "#8C8879FF",
+   "#8F8A79FF",
+   "#918C78FF",
+   "#948E78FF",
+   "#979178FF",
+   "#999278FF",
+   "#9C9577FF",
+   "#9E9677FF",
+   "#A19976FF",
+   "#A39A76FF",
+   "#A69D75FF",
+   "#AA9F75FF",
+   "#ACA174FF",
+   "#AFA473FF",
+   "#B1A573FF",
+   "#B4A872FF",
+   "#B6A971FF",
+   "#B9AC70FF",
+   "#BBAF6FFF",
+   "#BFB06EFF",
+   "#C2B36DFF",
+   "#C4B56CFF",
+   "#C7B76BFF",
+   "#CAB96AFF",
+   "#CDBC68FF",
+   "#D0BE67FF",
+   "#D2C066FF",
+   "#D6C364FF",
+   "#D8C563FF",
+   "#DBC761FF",
+   "#DDCA5FFF",
+   "#E1CC5DFF",
+   "#E4CF5BFF",
+   "#E6D159FF",
+   "#EAD357FF",
+   "#ECD555FF",
+   "#F0D852FF",
+   "#F3DB4FFF",
+   "#F6DD4DFF",
+   "#F9E04AFF",
+   "#FCE247FF",
+   "#FFE544FF",
+   "#FFE742FF",
+   "#FFEA46FF"
+  ]
+ },
+ "rocket": {
+  "type": "continuous",
+  "colors": [
+   "#03051AFF",
+   "#06071CFF",
+   "#08081EFF",
+   "#0D0A21FF",
+   "#100B23FF",
+   "#140E26FF",
+   "#170F28FF",
+   "#1B112BFF",
+   "#1F122DFF",
+   "#221331FF",
+   "#271534FF",
+   "#2A1636FF",
+   "#2E1739FF",
+   "#32183BFF",
+   "#35193EFF",
+   "#391A41FF",
+   "#3D1A42FF",
+   "#421B45FF",
+   "#451C47FF",
+   "#491D49FF",
+   "#4D1D4BFF",
+   "#511E4DFF",
+   "#551E4FFF",
+   "#591E50FF",
+   "#5E1F52FF",
+   "#621F53FF",
+   "#661F54FF",
+   "#6A1F56FF",
+   "#6E1F57FF",
+   "#721F58FF",
+   "#761F58FF",
+   "#7B1F59FF",
+   "#801E5AFF",
+   "#841E5AFF",
+   "#881E5BFF",
+   "#8C1D5BFF",
+   "#921C5BFF",
+   "#961C5BFF",
+   "#9A1B5BFF",
+   "#9E1A5BFF",
+   "#A3195BFF",
+   "#A7185AFF",
+   "#AB185AFF",
+   "#B01759FF",
+   "#B41658FF",
+   "#B91657FF",
+   "#BD1656FF",
+   "#C11754FF",
+   "#C51852FF",
+   "#C81951FF",
+   "#CD1C4EFF",
+   "#D01E4DFF",
+   "#D3214BFF",
+   "#D62549FF",
+   "#D92847FF",
+   "#DD2C45FF",
+   "#DF2F44FF",
+   "#E23442FF",
+   "#E43841FF",
+   "#E73D3FFF",
+   "#E8413EFF",
+   "#EB463EFF",
+   "#EC4B3EFF",
+   "#ED513EFF",
+   "#EF5640FF",
+   "#EF5B42FF",
+   "#F06043FF",
+   "#F16546FF",
+   "#F26948FF",
+   "#F26E4CFF",
+   "#F3734FFF",
+   "#F37852FF",
+   "#F47C56FF",
+   "#F4815AFF",
+   "#F4855EFF",
+   "#F58A61FF",
+   "#F58F66FF",
+   "#F5936AFF",
+   "#F5976EFF",
+   "#F69B72FF",
+   "#F6A077FF",
+   "#F6A47BFF",
+   "#F6A880FF",
+   "#F6AD85FF",
+   "#F6B08AFF",
+   "#F6B48FFF",
+   "#F6B894FF",
+   "#F6BC99FF",
+   "#F6C09EFF",
+   "#F7C5A4FF",
+   "#F7C9AAFF",
+   "#F7CCB0FF",
+   "#F7D0B5FF",
+   "#F8D4BBFF",
+   "#F8D7C0FF",
+   "#F8DBC6FF",
+   "#F9DFCBFF",
+   "#F9E3D2FF",
+   "#FAE7D7FF",
+   "#FAEBDDFF"
+  ]
+ },
+ "mako": {
+  "type": "continuous",
+  "colors": [
+   "#0B0405FF",
+   "#0F0609FF",
+   "#11070CFF",
+   "#140910FF",
+   "#160B14FF",
+   "#190E18FF",
+   "#1B0F1BFF",
+   "#1E111FFF",
+   "#211423FF",
+   "#231526FF",
+   "#26172AFF",
+   "#28192FFF",
+   "#2A1B33FF",
+   "#2C1C37FF",
+   "#2E1E3BFF",
+   "#31213FFF",
+   "#322243FF",
+   "#342548FF",
+   "#35264CFF",
+   "#372851FF",
+   "#382A55FF",
+   "#3A2C59FF",
+   "#3B2F5EFF",
+   "#3C3162FF",
+   "#3E3367FF",
+   "#3E356CFF",
+   "#3F3770FF",
+   "#403A75FF",
+   "#403C79FF",
+   "#413E7EFF",
+   "#414083FF",
+   "#414387FF",
+   "#40478AFF",
+   "#40498EFF",
+   "#3F4C91FF",
+   "#3E4F94FF",
+   "#3D5296FF",
+   "#3C5598FF",
+   "#3B589AFF",
+   "#3A5C9BFF",
+   "#395E9CFF",
+   "#38629DFF",
+   "#37649EFF",
+   "#37689FFF",
+   "#366A9FFF",
+   "#366DA0FF",
+   "#3670A0FF",
+   "#3573A1FF",
+   "#3576A2FF",
+   "#3579A2FF",
+   "#357CA3FF",
+   "#357EA4FF",
+   "#3482A4FF",
+   "#3485A5FF",
+   "#3487A6FF",
+   "#348AA6FF",
+   "#348DA7FF",
+   "#3490A8FF",
+   "#3492A8FF",
+   "#3496A9FF",
+   "#3499AAFF",
+   "#359BAAFF",
+   "#359FABFF",
+   "#35A1ABFF",
+   "#36A4ABFF",
+   "#37A7ACFF",
+   "#38AAACFF",
+   "#3AADACFF",
+   "#3BAFADFF",
+   "#3DB3ADFF",
+   "#3FB5ADFF",
+   "#41B8ADFF",
+   "#43BBADFF",
+   "#46BEADFF",
+   "#48C1ADFF",
+   "#4CC3ADFF",
+   "#50C6ADFF",
+   "#54C9ADFF",
+   "#59CCADFF",
+   "#5FCDADFF",
+   "#65D0ADFF",
+   "#6CD3ADFF",
+   "#74D4ADFF",
+   "#7BD6AFFF",
+   "#83D8B0FF",
+   "#8BDAB2FF",
+   "#93DBB5FF",
+   "#99DDB6FF",
+   "#A0DFB9FF",
+   "#A7E1BCFF",
+   "#ADE3C0FF",
+   "#B3E4C3FF",
+   "#B9E6C7FF",
+   "#BFE9CBFF",
+   "#C4EACFFF",
+   "#C9EDD3FF",
+   "#CFEED7FF",
+   "#D4F1DCFF",
+   "#D9F2E0FF",
+   "#DEF5E5FF"
+  ]
+ },
+ "turbo": {
+  "type": "continuous",
+  "colors": [
+   "#30123BFF",
+   "#341A4EFF",
+   "#362160FF",
+   "#392971FF",
+   "#3B3082FF",
+   "#3E3890FF",
+   "#3F3F9FFF",
+   "#4146ACFF",
+   "#424DB8FF",
+   "#4454C4FF",
+   "#455BCEFF",
+   "#4662D7FF",
+   "#4669E0FF",
+   "#4770E8FF",
+   "#4776EEFF",
+   "#467CF3FF",
+   "#4683F8FF",
+   "#4589FCFF",
+   "#4490FEFF",
+   "#4196FFFF",
+   "#3D9DFEFF",
+   "#3AA3FCFF",
+   "#36AAF9FF",
+   "#30B0F5FF",
+   "#2CB7F0FF",
+   "#28BDEAFF",
+   "#23C3E4FF",
+   "#1FC8DEFF",
+   "#1CCDD8FF",
+   "#1AD3D1FF",
+   "#18D8C9FF",
+   "#18DDC2FF",
+   "#18E1BCFF",
+   "#1AE4B6FF",
+   "#1EE8B0FF",
+   "#22EBAAFF",
+   "#29EFA2FF",
+   "#30F19AFF",
+   "#38F491FF",
+   "#41F689FF",
+   "#4AF880FF",
+   "#54FA78FF",
+   "#5EFC6EFF",
+   "#68FD67FF",
+   "#72FE5EFF",
+   "#7DFF56FF",
+   "#86FF50FF",
+   "#8FFF49FF",
+   "#98FE43FF",
+   "#9FFD3FFF",
+   "#A6FC3AFF",
+   "#ADFB38FF",
+   "#B4F836FF",
+   "#BBF535FF",
+   "#C1F334FF",
+   "#C7EF34FF",
+   "#CEEC34FF",
+   "#D4E735FF",
+   "#DAE336FF",
+   "#DFDF37FF",
+   "#E4DA38FF",
+   "#E9D539FF",
+   "#EDD03AFF",
+   "#F1CA3AFF",
+   "#F5C53AFF",
+   "#F7C03AFF",
+   "#FABA39FF",
+   "#FCB436FF",
+   "#FDAE35FF",
+   "#FEA832FF",
+   "#FEA030FF",
+   "#FE992CFF",
+   "#FE922AFF",
+   "#FD8A26FF",
+   "#FB8222FF",
+   "#FA7A1FFF",
+   "#F8731CFF",
+   "#F66B19FF",
+   "#F36315FF",
+   "#F05C13FF",
+   "#ED5510FF",
+   "#EA4F0DFF",
+   "#E7490CFF",
+   "#E2430AFF",
+   "#DE3E08FF",
+   "#DA3907FF",
+   "#D53406FF",
+   "#D02F05FF",
+   "#CB2A04FF",
+   "#C42603FF",
+   "#BE2102FF",
+   "#B81E02FF",
+   "#B21A01FF",
+   "#AA1701FF",
+   "#A41301FF",
+   "#9C0F01FF",
+   "#940C01FF",
+   "#8B0902FF",
+   "#830702FF",
+   "#7A0403FF"
+  ]
+ },
+ "ocean.algae": {
+  "type": "continuous",
+  "colors": [
+   "#122414",
+   "#193F29",
+   "#185B3B",
+   "#0C7748",
+   "#129450",
+   "#50AD59",
+   "#84C47A",
+   "#AFDDA2",
+   "#D7F9D0"
+  ]
+ },
+ "ocean.deep": {
+  "type": "continuous",
+  "colors": [
+   "#281A2C",
+   "#352A4A",
+   "#3F396D",
+   "#404C8B",
+   "#3E6495",
+   "#427999",
+   "#488E9E",
+   "#50A3A2",
+   "#5DBAA4",
+   "#78CEA3",
+   "#A3DEA6",
+   "#D1EDB4",
+   "#FDFECC"
+  ]
+ },
+ "ocean.dense": {
+  "type": "continuous",
+  "colors": [
+   "#360E24",
+   "#5D1A58",
+   "#723692",
+   "#795CC3",
+   "#7487E0",
+   "#7EB0E4",
+   "#AAD2E3",
+   "#E6F1F1"
+  ]
+ },
+ "ocean.gray": {
+  "type": "continuous",
+  "colors": [
+   "#000000",
+   "#363636",
+   "#717070",
+   "#B1B1B0",
+   "#FFFFFD"
+  ]
+ },
+ "ocean.haline": {
+  "type": "continuous",
+  "colors": [
+   "#2A186C",
+   "#2E1B87",
+   "#2B229F",
+   "#1D35A1",
+   "#11459A",
+   "#0C5294",
+   "#115D8F",
+   "#19678C",
+   "#22718A",
+   "#2B7A89",
+   "#328388",
+   "#388D88",
+   "#3E9886",
+   "#44A284",
+   "#4CAC80",
+   "#55B67A",
+   "#62BF72",
+   "#73C869",
+   "#8AD060",
+   "#A4D75C",
+   "#BEDC62",
+   "#D5E171",
+   "#EAE784",
+   "#FDEF9A"
+  ]
+ },
+ "ocean.ice": {
+  "type": "continuous",
+  "colors": [
+   "#040613",
+   "#1E1D3B",
+   "#333268",
+   "#3F4B96",
+   "#3E6AB0",
+   "#4989BC",
+   "#61A8C7",
+   "#83C5D3",
+   "#B6E0E3",
+   "#EAFDFD"
+  ]
+ },
+ "ocean.matter": {
+  "type": "continuous",
+  "colors": [
+   "#2F0F3E",
+   "#581756",
+   "#831C63",
+   "#AB2960",
+   "#CE4356",
+   "#E66A54",
+   "#F29567",
+   "#F9C187",
+   "#FEEDB0"
+  ]
+ },
+ "ocean.oxy": {
+  "type": "continuous",
+  "colors": [
+   "#400505",
+   "#54070A",
+   "#6A060F",
+   "#80060D",
+   "#901A07",
+   "#9C2E04",
+   "#A84003",
+   "#B25203",
+   "#BC6404",
+   "#C57606",
+   "#CE880B",
+   "#D59A12",
+   "#DCAE19",
+   "#E2C221",
+   "#E7D72C",
+   "#EAED3E",
+   "#F8FE69"
+  ]
+ },
+ "ocean.phase": {
+  "type": "continuous",
+  "colors": [
+   "#A8780D",
+   "#BD6827",
+   "#CE5642",
+   "#DA4065",
+   "#DF2A92",
+   "#D528C3",
+   "#C040E4",
+   "#A25BF3",
+   "#7E71F0",
+   "#5384DD",
+   "#2D8FBD",
+   "#19959D",
+   "#0C987D",
+   "#219A54",
+   "#5A9422",
+   "#88860D",
+   "#A8780D"
+  ]
+ },
+ "ocean.solar": {
+  "type": "continuous",
+  "colors": [
+   "#331418",
+   "#602124",
+   "#8B3120",
+   "#AA5116",
+   "#C07613",
+   "#D0A01F",
+   "#DBCC32",
+   "#E1FD4B"
+  ]
+ },
+ "ocean.thermal": {
+  "type": "continuous",
+  "colors": [
+   "#042333",
+   "#072B4B",
+   "#0E3167",
+   "#1F3488",
+   "#3A339E",
+   "#51399D",
+   "#624198",
+   "#744992",
+   "#84508E",
+   "#95568A",
+   "#A65C85",
+   "#B9627E",
+   "#CB6773",
+   "#DB6E66",
+   "#EB7958",
+   "#F58649",
+   "#FA963F",
+   "#FCA93C",
+   "#FABD3E",
+   "#F7D145",
+   "#F1E54F",
+   "#E8FA5B"
+  ]
+ },
+ "ocean.turbid": {
+  "type": "continuous",
+  "colors": [
+   "#221F1B",
+   "#4D392D",
+   "#795338",
+   "#A1703B",
+   "#BF9747",
+   "#D3C56F",
+   "#E9F6AB"
+  ]
+ },
+ "ocean.balance": {
+  "type": "continuous",
+  "colors": [
+   "#181C43",
+   "#21295F",
+   "#27347D",
+   "#28409F",
+   "#1950BA",
+   "#0A65BD",
+   "#1F77BB",
+   "#3787BA",
+   "#4F96BA",
+   "#6AA4BC",
+   "#87B2C1",
+   "#A3BFC9",
+   "#BECDD3",
+   "#D8DCDE",
+   "#F0ECEB",
+   "#E8D7D2",
+   "#E1C1B8",
+   "#DAAD9E",
+   "#D49884",
+   "#CD8369",
+   "#C66E51",
+   "#BF583B",
+   "#B7412A",
+   "#AB2924",
+   "#991527",
+   "#830E29",
+   "#6B0E25",
+   "#530D1D",
+   "#3C0912"
+  ]
+ },
+ "ocean.curl": {
+  "type": "continuous",
+  "colors": [
+   "#151D44",
+   "#1B3B55",
+   "#1B5867",
+   "#117676",
+   "#2B937F",
+   "#69AB89",
+   "#A1C1A1",
+   "#D2D9C6",
+   "#FDF5F3",
+   "#EDCEBF",
+   "#E2A78F",
+   "#D67F6D",
+   "#C35961",
+   "#A73960",
+   "#851F60",
+   "#5C1453",
+   "#340D35"
+  ]
+ },
+ "ocean.delta": {
+  "type": "continuous",
+  "colors": [
+   "#112040",
+   "#142348",
+   "#172650",
+   "#1B2A59",
+   "#1E2D62",
+   "#21316C",
+   "#243576",
+   "#253781",
+   "#263B8A",
+   "#244094",
+   "#214599",
+   "#1E4C9B",
+   "#1C529D",
+   "#1B579D",
+   "#1B5D9E",
+   "#1B629F",
+   "#1C67A0",
+   "#1E6DA1",
+   "#2072A2",
+   "#2277A3",
+   "#257DA4",
+   "#2881A5",
+   "#2C87A7",
+   "#2F8CA8",
+   "#3391A9",
+   "#3896AB",
+   "#3D9BAC",
+   "#42A0AD",
+   "#49A5AE",
+   "#51A9AF",
+   "#5BAEB0",
+   "#64B2B2",
+   "#6FB6B3",
+   "#7ABAB5",
+   "#85BEB8",
+   "#8EC1BA",
+   "#98C6BE",
+   "#A2CAC2",
+   "#ABCEC5",
+   "#B5D2C9",
+   "#BED6CD",
+   "#C6DBD1",
+   "#CFDFD4",
+   "#D7E3D8",
+   "#DFE9DC",
+   "#E8EDDF",
+   "#F0F2E2",
+   "#F9F8E5",
+   "#FDF9C7",
+   "#F9F2BB",
+   "#F5ECB0",
+   "#F2E6A5",
+   "#EEE099",
+   "#EADA8D",
+   "#E7D582",
+   "#E2CE76",
+   "#DDCA6A",
+   "#D8C55F",
+   "#D2C054",
+   "#CCBC48",
+   "#C4B73E",
+   "#BDB434",
+   "#B5B02B",
+   "#ACAC22",
+   "#A4A91B",
+   "#9BA614",
+   "#92A20D",
+   "#88A008",
+   "#7F9C06",
+   "#769906",
+   "#6C9606",
+   "#62920A",
+   "#588F0E",
+   "#4F8C11",
+   "#458816",
+   "#3B841A",
+   "#32801D",
+   "#297C21",
+   "#207724",
+   "#197227",
+   "#126E29",
+   "#0E6A2B",
+   "#0B642C",
+   "#0B602C",
+   "#0C5B2D",
+   "#0E552C",
+   "#10512C",
+   "#134B2A",
+   "#154628",
+   "#174127",
+   "#183C24",
+   "#193721",
+   "#19321E",
+   "#192C1A",
+   "#182816",
+   "#172313"
+  ]
+ },
+ "ocean.amp": {
+  "type": "continuous",
+  "colors": [
+   "#F1EDEC",
+   "#E5CEC8",
+   "#DCB1A3",
+   "#D3947E",
+   "#CA775B",
+   "#C0583B",
+   "#B23726",
+   "#9D1926",
+   "#7F0E29",
+   "#5C0E21",
+   "#3C0912"
+  ]
+ },
+ "ocean.speed": {
+  "type": "continuous",
+  "colors": [
+   "#FFFDCD",
+   "#E9D889",
+   "#C9BA45",
+   "#98A512",
+   "#60920B",
+   "#277B23",
+   "#0B5F2D",
+   "#174026",
+   "#172313"
+  ]
+ },
+ "ocean.tempo": {
+  "type": "continuous",
+  "colors": [
+   "#FFF6F4",
+   "#CBD5C0",
+   "#92BB99",
+   "#4FA183",
+   "#13847B",
+   "#19616C",
+   "#1C4058",
+   "#151D44"
+  ]
+ },
+ "BrowntoBlue.10": {
+  "type": "continuous",
+  "colors": [
+   "#663000",
+   "#996136",
+   "#CC9B7A",
+   "#D9AF98",
+   "#F2DACE",
+   "#CCFDFF",
+   "#99F8FF",
+   "#66F0FF",
+   "#33E4FF",
+   "#00AACC"
+  ]
+ },
+ "BrowntoBlue.12": {
+  "type": "continuous",
+  "colors": [
+   "#331A00",
+   "#663000",
+   "#996136",
+   "#CC9B7A",
+   "#D9AF98",
+   "#F2DACE",
+   "#CCFDFF",
+   "#99F8FF",
+   "#66F0FF",
+   "#33E4FF",
+   "#00AACC",
+   "#007A99"
+  ]
+ },
+ "BluetoDarkOrange.12": {
+  "type": "continuous",
+  "colors": [
+   "#1F8F99",
+   "#52C4CC",
+   "#99FAFF",
+   "#B2FCFF",
+   "#CCFEFF",
+   "#E6FFFF",
+   "#FFE6CC",
+   "#FFCA99",
+   "#FFAD66",
+   "#FF8F33",
+   "#CC5800",
+   "#994000"
+  ]
+ },
+ "BluetoDarkOrange.18": {
+  "type": "continuous",
+  "colors": [
+   "#006666",
+   "#009999",
+   "#00CCCC",
+   "#00FFFF",
+   "#33FFFF",
+   "#66FFFF",
+   "#99FFFF",
+   "#B2FFFF",
+   "#CCFFFF",
+   "#E6FFFF",
+   "#FFE6CC",
+   "#FFCA99",
+   "#FFAD66",
+   "#FF8F33",
+   "#FF6E00",
+   "#CC5500",
+   "#993D00",
+   "#662700"
+  ]
+ },
+ "DarkRedtoBlue.12": {
+  "type": "continuous",
+  "colors": [
+   "#2A0BD9",
+   "#264EFF",
+   "#40A1FF",
+   "#73DAFF",
+   "#ABF8FF",
+   "#E0FFFF",
+   "#FFFFBF",
+   "#FFE099",
+   "#FFAD73",
+   "#F76E5E",
+   "#D92632",
+   "#A60021"
+  ]
+ },
+ "DarkRedtoBlue.18": {
+  "type": "continuous",
+  "colors": [
+   "#2400D9",
+   "#191DF7",
+   "#2957FF",
+   "#3D87FF",
+   "#57B0FF",
+   "#75D3FF",
+   "#99EBFF",
+   "#BDF9FF",
+   "#EBFFFF",
+   "#FFFFEB",
+   "#FFF2BD",
+   "#FFD699",
+   "#FFAC75",
+   "#FF7857",
+   "#FF3D3D",
+   "#F72836",
+   "#D91630",
+   "#A60021"
+  ]
+ },
+ "BluetoGreen.14": {
+  "type": "continuous",
+  "colors": [
+   "#0000FF",
+   "#3333FF",
+   "#6666FF",
+   "#9999FF",
+   "#B2B2FF",
+   "#CCCCFF",
+   "#E6E6FF",
+   "#E6FFE6",
+   "#CCFFCC",
+   "#B2FFB2",
+   "#99FF99",
+   "#66FF66",
+   "#33FF33",
+   "#00FF00"
+  ]
+ },
+ "BluetoGray.8": {
+  "type": "continuous",
+  "colors": [
+   "#0099CC",
+   "#66E6FF",
+   "#99FFFF",
+   "#CCFFFF",
+   "#E6E6E6",
+   "#999999",
+   "#666666",
+   "#333333"
+  ]
+ },
+ "BluetoOrangeRed.14": {
+  "type": "continuous",
+  "colors": [
+   "#085AFF",
+   "#3377FF",
+   "#5991FF",
+   "#8CB2FF",
+   "#BFD4FF",
+   "#E6EEFF",
+   "#F7FAFF",
+   "#FFFFCC",
+   "#FFFF99",
+   "#FFFF00",
+   "#FFCC00",
+   "#FF9900",
+   "#FF6600",
+   "#FF0000"
+  ]
+ },
+ "BluetoOrange.10": {
+  "type": "continuous",
+  "colors": [
+   "#0055FF",
+   "#3399FF",
+   "#66CCFF",
+   "#99EEFF",
+   "#CCFFFF",
+   "#FFFFCC",
+   "#FFEE99",
+   "#FFCC66",
+   "#FF9933",
+   "#FF5500"
+  ]
+ },
+ "BluetoOrange.12": {
+  "type": "continuous",
+  "colors": [
+   "#002BFF",
+   "#1A66FF",
+   "#3399FF",
+   "#66CCFF",
+   "#99EEFF",
+   "#CCFFFF",
+   "#FFFFCC",
+   "#FFEE99",
+   "#FFCC66",
+   "#FF9933",
+   "#FF661A",
+   "#FF2B00"
+  ]
+ },
+ "BluetoOrange.8": {
+  "type": "continuous",
+  "colors": [
+   "#0080FF",
+   "#4CC4FF",
+   "#99EEFF",
+   "#CCFFFF",
+   "#FFFFCC",
+   "#FFEE99",
+   "#FFC44C",
+   "#FF8000"
+  ]
+ },
+ "LightBluetoDarkBlue.10": {
+  "type": "continuous",
+  "colors": [
+   "#E6FFFF",
+   "#CCFBFF",
+   "#B2F2FF",
+   "#99E6FF",
+   "#80D4FF",
+   "#66BFFF",
+   "#4CA6FF",
+   "#3388FF",
+   "#1A66FF",
+   "#0040FF"
+  ]
+ },
+ "LightBluetoDarkBlue.7": {
+  "type": "continuous",
+  "colors": [
+   "#FFFFFF",
+   "#CCFDFF",
+   "#99F8FF",
+   "#66F0FF",
+   "#33E4FF",
+   "#00AACC",
+   "#007A99"
+  ]
+ },
+ "Categorical.12": {
+  "type": "discrete",
+  "colors": [
+   "#FFBF80",
+   "#FF8000",
+   "#FFFF99",
+   "#FFFF33",
+   "#B2FF8C",
+   "#33FF00",
+   "#A6EDFF",
+   "#1AB2FF",
+   "#CCBFFF",
+   "#664CFF",
+   "#FF99BF",
+   "#E61A33"
+  ]
+ },
+ "GreentoMagenta.16": {
+  "type": "continuous",
+  "colors": [
+   "#005100",
+   "#008600",
+   "#00BC00",
+   "#00F100",
+   "#51FF51",
+   "#86FF86",
+   "#BCFFBC",
+   "#FFFFFF",
+   "#FFF1FF",
+   "#FFBCFF",
+   "#FF86FF",
+   "#FF51FF",
+   "#F100F1",
+   "#BC00BC",
+   "#860086",
+   "#510051"
+  ]
+ },
+ "SteppedSequential.5": {
+  "type": "discrete",
+  "colors": [
+   "#990F0F",
+   "#B22D2D",
+   "#CC5252",
+   "#E67E7E",
+   "#FFB2B2",
+   "#99700F",
+   "#B28B2D",
+   "#CCA852",
+   "#E6C77E",
+   "#FFE8B2",
+   "#1F990F",
+   "#3CB22D",
+   "#60CC52",
+   "#8AE67E",
+   "#BCFFB2",
+   "#710F99",
+   "#8B2DB2",
+   "#A852CC",
+   "#C77EE6",
+   "#E9B2FF",
+   "#990F20",
+   "#B22D3C",
+   "#CC5260",
+   "#E67E8A",
+   "#FFB2BC"
+  ]
+ },
+ "jcolors-default": {
+  "type": "discrete",
+  "colors": [
+   "#29BF12",
+   "#00A5CF",
+   "#DE1A1A",
+   "#574AE2",
+   "#FFBF00"
+  ],
+  "names": [
+   "kelly_green",
+   "rich_electric_blue",
+   "maximum_red",
+   "majorelle_blue",
+   "fluorescent_orange"
+  ]
+ },
+ "jcolors-pal2": {
+  "type": "discrete",
+  "colors": [
+   "#3E71A8",
+   "#CEFF1A",
+   "#870E75",
+   "#FE6900",
+   "#0BB19F"
+  ],
+  "names": [
+   "blue_yonder",
+   "arctic_lime",
+   "mardi_gras",
+   "safety_orange",
+   "tiffany_blue"
+  ]
+ },
+ "jcolors-pal3": {
+  "type": "discrete",
+  "colors": [
+   "#66CD00",
+   "#009ACD",
+   "#FF4500",
+   "#9A32CD",
+   "#F5E400"
+  ],
+  "names": [
+   "chartreuse3",
+   "deepskyblue3",
+   "orangered",
+   "darkorchid4",
+   "titanium_yellow"
+  ]
+ },
+ "jcolors-pal4": {
+  "type": "discrete",
+  "colors": [
+   "#202547",
+   "#53354A",
+   "#7A6C5D",
+   "#BE3144",
+   "#FF7844",
+   "#E3D26F"
+  ],
+  "names": [
+   "yankees_blue",
+   "purple_taupe",
+   "deep_taupe",
+   "raspberry",
+   "mango",
+   "straw"
+  ]
+ },
+ "jcolors-pal5": {
+  "type": "discrete",
+  "colors": [
+   "#628395",
+   "#C5D86D",
+   "#DB2763",
+   "#17377A",
+   "#FC471E",
+   "#55DDE0"
+  ],
+  "names": [
+   "steel_teal",
+   "june_bud",
+   "cherry",
+   "st_patricks_blue",
+   "orioles_orange",
+   "turquoise"
+  ]
+ },
+ "jcolors-pal6": {
+  "type": "discrete",
+  "colors": [
+   "#558aa6",
+   "#B1740F",
+   "#D5006A",
+   "#08585A",
+   "#FFFD98",
+   "#9449d2",
+   "#BBBE64",
+   "#D7263D"
+  ],
+  "names": [
+   "rackley",
+   "dark_goldenrod",
+   "rubine_red",
+   "midnight_green",
+   "canary",
+   "dark_orchid",
+   "dark_khaki",
+   "rusty_red"
+  ]
+ },
+ "jcolors-pal7": {
+  "type": "discrete",
+  "colors": [
+   "#1d3554",
+   "#DFE07C",
+   "#7F8E39",
+   "#42858C",
+   "#E48F1B",
+   "#570D32",
+   "#E5C616",
+   "#D33B44"
+  ],
+  "names": [
+   "very_dark_blue",
+   "very_soft_yellow",
+   "dark_moderate_yellow",
+   "dark_moderate_cyan",
+   "vivid_orange",
+   "very_dark_pink",
+   "vivid_yellow",
+   "moderate_red"
+  ]
+ },
+ "jcolors-pal8": {
+  "type": "discrete",
+  "colors": [
+   "#943CB4",
+   "#194D44",
+   "#C6CF6E",
+   "#5B6DC8",
+   "#3CA437",
+   "#6B244C",
+   "#6ACDC5",
+   "#DE1A1A",
+   "#BBB53E",
+   "#2A297A",
+   "#995533",
+   "#D590DA"
+  ],
+  "names": [
+   "moderate_violet",
+   "very_dark_cyan",
+   "slightly_desaturated_yellow",
+   "moderate_blue",
+   "dark_moderate_lime_green",
+   "very_dark_pink",
+   "slightly_desaturated_cyan",
+   "maximum_red",
+   "moderate_yellow",
+   "dark_moderate_blue",
+   "dark_moderate_orange",
+   "very_soft_magenta"
+  ]
+ },
+ "jcolors-pal9": {
+  "type": "discrete",
+  "colors": [
+   "#273B5B",
+   "#C1C243",
+   "#E73E26",
+   "#2E6657",
+   "#E8F5B3",
+   "#24A99C"
+  ]
+ },
+ "jcolors-pal10": {
+  "type": "continuous",
+  "colors": [
+   "#3e71a8",
+   "#577f9f",
+   "#698e96",
+   "#779d8d",
+   "#84ad83",
+   "#8fbd77",
+   "#99cd6b",
+   "#a2dd5c",
+   "#aaee49",
+   "#b2ff2e"
+  ]
+ },
+ "jcolors-pal11": {
+  "type": "continuous",
+  "colors": [
+   "#202547",
+   "#323649",
+   "#41474b",
+   "#4e5a4c",
+   "#5c6c4c",
+   "#68804c",
+   "#75944b",
+   "#81a949",
+   "#8ebe45",
+   "#9ad340",
+   "#a6e939",
+   "#b2ff2e"
+  ]
+ },
+ "jcolors-pal12": {
+  "type": "continuous",
+  "colors": [
+   "#202547",
+   "#43444a",
+   "#5f654a",
+   "#7b8948",
+   "#97b043",
+   "#b2d736",
+   "#ceff1a",
+   "#d8e01b",
+   "#dfc11b",
+   "#e2a11b",
+   "#e37f1b",
+   "#e1581a",
+   "#de1a1a"
+  ]
+ },
+ "jcolors-rainbow": {
+  "type": "continuous",
+  "colors": [
+   "#D12600",
+   "#DB6A00",
+   "#B2FF2E",
+   "#00AD00",
+   "#9CCADE",
+   "#005B94",
+   "#1E2085",
+   "#610052",
+   "#953272"
+  ],
+  "names": [
+   "rosso_corsa",
+   "spanish_orange",
+   "green_yellow",
+   "green",
+   "pale_cerulean",
+   "sea_blue",
+   "st_patricks_blue",
+   "tyrian_purple",
+   "amaranth_deep_purple"
+  ]
+ },
+ "jet": {
+  "type": "continuous",
+  "colors": [
+   "#00007A",
+   "#000085",
+   "#00008F",
+   "#000099",
+   "#0000A3",
+   "#0000AD",
+   "#0000B8",
+   "#0000C2",
+   "#0000CC",
+   "#0000D6",
+   "#0000E0",
+   "#0000EB",
+   "#0000F5",
+   "#0000FF",
+   "#000AFF",
+   "#0014FF",
+   "#001FFF",
+   "#0029FF",
+   "#0033FF",
+   "#003DFF",
+   "#0047FF",
+   "#0052FF",
+   "#005CFF",
+   "#0066FF",
+   "#0070FF",
+   "#007AFF",
+   "#0085FF",
+   "#008FFF",
+   "#0099FF",
+   "#00A3FF",
+   "#00ADFF",
+   "#00B8FF",
+   "#00C2FF",
+   "#00CCFF",
+   "#00D6FF",
+   "#00E0FF",
+   "#00EBFF",
+   "#00F5FF",
+   "#00FFFF",
+   "#0AFFF5",
+   "#14FFEB",
+   "#1FFFE0",
+   "#29FFD6",
+   "#33FFCC",
+   "#3DFFC2",
+   "#47FFB8",
+   "#52FFAD",
+   "#5CFFA3",
+   "#66FF99",
+   "#70FF8F",
+   "#7AFF85",
+   "#85FF7A",
+   "#8FFF70",
+   "#99FF66",
+   "#A3FF5C",
+   "#ADFF52",
+   "#B8FF47",
+   "#C2FF3D",
+   "#CCFF33",
+   "#D6FF29",
+   "#E0FF1F",
+   "#EBFF14",
+   "#F5FF0A",
+   "#FFFF00",
+   "#FFF500",
+   "#FFEB00",
+   "#FFE000",
+   "#FFD600",
+   "#FFCC00",
+   "#FFC200",
+   "#FFB800",
+   "#FFAD00",
+   "#FFA300",
+   "#FF9900",
+   "#FF8F00",
+   "#FF8500",
+   "#FF7A00",
+   "#FF7000",
+   "#FF6600",
+   "#FF5C00",
+   "#FF5200",
+   "#FF4700",
+   "#FF3D00",
+   "#FF3300",
+   "#FF2900",
+   "#FF1F00",
+   "#FF1400",
+   "#FF0A00",
+   "#FF0000",
+   "#F50000",
+   "#EB0000",
+   "#E00000",
+   "#D60000",
+   "#CC0000",
+   "#C20000",
+   "#B80000",
+   "#AD0000",
+   "#A30000",
+   "#990000",
+   "#8F0000"
+  ]
+ },
+ "simspec": {
+  "type": "discrete",
+  "colors": [
+   "#c22b86",
+   "#f769a1",
+   "#fcc5c1",
+   "#253777",
+   "#1d92c0",
+   "#9ec9e1",
+   "#015b33",
+   "#42aa5e",
+   "#d9f0a2",
+   "#E66F00",
+   "#f18c28",
+   "#FFBB61"
+  ]
+ },
+ "GdRd": {
+  "type": "discrete",
+  "colors": [
+   "gold",
+   "red3"
+  ]
+ }
+}
