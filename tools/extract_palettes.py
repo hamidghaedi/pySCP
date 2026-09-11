@@ -25,7 +25,7 @@ def main(rda: str) -> None:
     obj = load_rda(rda)["palette_list"]
     names = obj["attrs"]["names"]
     out = {}
-    for nm, v in zip(names, obj["values"]):
+    for nm, v in zip(names, obj["values"], strict=True):
         if isinstance(v, dict):
             out[nm] = {"type": v["attrs"].get("type", ["discrete"])[0], "colors": v["values"]}
         else:

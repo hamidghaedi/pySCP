@@ -22,7 +22,8 @@ from __future__ import annotations
 
 import re
 import warnings
-from typing import Iterable, Literal, Sequence
+from collections.abc import Iterable, Sequence
+from typing import Literal
 
 import numpy as np
 import pandas as pd

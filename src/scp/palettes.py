@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import json
 import warnings
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from importlib import resources
-from typing import Iterable, Literal, Mapping, Sequence
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -174,13 +175,13 @@ def discrete_palette(
             picked = list(colors[:n])
         else:
             picked = color_ramp(colors, n)
-        out = dict(zip(levels, picked))
+        out = dict(zip(levels, picked, strict=True))
 
     if include_na:
         out["NA"] = na_color
     if reverse:
         keys = list(out)
-        out = dict(zip(keys, list(out.values())[::-1]))
+        out = dict(zip(keys, list(out.values())[::-1], strict=True))
     return out
 
 

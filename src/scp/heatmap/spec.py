@@ -32,8 +32,9 @@ Spec: ``docs/porting_briefs/heatmaps.md``.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Callable, Literal, Sequence
+from typing import Literal
 
 import numpy as np
 import pandas as pd

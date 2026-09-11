@@ -1,6 +1,11 @@
 """Minimal reader for R's XDR serialization (format 2/3), enough for named
 character-vector lists with attributes."""
-import struct, bz2, gzip, lzma, json, sys
+import bz2
+import gzip
+import json
+import lzma
+import struct
+import sys
 
 NILVALUE_SXP=254; NILSXP=0; SYMSXP=1; LISTSXP=2; CHARSXP=9; LGLSXP=10
 INTSXP=13; REALSXP=14; STRSXP=16; VECSXP=19; REFSXP=255

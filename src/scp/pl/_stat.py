@@ -11,7 +11,8 @@ Spec: ``docs/porting_briefs/stat_plots.md``.
 
 from __future__ import annotations
 
-from typing import Literal, Sequence
+from collections.abc import Sequence
+from typing import Literal
 
 import pandas as pd
 from matplotlib.figure import Figure

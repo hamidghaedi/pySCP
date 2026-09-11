@@ -8,7 +8,8 @@ Reference: ``SCP/R/SCP-plot.R`` lines 7196--7230.
 
 from __future__ import annotations
 
-from typing import Callable, Literal
+from collections.abc import Callable
+from typing import Literal
 
 import numpy as np
 

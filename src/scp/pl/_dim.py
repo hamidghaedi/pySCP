@@ -13,7 +13,8 @@ The remaining functions here carry their full, final signatures but raise
 from __future__ import annotations
 
 import warnings
-from typing import Literal, Sequence
+from collections.abc import Sequence
+from typing import Literal
 
 import numpy as np
 import pandas as pd

@@ -10,7 +10,8 @@ Spec: ``docs/porting_briefs/heatmaps.md``.
 
 from __future__ import annotations
 
-from typing import Callable, Literal, Sequence
+from collections.abc import Callable, Sequence
+from typing import Literal
 
 import numpy as np
 

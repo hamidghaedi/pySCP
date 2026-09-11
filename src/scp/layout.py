@@ -14,8 +14,9 @@ port — build it before any plot function.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Callable, Iterable, Literal, Sequence
+from typing import Literal
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
