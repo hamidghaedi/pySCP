@@ -24,7 +24,7 @@ body raises · **n/a** = nothing to port.
 | `segementsDf` | 6666 | `scp.pl.shorten_segments` | stub | 11 |
 | `VelocityPlot` | 6745 | `scp.pl.velocity_plot` | stub | 12 |
 | `compute_velocity_on_grid` | 6963 | delegate to **scvelo** | stub | 12 |
-| `GroupHeatmap` | 7911 | `scp.pl.group_heatmap` | stub | 7 |
+| `GroupHeatmap` | 7911 | `scp.pl.group_heatmap` | done (matrix verified vs R; enrichment tracks stub) | 7 |
 | `FeatureHeatmap` | 9114 | `scp.pl.feature_heatmap` | stub | 7 |
 | `FeatureCorHeatmap` | 9980 | `scp.pl.feature_cor_heatmap` | stub — **R version is an empty stub**, implement clean-room | 10 |
 | `CellCorHeatmap` | 10113 | `scp.pl.cell_cor_heatmap` | stub | 10 |
@@ -49,7 +49,7 @@ body raises · **n/a** = nothing to port.
 | `adjcolors` | `scp.adjcolors` | done |
 | `blendcolors`, `Blend2Color`, `BlendRGBList`, `RGBA2RGB` | `scp.colors.*` | done |
 | `matrix_process`, `zscore_matrix`, `fc_matrix`, `log2fc_matrix`, `log1p_matrix` | `scp.matrix_process` | done |
-| `heatmap_rendersize` / `heatmap_fixsize` | `HeatmapSpec.figsize()` | done (sizing); renderer todo |
+| `heatmap_rendersize` / `heatmap_fixsize` | `HeatmapSpec.figsize()` + `heatmap.render` | done |
 | `panel_fix` / `panel_fix_overall` | `scp.layout.PanelGrid` + `panel_size_for` | done |
 | `cluster_within_group2` | `scp.heatmap` (todo) | stub |
 | `heatmap_enrichment` | pluggable `enrichment_fn` | stub |

@@ -103,9 +103,17 @@ trick: down-regulated genes hang **below** zero and the axis is relabelled with
 `scipy.stats.gaussian_kde` gives control over the ordering rules, which matter
 here.
 
-### 7 — The heatmap engine + `group_heatmap` / `feature_heatmap` — L
+### 7 — The heatmap engine + `group_heatmap` — L (engine + group_heatmap done)
 
 Brief: `porting_briefs/heatmaps.md`. This is the biggest single piece.
+
+Landed: `heatmap/render.py` (inch-exact GridSpec engine, nested split subgrids,
+simple/block/mark tracks, whiteout/bg/reticle/dot layers, legend column,
+dendrogram axes) and `group_heatmap`. Its matrix matches R's `matrix_list` to
+8.6e-07 — see `notebooks/01_parity_foundation.ipynb` §8.
+
+Still to do: `feature_heatmap` (per-cell, downsampled), `cluster_within_group2`,
+enrichment tracks, and the `mfuzz`/peaktime split methods.
 
 Build `heatmap/render.py` bottom-up and do not skip a step:
 
