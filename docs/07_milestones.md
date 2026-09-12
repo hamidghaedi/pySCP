@@ -51,9 +51,18 @@ per-feature two-stop ramps from `adjcolors(hue, 0.1)` → `hue`, per-cell
 `blendcolors`, draw order by descending RGB sum, and **one colorbar per
 feature** tiled `min(ceil(sqrt(N)), 3)` per row.
 
-### 4 — `feature_stat_plot` / `expression_stat_plot` — L
+### 4 — `feature_stat_plot` — L (partly done)
 
 Brief: `porting_briefs/stat_plots.md` §1.
+
+Landed: all five `plot_type`s, `bg_by` striping (including the default
+alternating grey85 that fires with no `bg_by` at all), declared level order,
+`sort`, `split_by` dodging, `same_y_lims`, and the `add_point`/`add_box`/
+`add_stat`/`add_line` overlays. Verified against R in
+`notebooks/01_parity_foundation.ipynb`.
+
+Still stub: `stack`, `plot_by="feature"`, `individual`, `add_trend`,
+`calculate_coexp` and the whole significance-bracket layer.
 
 The five `plot_type`s are straightforward; the work is in the surrounding
 grammar. Order: violin → box → bar → dot → col, then `bg_by` striping

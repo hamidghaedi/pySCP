@@ -11,7 +11,7 @@ body raises · **n/a** = nothing to port.
 | `FeatureDimPlot` | 2042 | `scp.pl.feature_dim_plot` | done (standard + blend; `add_density`/`graph`/`lineages`/`hex` stub) | 3 |
 | `CellDimPlot3D` | 2843 | `scp.pl.cell_dim_plot_3d` | stub | 8 |
 | `FeatureDimPlot3D` | 3066 | `scp.pl.feature_dim_plot_3d` | stub | 8 |
-| `FeatureStatPlot` | 3524 | `scp.pl.feature_stat_plot` | stub | 4 |
+| `FeatureStatPlot` | 3524 | `scp.pl.feature_stat_plot` | done (5 plot_types + bg_by/overlays; `stack`/`plot_by='feature'`/stats stub) | 4 |
 | `ExpressionStatPlot` | 3723 | `scp.pl.expression_stat_plot` | stub | 4 |
 | `CellStatPlot` | 4463 | `scp.pl.cell_stat_plot` | stub | 5 |
 | `StatPlot` | 4564 | `scp.pl.stat_plot` | stub | 5 |
@@ -59,6 +59,12 @@ body raises · **n/a** = nothing to port.
 | `check_DataType` | `scp.fetch.infer_data_type` | done |
 | `drop_data` / `slim_data` | — n/a (no ggplot data duplication problem) | — |
 | `as_grob` / `as_gtable` / `build_patchwork` | — n/a | — |
+
+## Signature changes made during the port
+
+| Function | Change | Why |
+|---|---|---|
+| `feature_stat_plot` | added `title`, `subtitle`, `xlab`, `ylab="Expression level"` | The scaffold signature omitted them; they are parameters of the R original and `ylab`'s default is visible on every panel. |
 
 ## Argument renaming rules
 
