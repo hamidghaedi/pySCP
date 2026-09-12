@@ -126,6 +126,7 @@ class PanelGrid:
         margin: float = 0.45,
         wspace: float = 0.25,
         hspace: float = 0.3,
+        polar: bool = False,
     ) -> None:
         self.theme = theme or Theme()
         self.legend = legend if legend is not None else LegendColumn(position=self.theme.legend_position)
@@ -142,8 +143,14 @@ class PanelGrid:
         self.axes: dict[str, Axes] = {}
         for i, key in enumerate(self.keys):
             r, c = (i // self.ncol, i % self.ncol) if byrow else (i % self.nrow, i // self.nrow)
-            ax = self.fig.add_subplot(self.gs[r, c])
-            apply_theme(ax, self.theme)
+            ax = self.fig.add_subplot(self.gs[r, c], projection="polar" if polar else None)
+            if not polar:
+                apply_theme(ax, self.theme)
+            else:
+                # theme_scp's rectangular frame is meaningless on a polar axes;
+                # coord_polar drops it in ggplot too.
+                ax.set_facecolor(self.theme.background)
+                ax.spines["polar"].set_visible(False)
             self.axes[key] = ax
 
     def __iter__(self):

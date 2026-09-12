@@ -13,8 +13,8 @@ body raises · **n/a** = nothing to port.
 | `FeatureDimPlot3D` | 3066 | `scp.pl.feature_dim_plot_3d` | stub | 8 |
 | `FeatureStatPlot` | 3524 | `scp.pl.feature_stat_plot` | done (5 plot_types + bg_by/overlays; `stack`/`plot_by='feature'`/stats stub) | 4 |
 | `ExpressionStatPlot` | 3723 | `scp.pl.expression_stat_plot` | stub | 4 |
-| `CellStatPlot` | 4463 | `scp.pl.cell_stat_plot` | stub | 5 |
-| `StatPlot` | 4564 | `scp.pl.stat_plot` | stub | 5 |
+| `CellStatPlot` | 4463 | `scp.pl.cell_stat_plot` | done (9/11 types; sankey+chord stub) | 5 |
+| `StatPlot` | 4564 | `scp.pl.stat_plot` | done (9/11 types; sankey+chord stub) | 5 |
 | `FeatureCorPlot` | 5232 | `scp.pl.feature_cor_plot` | stub | 6 |
 | `CellDensityPlot` | 5679 | `scp.pl.cell_density_plot` | stub | 6 |
 | `VolcanoPlot` | 7088 | `scp.pl.volcano_plot` | stub | 6 |

@@ -75,9 +75,17 @@ For significance brackets there is no `ggpubr`; `statannotations` is the
 closest, or hand-roll — a bracket is two `hlines` and a `text`, and the
 `step.increase=0.1` stacking rule is in the brief.
 
-### 5 — `cell_stat_plot` / `stat_plot` — L
+### 5 — `cell_stat_plot` / `stat_plot` — L (9 of 11 done)
 
 Brief: `porting_briefs/stat_plots.md` §2.
+
+Landed: the aggregation core (complete cross-tab, empty cells retained,
+percent within group) plus `bar`, `trend`, `area`, `dot`, `rose`, `ring`,
+`pie`, `venn` and `upset`. Verified against R in
+`notebooks/01_parity_foundation.ipynb` §9.
+
+Still stub: `sankey` and `chord`, which have no good Python equivalent, and
+`individual`.
 
 Eleven `plot_type`s. Ship `bar`, `trend`, `area`, `dot` first (cartesian),
 then `rose`/`ring`/`pie` (polar — note the dummy `"   "` level that reserves

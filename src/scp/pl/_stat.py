@@ -11,19 +11,21 @@ Spec: ``docs/porting_briefs/stat_plots.md``.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Sequence
 from typing import Literal
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
 from matplotlib.patches import Patch
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import MaxNLocator, PercentFormatter
 
 from ..fetch import as_ordered_categorical, fetch_data
 from ..layout import LegendColumn, PanelGrid
 from ..palettes import discrete_palette
-from ..theme import theme_scp
+from ..theme import halo, theme_scp
 
 __all__ = [
     "feature_stat_plot",
@@ -402,12 +404,358 @@ def cell_stat_plot(
     types (``sankey``, ``chord``, ``venn``, ``upset``) and forces
     ``stat_type="count"``.
     """
-    raise NotImplementedError("Milestone 5. Spec: docs/porting_briefs/stat_plots.md §2.")
+    if isinstance(stat_by, str):
+        stat_cols = [stat_by]
+    else:
+        stat_cols = list(stat_by)
+
+    # R takes unique(c(stat.by, group.by, split.by, bg.by)); the same column may
+    # legitimately serve two roles, and selecting it twice makes a frame with
+    # duplicate labels that cannot be reindexed.
+    cols = list(dict.fromkeys(c for c in stat_cols + [group_by, split_by, bg_by] if c))
+    data = adata.obs.loc[:, cols].copy()
+    if cells is not None:
+        data = data.loc[data.index.intersection(pd.Index(cells))]
+    return stat_plot(
+        data, stat_by=stat_cols, group_by=group_by, split_by=split_by, bg_by=bg_by,
+        plot_type=plot_type, stat_type=stat_type, position=position, palette=palette,
+        palcolor=palcolor, alpha=alpha, na_color=na_color, na_stat=na_stat,
+        stat_level=stat_level, label=label, label_size=label_size, flip=flip,
+        keep_empty=keep_empty, individual=individual, panel_size=panel_size,
+        aspect_ratio=aspect_ratio, legend_position=legend_position, nrow=nrow,
+        ncol=ncol, byrow=byrow, force=force, seed=seed,
+    )
 
 
-def stat_plot(data: pd.DataFrame, *args, **kwargs) -> Figure:
-    """DataFrame engine behind :func:`cell_stat_plot`. Milestone 5."""
-    raise NotImplementedError("Milestone 5. Spec: docs/porting_briefs/stat_plots.md §2.")
+def stat_plot(
+    data: pd.DataFrame,
+    *,
+    stat_by: Sequence[str],
+    group_by: str | None = None,
+    split_by: str | None = None,
+    bg_by: str | None = None,
+    plot_type: StatPlotType = "bar",
+    stat_type: Literal["percent", "count"] = "percent",
+    position: Literal["stack", "dodge"] = "stack",
+    palette: str = "Paired",
+    palcolor: Sequence[str] | dict[str, str] | None = None,
+    alpha: float = 1.0,
+    na_color: str = "#BEBEBE",
+    na_stat: bool = True,
+    stat_level=None,
+    label: bool = False,
+    label_size: float = 3.5,
+    flip: bool = False,
+    keep_empty: bool = False,
+    individual: bool = False,
+    panel_size: tuple[float, float] = (2.6, 2.2),
+    aspect_ratio: float | None = None,
+    legend_position: str = "right",
+    nrow: int | None = None,
+    ncol: int | None = None,
+    byrow: bool = True,
+    force: bool = False,
+    seed: int = 11,
+) -> Figure:
+    """DataFrame engine behind :func:`cell_stat_plot`.
+
+    R original: ``StatPlot``.  The aggregation core is a **complete** cross-tab
+    of ``stat_by x group_by`` within each split level, keeping empty cells, and
+    (for ``stat_type="percent"``) dividing by the group total.  Get that right
+    before worrying about any geometry: every ``plot_type`` is a different view
+    of the same table.
+
+    Multi-column ``stat_by`` is only meaningful for the set-like types
+    (``venn``/``upset``), which binarise each column with ``stat_level``.
+    """
+    stat_cols = list(stat_by)
+    if len(stat_cols) >= 2 and plot_type not in ("sankey", "chord", "venn", "upset"):
+        raise ValueError(
+            "several `stat_by` columns are only meaningful for plot_type in "
+            "{'sankey', 'chord', 'venn', 'upset'}"
+        )
+    if plot_type in ("sankey", "chord"):
+        raise NotImplementedError(
+            f"plot_type={plot_type!r} is specified in docs/porting_briefs/stat_plots.md "
+            "§2.3 but not yet implemented; see docs/07_milestones.md."
+        )
+    if individual:
+        raise NotImplementedError(
+            "`individual` is specified in docs/porting_briefs/stat_plots.md §2.2 "
+            "but not yet implemented."
+        )
+    if plot_type in ("rose", "ring", "pie"):
+        aspect_ratio = 1.0
+
+    if plot_type in ("venn", "upset"):
+        return _set_plot(data, stat_cols, plot_type, stat_level=stat_level, palette=palette,
+                         palcolor=palcolor, alpha=alpha, panel_size=panel_size,
+                         legend_position=legend_position, label_size=label_size)
+
+    stat_col = stat_cols[0]
+    stat_cat = as_ordered_categorical(data[stat_col], show_na=na_stat)
+    stat_levels = [str(x) for x in stat_cat.cat.categories]
+    data = data.copy()
+    data[stat_col] = np.asarray(stat_cat).astype(str)
+
+    if group_by is None:
+        group_by = "__all__"
+        data[group_by] = ""
+        group_levels = [""]
+    else:
+        gcat = as_ordered_categorical(data[group_by])
+        group_levels = [str(x) for x in gcat.cat.categories]
+        data[group_by] = np.asarray(gcat).astype(str)
+
+    if split_by is None:
+        split_levels: list[str | None] = [None]
+    else:
+        scat = as_ordered_categorical(data[split_by])
+        split_levels = [str(x) for x in scat.cat.categories]
+        data[split_by] = np.asarray(scat).astype(str)
+
+    colors = discrete_palette(stat_levels, palette=palette, palcolor=palcolor)
+    if "NA" in stat_levels:
+        colors["NA"] = na_color
+
+    th = theme_scp(aspect_ratio=aspect_ratio, legend_position=legend_position)
+    keys = [str(s) for s in split_levels]
+    legend = LegendColumn(position=legend_position)
+    pg = PanelGrid(len(keys), panel_size=panel_size, nrow=nrow, ncol=ncol, byrow=byrow,
+                   keys=keys, theme=th, legend=legend,
+                   polar=plot_type in ("rose", "ring", "pie"))
+
+    for sp in split_levels:
+        ax = pg.axes[str(sp)]
+        block = data if sp is None else data[data[split_by] == sp]
+
+        # The aggregation core: a COMPLETE cross-tab, empty cells retained, then
+        # normalised within each group. Every plot_type below is a view of this.
+        tab = pd.crosstab(block[stat_col], block[group_by], dropna=False)
+        tab = tab.reindex(index=stat_levels, columns=group_levels, fill_value=0)
+        if stat_type == "percent":
+            totals = tab.sum(axis=0).replace(0, np.nan)
+            values = tab / totals
+        else:
+            values = tab.astype(float)
+
+        levels_x = list(group_levels)
+        if not keep_empty:
+            nonempty = [g for g in levels_x if tab[g].sum() > 0]
+            levels_x = nonempty or levels_x
+        if flip and plot_type not in ("pie", "rose"):
+            levels_x = levels_x[::-1]
+
+        _draw_stat_panel(ax, values[levels_x], stat_levels, levels_x, colors,
+                         plot_type=plot_type, stat_type=stat_type, position=position,
+                         alpha=alpha, label=label, label_size=label_size, flip=flip,
+                         bg_by=bg_by, block=block, group_by=group_by, theme=th)
+
+        if sp is not None:
+            ax.set_title(str(sp), fontsize=th.size("plot.title"))
+
+    handles = [Patch(facecolor=colors[lv], edgecolor="black", label=lv) for lv in stat_levels]
+    if legend_position != "none":
+        legend.add(stat_col, handles)
+    return pg.finish()
+
+
+def _draw_stat_panel(ax, values, stat_levels, levels_x, colors, *, plot_type, stat_type,
+                     position, alpha, label, label_size, flip, bg_by, block, group_by, theme):
+    """Draw one panel of the aggregated table."""
+    n_x = len(levels_x)
+    x = np.arange(n_x)
+
+    if plot_type in ("bar", "area", "trend"):
+        if position == "stack":
+            bottom = np.zeros(n_x)
+            # ggplot's position_stack fills from the top down, so the FIRST
+            # level ends up at the top of the bar. Accumulating in declared
+            # order instead silently flips the whole figure upside down.
+            for lv in reversed(stat_levels):
+                v = np.nan_to_num(values.loc[lv].to_numpy())
+                if plot_type == "bar":
+                    ax.bar(x, v, bottom=bottom, width=0.8, color=colors[lv], alpha=alpha,
+                           edgecolor="black", linewidth=0.5)
+                elif plot_type == "area":
+                    ax.fill_between(x, bottom, bottom + v, color=colors[lv], alpha=alpha,
+                                    edgecolor="black", linewidth=0.5)
+                else:  # trend: a ribbon joining adjacent bars, plus a narrow bar
+                    ax.fill_between(x, bottom, bottom + v, color=colors[lv],
+                                    alpha=alpha / 2, edgecolor="#7F7F7F", linewidth=0.5)
+                    ax.bar(x, v, bottom=bottom, width=0.6, color=colors[lv], alpha=alpha,
+                           edgecolor="black", linewidth=0.5)
+                if label:
+                    for xi, (b, vv) in enumerate(zip(bottom, v, strict=True)):
+                        if vv <= 0:
+                            continue
+                        txt = f"{vv * 100:.1f}%" if stat_type == "percent" else f"{vv:g}"
+                        t = ax.text(xi, b + vv / 2, txt, ha="center", va="center",
+                                    fontsize=label_size * 2, color="black")
+                        halo(t, foreground="white", radius=0.1)
+                bottom = bottom + v
+        else:
+            w = 0.8 / max(len(stat_levels), 1)
+            for i, lv in enumerate(stat_levels):
+                v = np.nan_to_num(values.loc[lv].to_numpy())
+                off = (i - (len(stat_levels) - 1) / 2) * w
+                ax.bar(x + off, v, width=w * 0.95, color=colors[lv], alpha=alpha,
+                       edgecolor="black", linewidth=0.5)
+        ax.set_xticks(x)
+        ax.set_xticklabels(levels_x, rotation=45, ha="right")
+        if stat_type == "percent" and position == "stack":
+            ax.set_ylim(0, 1)
+            ax.yaxis.set_major_formatter(PercentFormatter(xmax=1))
+
+    elif plot_type == "dot":
+        # y is the CATEGORY, not the value: a dot matrix sized by the statistic
+        vmax = np.nanmax(values.to_numpy()) or 1.0
+        for yi, lv in enumerate(stat_levels):
+            v = np.nan_to_num(values.loc[lv].to_numpy())
+            ax.scatter(x, np.full(n_x, yi), s=12 ** 2 * v / vmax, facecolor=colors[lv],
+                       edgecolor="black", linewidth=0.5, alpha=alpha)
+        ax.set_xticks(x)
+        ax.set_xticklabels(levels_x, rotation=45, ha="right")
+        ax.set_yticks(range(len(stat_levels)))
+        ax.set_yticklabels(stat_levels)
+        ax.set_ylim(-0.6, len(stat_levels) - 0.4)
+
+    elif plot_type == "rose":
+        # Nightingale rose: group levels around the circle, radius = value
+        width = 2 * np.pi / max(n_x, 1)
+        theta = x * width
+        bottom = np.zeros(n_x)
+        for lv in stat_levels:
+            v = np.nan_to_num(values.loc[lv].to_numpy())
+            ax.bar(theta, v, width=width * 0.95, bottom=bottom, color=colors[lv],
+                   alpha=alpha, edgecolor="black", linewidth=0.5)
+            bottom = bottom + v
+        ax.set_xticks(theta)
+        ax.set_xticklabels(levels_x, fontsize=7)
+        ax.set_yticklabels([])
+
+    elif plot_type in ("ring", "pie"):
+        # theta carries the value; ring reserves an inner hole, pie does not.
+        # R prepends a dummy "   " level to the group factor to make the hole.
+        totals = values.sum(axis=1)
+        frac = (totals / totals.sum()).to_numpy() if totals.sum() else np.zeros(len(totals))
+        start = np.pi / 2 if flip else 0.0
+        inner = 0.45 if plot_type == "ring" else 0.0
+        edges = start + 2 * np.pi * np.concatenate([[0], np.cumsum(frac)])
+        for i, lv in enumerate(stat_levels):
+            if frac[i] <= 0:
+                continue
+            ax.bar((edges[i] + edges[i + 1]) / 2, 1 - inner, width=edges[i + 1] - edges[i],
+                   bottom=inner, color=colors[lv], alpha=alpha, edgecolor="black",
+                   linewidth=0.5)
+            if label:
+                t = ax.text((edges[i] + edges[i + 1]) / 2, inner + (1 - inner) / 2,
+                            f"{frac[i] * 100:.1f}%" if stat_type == "percent"
+                            else f"{totals.iloc[i]:g}",
+                            ha="center", va="center", fontsize=label_size * 2)
+                halo(t, foreground="white", radius=0.1)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_ylim(0, 1)
+
+    # Background stripes exist only when position != "stack" (R sets bg_layer
+    # to NULL under stack, because the bars already tile the panel).
+    if bg_by is not None and position != "stack" and plot_type in ("bar", "area", "trend", "dot"):
+        bgcat = as_ordered_categorical(block[bg_by])
+        bg_levels = [str(c) for c in bgcat.cat.categories]
+        mapping = block.groupby(group_by, observed=True)[bg_by].first()
+        spread = block.groupby(group_by, observed=True)[bg_by].nunique()
+        if (spread > 1).any():
+            raise ValueError("`group_by` must be a part of `bg_by`")
+        bg_colors = discrete_palette(bg_levels, palette="Paired")
+        for i, lv in enumerate(levels_x):
+            b = mapping.get(lv)
+            if b is not None:
+                ax.axvspan(i - 0.5, i + 0.5, color=bg_colors[str(b)], alpha=0.2,
+                           zorder=0, linewidth=0)
+
+
+def _set_plot(data, stat_cols, plot_type, *, stat_level, palette, palcolor, alpha,
+              panel_size, legend_position, label_size):
+    """``venn`` and ``upset`` — the set-membership views.
+
+    ``stat_level`` binarises each ``stat_by`` column into set membership; it has
+    no effect on any other plot type.  Defaults to each column's first level,
+    with a message, exactly as R does.
+    """
+    if stat_level is None:
+        stat_level = {c: [str(as_ordered_categorical(data[c]).cat.categories[0])]
+                      for c in stat_cols}
+        warnings.warn(
+            "`stat_level` not given; using the first level of each column: "
+            + ", ".join(f"{k}={v[0]}" for k, v in stat_level.items()),
+            stacklevel=3,
+        )
+    elif isinstance(stat_level, str):
+        stat_level = {c: [stat_level] for c in stat_cols}
+    elif not isinstance(stat_level, dict):
+        stat_level = {c: list(stat_level) for c in stat_cols}
+    else:
+        stat_level = {k: ([v] if isinstance(v, str) else list(v)) for k, v in stat_level.items()}
+
+    sets = {c: set(data.index[data[c].astype(str).isin([str(x) for x in stat_level[c]])])
+            for c in stat_cols}
+    colors = discrete_palette(list(sets), palette=palette, palcolor=palcolor)
+
+    if plot_type == "venn":
+        if len(sets) > 3:
+            raise NotImplementedError(
+                "venn beyond 3 sets needs a custom renderer; "
+                "docs/porting_briefs/stat_plots.md §2.3."
+            )
+        try:
+            from matplotlib_venn import venn2, venn3
+        except ImportError as e:  # pragma: no cover - optional dependency
+            raise ImportError("venn plots need `pip install matplotlib-venn`") from e
+        fig, ax = plt.subplots(figsize=panel_size)
+        names = list(sets)
+        draw = venn2 if len(sets) == 2 else venn3
+        v = draw([sets[n] for n in names], set_labels=names, ax=ax)
+        for i, n in enumerate(names):
+            patch = v.get_patch_by_id("A" if i == 0 else ("B" if i == 1 else "C"))
+            if patch is not None:
+                patch.set_color(colors[n])
+                patch.set_alpha(alpha * 0.6)
+        return fig
+
+    # upset: intersection sizes, largest first, with a membership matrix beneath
+    members = pd.DataFrame({c: data.index.isin(list(sets[c])) for c in stat_cols},
+                           index=data.index)
+    members = members[members.any(axis=1)]
+    combos = members.apply(lambda r: tuple(c for c in stat_cols if r[c]), axis=1)
+    counts = combos.value_counts().head(20)
+
+    fig = plt.figure(figsize=(max(panel_size[0], 0.5 * len(counts) + 1), panel_size[1] * 1.7))
+    gs = fig.add_gridspec(2, 1, height_ratios=[2.2, 1], hspace=0.06)
+    bar_ax, mat_ax = fig.add_subplot(gs[0]), fig.add_subplot(gs[1])
+    xs = np.arange(len(counts))
+    bar_ax.bar(xs, counts.to_numpy(), width=0.7, color="#3C3C3C")
+    for xi, c in zip(xs, counts.to_numpy(), strict=True):
+        bar_ax.text(xi, c, str(c), ha="center", va="bottom", fontsize=label_size * 2)
+    bar_ax.set_xticks([])
+    bar_ax.set_ylabel("Intersection size")
+    bar_ax.set_xlim(-0.6, len(counts) - 0.4)
+    for yi, c in enumerate(stat_cols):
+        for xi, combo in enumerate(counts.index):
+            on = c in combo
+            mat_ax.scatter(xi, yi, s=60, color=colors[c] if on else "#DDDDDD",
+                           zorder=3 if on else 2)
+        hits = [xi for xi, combo in enumerate(counts.index) if c in combo]
+        if hits:
+            mat_ax.plot([min(hits), max(hits)], [yi, yi], color="#DDDDDD", linewidth=1, zorder=1)
+    mat_ax.set_yticks(range(len(stat_cols)))
+    mat_ax.set_yticklabels(stat_cols)
+    mat_ax.set_xticks([])
+    mat_ax.set_xlim(-0.6, len(counts) - 0.4)
+    mat_ax.set_ylim(-0.6, len(stat_cols) - 0.4)
+    for side in ("top", "right", "bottom", "left"):
+        mat_ax.spines[side].set_visible(False)
+    return fig
 
 
 def feature_cor_plot(
