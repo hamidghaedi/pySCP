@@ -45,13 +45,15 @@ src/scp/
 ├── heatmap/
 │   ├── matrix.py      matrix_process, lib_normalize, color_limits   [done]
 │   ├── spec.py        HeatmapSpec / PanelSpec / Track / Layer       [done]
-│   └── render.py      the GridSpec renderer                         [todo]
+│   └── render.py      the GridSpec renderer                         [done]
 └── pl/
-    ├── _dim.py        cell_dim_plot [done], feature_dim_plot, 3D
-    ├── _stat.py       feature_stat_plot, cell_stat_plot, cor, density, volcano
-    ├── _heatmap.py    group/feature/dynamic/cell_cor heatmaps
-    ├── _traj.py       graph, paga, lineage, velocity, dynamic, projection
-    └── _enrich.py     enrichment_plot, gsea_plot
+    ├── _dim.py        cell_dim_plot, feature_dim_plot, 3D              [done]
+    ├── _stat.py       feature_stat_plot, cell_stat_plot, cor, density,
+    │                  volcano                                          [done]
+    ├── _heatmap.py    group/feature/dynamic/cell_cor heatmaps          [done]
+    ├── _traj.py       graph, paga, lineage, velocity, dynamic,
+    │                  projection                                       [done]
+    └── _enrich.py     enrichment_plot, gsea_plot                       [done]
 ```
 
 Why `heatmap/` is its own subpackage: the heatmap family is not a ggplot

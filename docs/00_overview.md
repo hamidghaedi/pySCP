@@ -43,20 +43,20 @@ plot function, not after.
 
 ## What already works
 
-```python
-import scp
-scp.list_palettes()                       # 229 palettes, extracted from the .rda
-scp.discrete_palette(["A","B"], "Paired")
-scp.blendcolors(["#FF0000", "#00FF00"], "screen")
-scp.matrix_process(M, "zscore")           # ddof=1, matching R's scale()
-scp.fetch_data(adata, ["CD3E", "leiden", "UMAP_1"])
-scp.default_reduction(adata)
-scp.pl.cell_dim_plot(adata, "leiden", label=True)   # the reference implementation
-```
+The first pass over the whole layer is complete: 27 of the 28 functions in
+`scp.pl` are implemented. `docs/04_api_mapping.md` carries the per-function
+status, and the table at the end of `docs/07_milestones.md` lists what is
+deliberately not ported and why.
 
-Everything else raises `NotImplementedError` with a pointer to its brief and
-milestone. That is deliberate: the signatures are the contract, and they were
-derived from reading the R source, so they should not drift during the port.
+Options within an implemented function that are not ported raise
+`NotImplementedError` naming the brief section that specifies them. That is
+deliberate: the signatures are the contract, they were derived from reading the
+R source, and a missing option should announce itself rather than quietly do
+something else.
+
+`notebooks/01_parity_foundation.ipynb` runs both packages on `pancreas_sub` and
+compares them; see the README's Parity section for what has actually been
+checked against R and what has only been implemented.
 
 ## Licence
 
