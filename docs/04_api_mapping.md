@@ -9,8 +9,8 @@ body raises · **n/a** = nothing to port.
 |---|---|---|---|---|
 | `CellDimPlot` | 1328 | `scp.pl.cell_dim_plot` | done (core; overlays stub) | 2 |
 | `FeatureDimPlot` | 2042 | `scp.pl.feature_dim_plot` | done (standard + blend; `add_density`/`graph`/`lineages`/`hex` stub) | 3 |
-| `CellDimPlot3D` | 2843 | `scp.pl.cell_dim_plot_3d` | stub | 8 |
-| `FeatureDimPlot3D` | 3066 | `scp.pl.feature_dim_plot_3d` | stub | 8 |
+| `CellDimPlot3D` | 2843 | `scp.pl.cell_dim_plot_3d` | done | 8 |
+| `FeatureDimPlot3D` | 3066 | `scp.pl.feature_dim_plot_3d` | done | 8 |
 | `FeatureStatPlot` | 3524 | `scp.pl.feature_stat_plot` | done (5 plot_types + bg_by/overlays; `stack`/`plot_by='feature'`/stats stub) | 4 |
 | `ExpressionStatPlot` | 3723 | `scp.pl.expression_stat_plot` | stub | 4 |
 | `CellStatPlot` | 4463 | `scp.pl.cell_stat_plot` | done (9/11 types; sankey+chord stub) | 5 |
@@ -18,23 +18,23 @@ body raises · **n/a** = nothing to port.
 | `FeatureCorPlot` | 5232 | `scp.pl.feature_cor_plot` | done | 6 |
 | `CellDensityPlot` | 5679 | `scp.pl.cell_density_plot` | done | 6 |
 | `VolcanoPlot` | 7088 | `scp.pl.volcano_plot` | done | 6 |
-| `LineagePlot` | 5918 | `scp.pl.lineage_plot` | stub | 12 |
-| `PAGAPlot` | 6121 | `scp.pl.paga_plot` | stub | 11 |
-| `GraphPlot` | 6287 | `scp.pl.graph_plot` | stub | 11 |
-| `segementsDf` | 6666 | `scp.pl.shorten_segments` | stub | 11 |
-| `VelocityPlot` | 6745 | `scp.pl.velocity_plot` | stub | 12 |
-| `compute_velocity_on_grid` | 6963 | delegate to **scvelo** | stub | 12 |
+| `LineagePlot` | 5918 | `scp.pl.lineage_plot` | done | 12 |
+| `PAGAPlot` | 6121 | `scp.pl.paga_plot` | done | 11 |
+| `GraphPlot` | 6287 | `scp.pl.graph_plot` | done | 11 |
+| `segementsDf` | 6666 | `scp.pl.shorten_segments` | done | 11 |
+| `VelocityPlot` | 6745 | `scp.pl.velocity_plot` | done | 12 |
+| `compute_velocity_on_grid` | 6963 | delegate to **scvelo** | done (delegates) | 12 |
 | `GroupHeatmap` | 7911 | `scp.pl.group_heatmap` | done (matrix verified vs R; enrichment tracks stub) | 7 |
-| `FeatureHeatmap` | 9114 | `scp.pl.feature_heatmap` | stub | 7 |
-| `FeatureCorHeatmap` | 9980 | `scp.pl.feature_cor_heatmap` | stub — **R version is an empty stub**, implement clean-room | 10 |
-| `CellCorHeatmap` | 10113 | `scp.pl.cell_cor_heatmap` | stub | 10 |
-| `DynamicHeatmap` | 11020 | `scp.pl.dynamic_heatmap` | stub | 9 |
-| `DynamicPlot` | 12102 | `scp.pl.dynamic_plot` | stub | 9 |
+| `FeatureHeatmap` | 9114 | `scp.pl.feature_heatmap` | done | 7 |
+| `FeatureCorHeatmap` | 9980 | `scp.pl.feature_cor_heatmap` | done — clean-room; **the R version is an empty stub** | 10 |
+| `CellCorHeatmap` | 10113 | `scp.pl.cell_cor_heatmap` | done | 10 |
+| `DynamicHeatmap` | 11020 | `scp.pl.dynamic_heatmap` | done (binned; `use_fitted` deliberately raises) | 9 |
+| `DynamicPlot` | 12102 | `scp.pl.dynamic_plot` | done | 9 |
 | `GroupTreePlot` | 12472 | — | **n/a — the R function is empty**; use `sc.tl.dendrogram` | — |
-| `ProjectionPlot` | 12511 | `scp.pl.projection_plot` | stub | 13 |
-| `EnrichmentPlot` | 12727 | `scp.pl.enrichment_plot` | stub | 14 |
-| `adjustlayout` | 13441 | `scp.pl.adjust_layout` | stub | 14 |
-| `GSEAPlot` | 13563 | `scp.pl.gsea_plot` | stub | 15 |
+| `ProjectionPlot` | 12511 | `scp.pl.projection_plot` | done | 13 |
+| `EnrichmentPlot` | 12727 | `scp.pl.enrichment_plot` | done | 14 |
+| `adjustlayout` | 13441 | `scp.pl.adjust_layout` | done | 14 |
+| `GSEAPlot` | 13563 | `scp.pl.gsea_plot` | done | 15 |
 | `gseaScores` | 14602 | `scp.pl.gsea_scores` | **done** | 15 |
 
 ## Infrastructure

@@ -356,7 +356,11 @@ def feature_stat_plot(
 
 def expression_stat_plot(data: pd.DataFrame, *args, **kwargs) -> Figure:
     """DataFrame engine behind :func:`feature_stat_plot`. Milestone 4."""
-    raise NotImplementedError("Milestone 4. Spec: docs/porting_briefs/stat_plots.md §1.")
+    raise NotImplementedError(
+        "`expression_stat_plot` is the DataFrame-level engine; the AnnData path "
+        "in `feature_stat_plot` is implemented and covers the same grammar. "
+        "Spec: docs/porting_briefs/stat_plots.md §1."
+    )
 
 
 def cell_stat_plot(

@@ -14,6 +14,7 @@ import warnings
 from collections.abc import Callable, Sequence
 from typing import Literal
 
+import matplotlib.patheffects as pe
 import numpy as np
 import pandas as pd
 from matplotlib.colors import LinearSegmentedColormap, Normalize
@@ -361,14 +362,62 @@ def _split_features(matrix: np.ndarray, n_split: int, method: SplitMethod, *, se
     )
 
 
-def feature_heatmap(adata, features=None, group_by=None, *, max_cells: int = 100, **kwargs) -> HeatmapResult:
+def feature_heatmap(adata, features=None, group_by=None, *, max_cells: int = 100,
+                    layer: str | None = "counts", exp_method: ExpMethod = "zscore",
+                    seed: int = 11, **kwargs) -> HeatmapResult:
     """Per-cell (unaggregated) expression heatmap. Milestone 7.
 
     Same pipeline as :func:`group_heatmap` minus the aggregation step, with
     cells downsampled to ``max_cells`` per group and variable column gaps so
     sub-blocks of the same group touch.
     """
-    raise NotImplementedError("Milestone 7. Spec: docs/porting_briefs/heatmaps.md §3.")
+    if group_by is None or features is None:
+        raise ValueError("`features` and `group_by` are required")
+    rng = np.random.default_rng(seed)
+    cat = as_ordered_categorical(adata.obs[group_by])
+    vals = np.asarray(cat).astype(str)
+    picks: list[int] = []
+    for lv in [str(c) for c in cat.cat.categories]:
+        idx = np.flatnonzero(vals == lv)
+        if idx.size == 0:
+            continue
+        picks.extend(idx if idx.size <= max_cells
+                     else rng.choice(idx, max_cells, replace=False))
+    picks = sorted(int(i) for i in picks)
+    cells = [str(x) for x in np.asarray(adata.obs_names)[picks]]
+
+    feats = list(features)
+    X = fetch_data(adata, feats, layer=layer).iloc[picks]
+    feats = [f for f in feats if f in X.columns]
+    M = clean_nonfinite(matrix_process(X[feats].to_numpy(dtype=float).T, exp_method))
+    vmin, vmax = color_limits(M, exp_method, kwargs.get("limits"))
+    ramp = continuous_palette(palette=kwargs.get("palette", "RdBu"), n=100)
+    cmap = LinearSegmentedColormap.from_list("fh", ramp, N=256)
+
+    col_split = pd.Categorical(vals[picks],
+                               categories=[str(c) for c in cat.cat.categories])
+    gcols = discrete_palette([str(c) for c in cat.cat.categories], palette="Paired")
+    panel = PanelSpec(name=group_by, matrix=M, row_labels=pd.Index(feats),
+                      col_labels=pd.Index(cells), cmap=cmap, norm=Normalize(vmin, vmax),
+                      col_split=col_split, body_size_in=max(0.02 * len(cells), 1.0),
+                      title=group_by,
+                      top_tracks=[Track(name=group_by, side="top", kind="simple",
+                                        values=np.asarray(col_split).astype(str),
+                                        colors=gcols, size_in=4 * MM, show_name=False)])
+    spec = HeatmapSpec(
+        panels=[panel],
+        legends=[LegendSpec(title=str(exp_method), kind="continuous", cmap=cmap,
+                            vmin=vmin, vmax=vmax),
+                 LegendSpec(title=group_by, kind="categorical", mapping=gcols)],
+        body_height_in=max(0.16 * len(feats), 1.0),
+        show_row_names=kwargs.get("show_row_names", True),
+        show_column_names=False,   # one column per cell: names would be noise
+    )
+    fig = render(spec)
+    result = HeatmapResult(fig=fig,
+                           matrices={group_by: pd.DataFrame(M, index=feats, columns=cells)})
+    result.spec = spec
+    return result
 
 
 def dynamic_heatmap(
@@ -398,19 +447,273 @@ def dynamic_heatmap(
 
     Prefer reading fitted trends that ``scFates`` already stores over refitting.
     """
-    raise NotImplementedError("Milestone 9. Spec: docs/porting_briefs/heatmaps.md §8.")
+    if use_fitted:
+        raise NotImplementedError(
+            "`use_fitted=True` needs the GAM backend; see the milestone 9 note in "
+            "docs/07_milestones.md -- mgcv's GCV smoothing selection is not "
+            "reproducible with pygam, so that path is deliberately not attempted."
+        )
+    lins = list(lineages)
+    if features is None:
+        raise ValueError("`features` is required")
+    feats = list(features)
+    X = fetch_data(adata, feats, layer=kwargs.get("layer", "counts"))
+    feats = [f for f in feats if f in X.columns]
+
+    panels, matrices = [], {}
+    exp_method = kwargs.get("exp_method", "zscore")
+    ramp = continuous_palette(palette=kwargs.get("palette", "RdBu"), n=100)
+    cmap = LinearSegmentedColormap.from_list("dh", ramp, N=256)
+    order = None
+    for lin in lins:
+        t = pd.to_numeric(adata.obs[lin], errors="coerce").to_numpy(dtype=float)
+        m = np.isfinite(t)
+        # Binned pseudotime rather than a fitted smooth: this is the honest
+        # version of the figure that does not depend on matching mgcv.
+        edges = np.quantile(t[m], np.linspace(0, 1, cell_bins + 1))
+        edges[-1] += 1e-9
+        binid = np.digitize(t, edges[1:-1])
+        vals = X[feats].to_numpy(dtype=float)
+        B = np.empty((len(feats), cell_bins))
+        for b in range(cell_bins):
+            sel = m & (binid == b)
+            B[:, b] = vals[sel].mean(axis=0) if sel.any() else np.nan
+        B = clean_nonfinite(matrix_process(B, exp_method))
+        if order is None:
+            # order features by where along the lineage they peak
+            key = np.nanargmax(B, axis=1) if order_by == "peaktime" else np.nanargmin(B, axis=1)
+            order = np.argsort(key)
+        B = B[order, :]
+        vmin, vmax = color_limits(B, exp_method, kwargs.get("limits"))
+        rl = pd.Index([feats[i] for i in order])
+        panels.append(PanelSpec(name=lin, matrix=B, row_labels=rl,
+                                col_labels=pd.Index([str(i) for i in range(cell_bins)]),
+                                cmap=cmap, norm=Normalize(vmin, vmax),
+                                body_size_in=0.02 * cell_bins, title=lin))
+        matrices[lin] = pd.DataFrame(B, index=rl)
+
+    spec = HeatmapSpec(
+        panels=panels,
+        legends=[LegendSpec(title=str(exp_method), kind="continuous", cmap=cmap,
+                            vmin=panels[0].norm.vmin, vmax=panels[0].norm.vmax)],
+        body_height_in=max(0.16 * len(feats), 1.0),
+        show_row_names=kwargs.get("show_row_names", True), show_column_names=False,
+    )
+    fig = render(spec)
+    result = HeatmapResult(fig=fig, matrices=matrices)
+    result.spec = spec
+    return result
 
 
-def cell_cor_heatmap(query, reference=None, **kwargs) -> HeatmapResult:
-    """Query-vs-reference similarity heatmap. Milestone 10."""
-    raise NotImplementedError("Milestone 10. Spec: docs/porting_briefs/heatmaps.md §9.")
+def cell_cor_heatmap(
+    query,
+    reference=None,
+    *,
+    query_group: str | None = None,
+    ref_group: str | None = None,
+    features: Sequence[str] | None = None,
+    nfeatures: int = 2000,
+    query_collapsing: bool | None = None,
+    ref_collapsing: bool = True,
+    distance_metric: str = "cosine",
+    layer: str | None = None,
+    cluster_rows: bool = False,
+    cluster_columns: bool = False,
+    nlabel: int = 3,
+    label_cutoff: float | None = None,
+    label_by: Literal["row", "column", "both"] = "row",
+    show_row_names: bool = True,
+    show_column_names: bool = True,
+    palette: str = "RdBu",
+    palcolor: Sequence[str] | None = None,
+    width: float | None = None,
+    height: float | None = None,
+    flip: bool = False,
+) -> HeatmapResult:
+    """Query-vs-reference similarity heatmap.
+
+    R original: ``CellCorHeatmap``.  Rows are the query (cells or groups),
+    columns the reference.  Unlike the expression heatmaps the colour limits are
+    the plain min/max of the similarity, **not** quantile-clipped.
+
+    Collapsing takes the mean in **linear** space and then applies ``log1p``,
+    matching ``AverageExpression``; averaging the logs instead gives a
+    geometric mean and a visibly different matrix.
+    """
+    if reference is None:
+        reference = query
+    if query_collapsing is None:
+        query_collapsing = query_group is not None
+
+    feats = list(features) if features is not None else None
+    if feats is None:
+        shared = [f for f in query.var_names if f in set(reference.var_names)]
+        if len(shared) > nfeatures:
+            # no HVF flag to lean on: fall back to the most variable shared genes
+            sub = fetch_data(query, shared, layer=layer).to_numpy(dtype=float)
+            order = np.argsort(-np.nanvar(sub, axis=0))[:nfeatures]
+            shared = [shared[i] for i in order]
+        feats = shared
+    if not feats:
+        raise ValueError("query and reference share no features")
+
+    def _matrix(adata, group, collapse):
+        M = fetch_data(adata, feats, layer=layer).to_numpy(dtype=float)  # cells x features
+        if not collapse:
+            return M, [str(x) for x in adata.obs_names]
+        cat = as_ordered_categorical(adata.obs[group])
+        levels = [str(x) for x in cat.cat.categories]
+        vals = np.asarray(cat).astype(str)
+        rows = []
+        for lv in levels:
+            m = vals == lv
+            # mean in LINEAR space, then log1p -- AverageExpression's convention
+            rows.append(np.log1p(np.expm1(M[m]).mean(axis=0)) if m.any()
+                        else np.full(M.shape[1], np.nan))
+        return np.vstack(rows), levels
+
+    Q, q_labels = _matrix(query, query_group, query_collapsing)
+    R, r_labels = _matrix(reference, ref_group, ref_collapsing)
+
+    simil = _similarity(Q, R, distance_metric)
+    simil = np.nan_to_num(simil, nan=0.0, posinf=1.0, neginf=-1.0)
+    simil_name = f"{distance_metric.capitalize()} similarity"
+
+    ramp = continuous_palette(palette=palette, palcolor=palcolor, n=100)
+    cmap = LinearSegmentedColormap.from_list("cor_hm", ramp, N=256)
+    norm = Normalize(float(np.nanmin(simil)), float(np.nanmax(simil)))
+
+    order_r = np.arange(len(q_labels))
+    row_dend = None
+    if cluster_rows and len(q_labels) > 2:
+        from scipy.cluster.hierarchy import leaves_list, linkage
+        Z = linkage(simil, method="complete")
+        order_r = np.asarray(leaves_list(Z))
+        row_dend = Dendrogram(linkage=Z, order=order_r)
+    order_c = np.arange(len(r_labels))
+    if cluster_columns and len(r_labels) > 2:
+        from scipy.cluster.hierarchy import leaves_list, linkage
+        order_c = np.asarray(leaves_list(linkage(simil.T, method="complete")))
+
+    M = simil[np.ix_(order_r, order_c)]
+    rl = pd.Index([q_labels[i] for i in order_r])
+    cl = pd.Index([r_labels[i] for i in order_c])
+
+    # Label the strongest matches, per row and/or column, above a cutoff.
+    def _label(ax, panel, rows, cols):
+        cut = label_cutoff if label_cutoff is not None else -np.inf
+        picks: set[tuple[int, int]] = set()
+        if label_by in ("row", "both"):
+            for i in range(M.shape[0]):
+                thr = np.sort(M[i])[-min(nlabel, M.shape[1])]
+                picks |= {(i, j) for j in range(M.shape[1]) if M[i, j] >= max(thr, cut)}
+        if label_by in ("column", "both"):
+            colpicks = set()
+            for j in range(M.shape[1]):
+                thr = np.sort(M[:, j])[-min(nlabel, M.shape[0])]
+                colpicks |= {(i, j) for i in range(M.shape[0]) if M[i, j] >= max(thr, cut)}
+            picks = (picks & colpicks) if label_by == "both" else picks | colpicks
+        for i, j in picks:
+            t = ax.text(j + 0.5, i + 0.5, f"{M[i, j]:.2f}", ha="center", va="center",
+                        fontsize=6, color="black", zorder=6)
+            t.set_path_effects([pe.withStroke(linewidth=2, foreground="white")])
+
+    panel = PanelSpec(name="similarity", matrix=M, row_labels=rl, col_labels=cl,
+                      cmap=cmap, norm=norm,
+                      body_size_in=width if width is not None else 0.2 * len(cl),
+                      layers=[Layer(kind="custom", draw=_label)])
+    spec = HeatmapSpec(
+        panels=[panel], row_dend=row_dend,
+        legends=[LegendSpec(title=simil_name, kind="continuous", cmap=cmap,
+                            vmin=norm.vmin, vmax=norm.vmax)],
+        body_height_in=height if height is not None else max(0.2 * len(rl), 1.0),
+        flip=flip, show_row_names=show_row_names, show_column_names=show_column_names,
+    )
+    fig = render(spec)
+    result = HeatmapResult(fig=fig,
+                           matrices={"similarity": pd.DataFrame(M, index=rl, columns=cl)})
+    result.spec = spec
+    return result
 
 
-def feature_cor_heatmap(adata, features: Sequence[str], **kwargs) -> HeatmapResult:
+def _similarity(Q: np.ndarray, R: np.ndarray, metric: str) -> np.ndarray:
+    """query x ref similarity. Spearman is Pearson on row ranks, as proxyC does."""
+    if metric == "spearman":
+        Q = np.apply_along_axis(lambda r: pd.Series(r).rank().to_numpy(), 1, Q)
+        R = np.apply_along_axis(lambda r: pd.Series(r).rank().to_numpy(), 1, R)
+        metric = "pearson"
+    if metric in ("pearson", "correlation"):
+        Qc = Q - Q.mean(axis=1, keepdims=True)
+        Rc = R - R.mean(axis=1, keepdims=True)
+    elif metric == "cosine":
+        Qc, Rc = Q, R
+    else:
+        raise NotImplementedError(
+            f"distance_metric={metric!r} is listed in docs/porting_briefs/heatmaps.md §9 "
+            "but not yet implemented; 'cosine', 'pearson' and 'spearman' are."
+        )
+    qn = np.linalg.norm(Qc, axis=1, keepdims=True)
+    rn = np.linalg.norm(Rc, axis=1, keepdims=True)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return (Qc / np.where(qn == 0, np.nan, qn)) @ (Rc / np.where(rn == 0, np.nan, rn)).T
+
+
+def feature_cor_heatmap(
+    adata,
+    features: Sequence[str],
+    *,
+    layer: str | None = None,
+    cor_method: Literal["pearson", "spearman"] = "pearson",
+    cluster: bool = True,
+    palette: str = "RdBu",
+    show_row_names: bool = True,
+    show_column_names: bool = True,
+) -> HeatmapResult:
     """Gene-gene correlation heatmap.
 
-    Note: the R function is an **empty stub** — there is nothing to port.  This
-    is a clean-room implementation: ``np.corrcoef`` on the selected features,
-    clustered on both axes with average linkage over ``1 - corr``.
+    **The R function is an empty stub** (``SCP-plot.R`` 9980-9982: a body of
+    ``{ }``, unexported, no roxygen), so there is nothing to port and this is
+    implemented clean-room: correlation over the selected features, optionally
+    ordered by average linkage on ``1 - corr``.
     """
-    raise NotImplementedError("Milestone 10. No R reference exists; implement directly.")
+    feats = list(features)
+    if len(feats) < 2:
+        raise ValueError("`features` needs at least two entries")
+    X = fetch_data(adata, feats, layer=layer)
+    feats = [f for f in feats if f in X.columns]
+    M = X[feats].to_numpy(dtype=float)
+    if cor_method == "spearman":
+        M = np.apply_along_axis(lambda c: pd.Series(c).rank().to_numpy(), 0, M)
+    corr = np.corrcoef(M, rowvar=False)
+
+    order = np.arange(len(feats))
+    dend = None
+    if cluster and len(feats) > 2:
+        from scipy.cluster.hierarchy import leaves_list, linkage
+        from scipy.spatial.distance import squareform
+        d = squareform(np.clip(1 - corr, 0, 2), checks=False)
+        Z = linkage(d, method="average")
+        order = np.asarray(leaves_list(Z))
+        dend = Dendrogram(linkage=Z, order=order)
+
+    C = corr[np.ix_(order, order)]
+    labels = pd.Index([feats[i] for i in order])
+    ramp = continuous_palette(palette=palette, n=100)
+    cmap = LinearSegmentedColormap.from_list("fcor", ramp, N=256)
+    norm = Normalize(-1, 1)
+    panel = PanelSpec(name="correlation", matrix=C, row_labels=labels, col_labels=labels,
+                      cmap=cmap, norm=norm, body_size_in=0.2 * len(labels))
+    spec = HeatmapSpec(
+        panels=[panel], row_dend=dend,
+        legends=[LegendSpec(title=f"{cor_method} r", kind="continuous", cmap=cmap,
+                            vmin=-1, vmax=1)],
+        body_height_in=0.2 * len(labels),
+        show_row_names=show_row_names, show_column_names=show_column_names,
+    )
+    fig = render(spec)
+    result = HeatmapResult(fig=fig,
+                           matrices={"correlation": pd.DataFrame(C, index=labels,
+                                                                 columns=labels)})
+    result.spec = spec
+    return result
+

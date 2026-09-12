@@ -584,11 +584,126 @@ def feature_dim_plot(
     return pg.finish()
 
 
-def cell_dim_plot_3d(adata, group_by: str, **kwargs):
-    """plotly Scatter3d version of :func:`cell_dim_plot`. Milestone 8."""
-    raise NotImplementedError("Milestone 8. Spec: docs/porting_briefs/dim_plots.md §3.1.")
+def _plotly():
+    try:
+        import plotly.graph_objects as go
+    except ImportError as e:  # pragma: no cover - optional dependency
+        raise ImportError("3-D plots need `pip install scp-plot[interactive]`") from e
+    return go
 
 
-def feature_dim_plot_3d(adata, features: str | Sequence[str], **kwargs):
-    """plotly Scatter3d version of :func:`feature_dim_plot`. Milestone 8."""
-    raise NotImplementedError("Milestone 8. Spec: docs/porting_briefs/dim_plots.md §3.2.")
+def cell_dim_plot_3d(
+    adata,
+    group_by: str,
+    *,
+    reduction: str | None = None,
+    dims: tuple[int, int, int] = (1, 2, 3),
+    palette: str = "Paired",
+    palcolor: Sequence[str] | dict[str, str] | None = None,
+    bg_color: str = NA_COLOR_DEFAULT,
+    pt_size: float = 2.0,
+    show_na: bool = False,
+    width: int = 700,
+    height: int = 600,
+):
+    """plotly ``Scatter3d`` version of :func:`cell_dim_plot`.
+
+    R original: ``CellDimPlot3D``.  One trace per level, so plotly's own legend
+    does the grouping and levels can be toggled.  Level order is the column's
+    declared order, as everywhere else.
+    """
+    go = _plotly()
+    reduction = reduction or default_reduction(adata)
+    key = reduction_key(reduction)
+    emb = np.asarray(adata.obsm[reduction])
+    if emb.shape[1] < 3:
+        raise ValueError(f"{reduction!r} has {emb.shape[1]} dimensions; 3 are needed")
+    i, j, k = (d - 1 for d in dims)
+
+    cat = as_ordered_categorical(adata.obs[group_by], show_na=show_na)
+    levels = [str(x) for x in cat.cat.categories]
+    colors = discrete_palette(levels, palette=palette, palcolor=palcolor)
+    values = np.asarray(cat).astype(str)
+
+    fig = go.Figure()
+    for lv in levels:
+        m = values == lv
+        fig.add_trace(go.Scatter3d(
+            x=emb[m, i], y=emb[m, j], z=emb[m, k], mode="markers", name=lv,
+            marker=dict(size=pt_size, color=colors.get(lv, bg_color)),
+        ))
+    fig.update_layout(
+        width=width, height=height, legend_title_text=group_by,
+        scene=dict(xaxis_title=f"{key}{dims[0]}", yaxis_title=f"{key}{dims[1]}",
+                   zaxis_title=f"{key}{dims[2]}"),
+        margin=dict(l=0, r=0, t=30, b=0),
+    )
+    return fig
+
+
+def feature_dim_plot_3d(
+    adata,
+    features: str | Sequence[str],
+    *,
+    reduction: str | None = None,
+    dims: tuple[int, int, int] = (1, 2, 3),
+    layer: str | None = None,
+    palette: str = "Spectral",
+    palcolor: Sequence[str] | None = None,
+    bg_cutoff: float | None = 0.0,
+    bg_color: str = NA_COLOR_DEFAULT,
+    pt_size: float = 2.0,
+    width: int = 700,
+    height: int = 600,
+):
+    """plotly ``Scatter3d`` version of :func:`feature_dim_plot`.
+
+    **Deliberate divergence from R.**  ``FeatureDimPlot3D`` never calls
+    ``palette_scp``: it falls back to plotly's default scale, so a 3-D feature
+    plot does not match the 2-D Spectral colouring of the same data.  That is a
+    defect rather than a decision, so this uses the same ramp as
+    :func:`feature_dim_plot` and the two agree.
+
+    Several features become an ``updatemenus`` dropdown, one trace each.
+    """
+    go = _plotly()
+    feats = [features] if isinstance(features, str) else list(features)
+    reduction = reduction or default_reduction(adata)
+    key = reduction_key(reduction)
+    emb = np.asarray(adata.obsm[reduction])
+    if emb.shape[1] < 3:
+        raise ValueError(f"{reduction!r} has {emb.shape[1]} dimensions; 3 are needed")
+    i, j, k = (d - 1 for d in dims)
+
+    values = fetch_data(adata, feats, layer=layer)
+    feats = [f for f in feats if f in values.columns]
+    if not feats:
+        raise ValueError("none of `features` could be resolved")
+    ramp = continuous_palette(palette=palette, palcolor=palcolor, n=100)
+    scale = [[n / (len(ramp) - 1), c] for n, c in enumerate(ramp)]
+
+    fig = go.Figure()
+    for n, f in enumerate(feats):
+        v = pd.to_numeric(values[f], errors="coerce").to_numpy(dtype=float)
+        if bg_cutoff is not None:
+            v = np.where(v <= bg_cutoff, np.nan, v)
+        fig.add_trace(go.Scatter3d(
+            x=emb[:, i], y=emb[:, j], z=emb[:, k], mode="markers", name=f,
+            visible=(n == 0),
+            marker=dict(size=pt_size, color=v, colorscale=scale,
+                        colorbar=dict(title=f), showscale=True),
+        ))
+    if len(feats) > 1:
+        fig.update_layout(updatemenus=[dict(
+            buttons=[dict(label=f, method="update",
+                          args=[{"visible": [m == n for m in range(len(feats))]}])
+                     for n, f in enumerate(feats)],
+            direction="down", showactive=True, x=0, xanchor="left", y=1.1,
+        )])
+    fig.update_layout(
+        width=width, height=height,
+        scene=dict(xaxis_title=f"{key}{dims[0]}", yaxis_title=f"{key}{dims[1]}",
+                   zaxis_title=f"{key}{dims[2]}"),
+        margin=dict(l=0, r=0, t=40, b=0),
+    )
+    return fig

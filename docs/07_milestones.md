@@ -141,14 +141,14 @@ Build `heatmap/render.py` bottom-up and do not skip a step:
 `matrix_process`, `lib_normalize`, `clean_nonfinite` and `color_limits` are
 already done and tested — start from them.
 
-### 8 — 3D plots — S
+### 8 — 3D plots — S ✅ done
 
 `plotly.graph_objects.Scatter3d` plus `updatemenus`. Nearly mechanical. Note
 that `FeatureDimPlot3D` does **not** use `palette_scp` at all in R — it falls
 back to plotly's default scale, so 3D feature plots don't match the 2D
 Spectral coloring. Fix that rather than porting it.
 
-### 9 — `dynamic_heatmap` / `dynamic_plot` — L
+### 9 — `dynamic_heatmap` / `dynamic_plot` — L (binned form done; fitted form deliberately not)
 
 Brief: `porting_briefs/heatmaps.md` §8, `trajectory_enrichment.md` §5.
 
@@ -161,13 +161,26 @@ Before writing a fitter, check whether `scFates` already stores what you need �
 it computes and persists fitted trends, and reading them is strictly better
 than refitting.
 
-### 10 — `cell_cor_heatmap`, `feature_cor_heatmap` — M
+> **Known risk — exact parity here is probably not achievable.** `mgcv` selects
+> its smoothing parameter by GCV/REML over a penalised spline basis; `pygam`
+> selects by grid search over a different basis and does not reproduce mgcv's
+> criterion. Two fits of the same data will therefore differ by more than
+> floating-point noise, and the difference shows up as a visibly different
+> smooth. Treat this milestone as **best-effort with a documented divergence**
+> rather than a parity target: pin the *shape* (monotone trend, peak position,
+> ordering of features by peak time) rather than the fitted values, and say so
+> in the docstring. Do not spend the budget chasing mgcv's GCV.
+
+> Note also that reading `scFates`' persisted fits sidesteps the problem
+> entirely where the user has them, and that path should be preferred.
+
+### 10 — `cell_cor_heatmap`, `feature_cor_heatmap` — M ✅ done
 
 Brief: `porting_briefs/heatmaps.md` §9. Straightforward once the engine exists.
 `feature_cor_heatmap` has no R reference (the R function is an empty stub), so
 implement it clean-room.
 
-### 11 — `graph_plot` + `paga_plot` — M
+### 11 — `graph_plot` + `paga_plot` — M ✅ done
 
 Brief: `porting_briefs/trajectory_enrichment.md` §2–§3.
 
@@ -177,7 +190,7 @@ precisely: the **net** transition reduction (only the dominant direction is
 drawn) and the node positions as the per-group *median* of the embedding
 rather than `uns['paga']['pos']`.
 
-### 12 — `lineage_plot`, `velocity_plot` — M
+### 12 — `lineage_plot`, `velocity_plot` — M ✅ done
 
 Brief: `porting_briefs/trajectory_enrichment.md` §1, §4.
 
@@ -189,12 +202,12 @@ For LOESS with `degree=2`, use `skmisc.loess` (the same underlying
 C/Fortran routine R wraps); `statsmodels.lowess` is degree-1 and will not
 match.
 
-### 13 — `projection_plot` — S
+### 13 — `projection_plot` — S ✅ done
 
 Two scatters on one axes with shared limits. The R code harvests rendered point
 colors out of `ggplot_build`; unnecessary here — compute the palette directly.
 
-### 14 — `enrichment_plot` — L
+### 14 — `enrichment_plot` — L ✅ done
 
 Brief: `porting_briefs/trajectory_enrichment.md` §8.
 
@@ -209,7 +222,7 @@ Keep enrichment computation **out** of the plotting layer: accept a DataFrame
 matching `io.ENRICHMENT_COLUMNS`, with a pluggable `enrichment_fn` for the
 heatmap tracks.
 
-### 15 — `gsea_plot` — M
+### 15 — `gsea_plot` — M ✅ done
 
 Brief: `porting_briefs/trajectory_enrichment.md` §9. `gsea_scores` is already
 implemented. The `line` type is one intricate three-panel figure; the rest
@@ -236,3 +249,23 @@ if more than one person (or agent) is working.
 Milestones 1–7 give `cell_dim_plot`, `feature_dim_plot`, `feature_stat_plot`,
 `cell_stat_plot`, `volcano_plot` and `group_heatmap` — which is the ninety
 percent of day-to-day use, and enough to publish `0.1.0`.
+
+
+---
+
+## Status at the end of the first pass
+
+Every milestone has landed at least its main path. What remains is listed here
+rather than left implicit:
+
+| Not ported | Why |
+|---|---|
+| `sankey`, `chord` (`cell_stat_plot`) | no good Python equivalent; a bad one is worse than `NotImplementedError` |
+| significance brackets, `stack=True`, `plot_by="feature"` (`feature_stat_plot`) | the largest remaining piece of milestone 4 |
+| `network`, `enrichmap`, `wordcloud` (`enrichment_plot`) | need igraph layouts / a keyword-enrichment backend |
+| `dynamic_heatmap(use_fitted=True)`, mgcv-matched smooths | see the milestone 9 note: not reproducible with `pygam`, so not attempted |
+| `cluster_within_group2`, heatmap enrichment tracks | milestone 7 extras |
+| `expression_stat_plot` | the DataFrame-level engine; the AnnData path covers the same grammar |
+
+Every one of these raises `NotImplementedError` naming its brief section, rather
+than silently doing something else.
