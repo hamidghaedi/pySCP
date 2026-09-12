@@ -97,9 +97,14 @@ bezier-by-hand).
 The aggregation core is a complete cross-tab with empty cells retained; get
 that right before any drawing.
 
-### 6 — `feature_cor_plot`, `cell_density_plot`, `volcano_plot` — M
+### 6 — `feature_cor_plot`, `cell_density_plot`, `volcano_plot` — M ✅ done
 
 Brief: `porting_briefs/stat_plots.md` §3–§5.
+
+All three landed; see `notebooks/01_parity_foundation.ipynb` §10. `volcano_plot`
+raises a pointed error when the detection fractions are missing, since scanpy
+only fills them for `rank_genes_groups(..., pts=True)` and an all-NaN x would
+otherwise render as an empty panel.
 
 Three independent, self-contained figures. `volcano_plot` is the highest-value
 one and takes a DataFrame, so it needs nothing from AnnData —

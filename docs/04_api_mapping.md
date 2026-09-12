@@ -15,9 +15,9 @@ body raises · **n/a** = nothing to port.
 | `ExpressionStatPlot` | 3723 | `scp.pl.expression_stat_plot` | stub | 4 |
 | `CellStatPlot` | 4463 | `scp.pl.cell_stat_plot` | done (9/11 types; sankey+chord stub) | 5 |
 | `StatPlot` | 4564 | `scp.pl.stat_plot` | done (9/11 types; sankey+chord stub) | 5 |
-| `FeatureCorPlot` | 5232 | `scp.pl.feature_cor_plot` | stub | 6 |
-| `CellDensityPlot` | 5679 | `scp.pl.cell_density_plot` | stub | 6 |
-| `VolcanoPlot` | 7088 | `scp.pl.volcano_plot` | stub | 6 |
+| `FeatureCorPlot` | 5232 | `scp.pl.feature_cor_plot` | done | 6 |
+| `CellDensityPlot` | 5679 | `scp.pl.cell_density_plot` | done | 6 |
+| `VolcanoPlot` | 7088 | `scp.pl.volcano_plot` | done | 6 |
 | `LineagePlot` | 5918 | `scp.pl.lineage_plot` | stub | 12 |
 | `PAGAPlot` | 6121 | `scp.pl.paga_plot` | stub | 11 |
 | `GraphPlot` | 6287 | `scp.pl.graph_plot` | stub | 11 |
@@ -65,6 +65,7 @@ body raises · **n/a** = nothing to port.
 | Function | Change | Why |
 |---|---|---|
 | `feature_stat_plot` | added `title`, `subtitle`, `xlab`, `ylab="Expression level"` | The scaffold signature omitted them; they are parameters of the R original and `ylab`'s default is visible on every panel. |
+| `cell_density_plot` | added `y_min`, `y_max`, `y_nbreaks`, `keep_empty`, `aspect_ratio`, `legend_position`, `nrow`, `ncol`, `byrow` | Same omission; all nine are parameters of `CellDensityPlot` and the layout ones are needed for multi-feature figures. |
 
 ## Argument renaming rules
 

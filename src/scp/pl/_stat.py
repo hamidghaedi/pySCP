@@ -18,13 +18,16 @@ from typing import Literal
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import LinearSegmentedColormap, Normalize, TwoSlopeNorm
 from matplotlib.figure import Figure
-from matplotlib.patches import Patch
-from matplotlib.ticker import MaxNLocator, PercentFormatter
+from matplotlib.patches import Patch, Rectangle
+from matplotlib.ticker import FuncFormatter, MaxNLocator, PercentFormatter
+from scipy.stats import gaussian_kde, linregress
 
 from ..fetch import as_ordered_categorical, fetch_data
 from ..layout import LegendColumn, PanelGrid
-from ..palettes import discrete_palette
+from ..palettes import continuous_palette, discrete_palette
 from ..theme import halo, theme_scp
 
 __all__ = [
@@ -787,7 +790,112 @@ def feature_cor_plot(
     upper triangle = scatter with an optional ``lm`` fit and r2/p annotation.
     Spearman is Pearson on row-ranked values, matching ``proxyC::simil``.
     """
-    raise NotImplementedError("Milestone 6. Spec: docs/porting_briefs/stat_plots.md §3.")
+    feats = list(features)
+    if len(feats) < 2:
+        raise ValueError("`features` needs at least two entries")
+    if len(feats) > 10 and not force:
+        raise ValueError(
+            f"{len(feats)} features would make {len(feats) ** 2} panels. "
+            "Pass force=True to proceed anyway."
+        )
+
+    frame = fetch_data(adata, feats, layer=layer)
+    feats = [f for f in feats if f in frame.columns]
+    dat = frame[feats].apply(pd.to_numeric, errors="coerce")
+    if cells is not None:
+        dat = dat.loc[dat.index.intersection(pd.Index(cells))]
+    dat = dat[np.isfinite(dat.to_numpy()).all(axis=1)]
+
+    if group_by is None:
+        gvals = pd.Series(["all"] * len(dat), index=dat.index)
+        glevels = ["all"]
+    else:
+        gcat = as_ordered_categorical(adata.obs[group_by]).loc[dat.index]
+        gvals = pd.Series(np.asarray(gcat).astype(str), index=dat.index)
+        glevels = [str(c) for c in gcat.cat.categories]
+    colors = discrete_palette(glevels, palette=palette, palcolor=palcolor)
+
+    # Spearman is Pearson on row-ranked values, which is what proxyC::simil does
+    mat = dat.to_numpy(dtype=float)
+    ranked = np.apply_along_axis(lambda c: pd.Series(c).rank().to_numpy(), 0, mat)
+    corr = np.corrcoef((ranked if cor_method == "spearman" else mat), rowvar=False)
+
+    n = len(feats)
+    cor_ramp = continuous_palette(palette=cor_palette, n=200)
+    cor_cmap = LinearSegmentedColormap.from_list("cor", cor_ramp, N=256)
+    cor_norm = Normalize(*cor_range)
+
+    fig, axes = plt.subplots(n, n, figsize=(panel_size[0] * n, panel_size[1] * n),
+                             squeeze=False)
+    size = pt_size if pt_size is not None else max(2000 / max(len(dat), 1), 1.0)
+    for i, f1 in enumerate(feats):          # column
+        for j, f2 in enumerate(feats):      # row
+            ax = axes[j][i]
+            if i == j:
+                # diagonal: the distribution of that feature per group
+                for k, lv in enumerate(glevels):
+                    v = dat.loc[gvals == lv, f1].to_numpy()
+                    if v.size < 2:
+                        continue
+                    parts = ax.violinplot([v], positions=[k], widths=0.85,
+                                          showextrema=False)
+                    for body in parts["bodies"]:
+                        body.set(facecolor=colors[lv], alpha=0.9, edgecolor="black",
+                                 linewidth=0.4)
+                ax.set_xticks(range(len(glevels)))
+                ax.set_xticklabels([])
+            elif i < j:
+                # upper: scatter coloured by group, with an lm fit and its stats
+                ax.scatter(dat[f1], dat[f2], s=size,
+                           c=[colors[g] for g in gvals], linewidths=0, alpha=0.9,
+                           rasterized=len(dat) > 20000)
+                if add_smooth and len(dat) > 2:
+                    slope, intercept, r, pv, _ = linregress(dat[f1], dat[f2])
+                    xs = np.linspace(dat[f1].min(), dat[f1].max(), 50)
+                    ax.plot(xs, intercept + slope * xs, color="red", linewidth=1,
+                            alpha=0.7)
+                    lines = []
+                    if add_equation:
+                        sign = "-" if slope < 0 else "+"
+                        lines.append(f"y = {intercept:.2g} {sign} {abs(slope):.2g}x")
+                    if add_r2:
+                        lines.append(f"$r^2$ = {r ** 2:.2g}")
+                    if add_pvalue:
+                        lines.append(f"p = {pv:.2g}")
+                    if lines:
+                        ax.text(0.04, 0.96, "\n".join(lines), transform=ax.transAxes,
+                                ha="left", va="top", fontsize=6)
+            else:
+                # lower: a solid block whose colour encodes the correlation
+                r = corr[i, j]
+                ax.add_patch(Rectangle((0, 0), 1, 1, transform=ax.transAxes,
+                                       facecolor=cor_cmap(cor_norm(r)), edgecolor="none"))
+                ax.text(0.5, 0.5, f"{f1}\n{f2}\nCor: {r:.3f}", transform=ax.transAxes,
+                        ha="center", va="center", fontsize=6.5, fontweight="bold")
+                ax.set_xticks([])
+                ax.set_yticks([])
+
+            # axis decoration only on the outer edges, as R does
+            if i != 0 or i == j:
+                ax.set_yticklabels([])
+            if j != n - 1:
+                ax.set_xticklabels([])
+            if i == 0:
+                ax.set_ylabel(f2, fontsize=7.5)
+            if j == n - 1:
+                ax.set_xlabel(f1, fontsize=7.5)
+            ax.tick_params(labelsize=6)
+
+    handles = [Patch(facecolor=colors[lv], edgecolor="black", label=lv) for lv in glevels]
+    if group_by is not None:
+        fig.legend(handles=handles, title=group_by, loc="upper left",
+                   bbox_to_anchor=(1.0, 0.98), frameon=False, fontsize=7,
+                   title_fontsize=7.5)
+    cb = fig.colorbar(ScalarMappable(norm=cor_norm, cmap=cor_cmap),
+                      ax=list(axes.ravel()), fraction=0.02, pad=0.02)
+    cb.set_label(f"{cor_method} correlation", fontsize=7.5)
+    fig.set_layout_engine("constrained")
+    return fig
 
 
 def cell_density_plot(
@@ -805,7 +913,16 @@ def cell_density_plot(
     palette: str = "Paired",
     palcolor: Sequence[str] | None = None,
     same_y_lims: bool = False,
+    y_min: float | None = None,
+    y_max: float | None = None,
+    y_nbreaks: int = 4,
+    keep_empty: bool = False,
     panel_size: tuple[float, float] = (2.6, 2.2),
+    aspect_ratio: float | None = None,
+    legend_position: str = "right",
+    nrow: int | None = None,
+    ncol: int | None = None,
+    byrow: bool = True,
     force: bool = False,
 ) -> Figure:
     """Ridgeline plot of a feature per group. Milestone 6.
@@ -816,7 +933,83 @@ def cell_density_plot(
     by their median of the feature; ``None`` keeps factor order but reversed,
     so level 1 lands on top.
     """
-    raise NotImplementedError("Milestone 6. Spec: docs/porting_briefs/stat_plots.md §4.")
+    feats = [features] if isinstance(features, str) else list(features)
+    if len(feats) > 50 and not force:
+        raise ValueError(
+            f"{len(feats)} features will not be readable. Pass force=True to proceed."
+        )
+    frame = fetch_data(adata, feats, layer=layer)
+    feats = [f for f in feats if f in frame.columns]
+    if not feats:
+        raise ValueError("none of `features` could be resolved")
+
+    if group_by is None:
+        gcat = pd.Series(["all"] * adata.n_obs, index=adata.obs_names).astype("category")
+        glevels = ["all"]
+    else:
+        cat = as_ordered_categorical(adata.obs[group_by])
+        gcat = pd.Series(np.asarray(cat).astype(str), index=adata.obs_names)
+        glevels = [str(c) for c in cat.cat.categories]
+    colors = discrete_palette(glevels, palette=palette, palcolor=palcolor)
+
+    split_levels: list[str | None] = [None]
+    if split_by is not None:
+        scat = as_ordered_categorical(adata.obs[split_by])
+        split_levels = [str(c) for c in scat.cat.categories]
+
+    th = theme_scp(aspect_ratio=aspect_ratio)
+    keys = [f"{f}:{s}" for f in feats for s in split_levels]
+    legend = LegendColumn(position=legend_position)
+    pg = PanelGrid(len(keys), panel_size=panel_size, nrow=nrow, ncol=ncol, byrow=byrow,
+                   keys=keys, theme=th, legend=legend)
+
+    for f in feats:
+        vals = pd.to_numeric(frame[f], errors="coerce")
+        for sp in split_levels:
+            ax = pg.axes[f"{f}:{sp}"]
+            m = np.isfinite(vals.to_numpy())
+            if sp is not None:
+                m = m & (np.asarray(as_ordered_categorical(adata.obs[split_by])).astype(str) == sp)
+            v = vals[m]
+            g = gcat[m]
+            if x_order == "rank":
+                v = v.rank()  # rank mode is what spreads pseudotime ridges evenly
+
+            # Default order is the factor order REVERSED, so level 1 ends up on
+            # top of the ridge stack; `decreasing` sorts by median instead.
+            if decreasing is None:
+                order = list(reversed(glevels))
+            else:
+                med = v.groupby(g).median()
+                order = list(med.sort_values(ascending=not decreasing).index)
+            if flip:
+                order = list(glevels)
+
+            lo = y_min if y_min is not None else float(v.min())
+            hi = y_max if y_max is not None else float(v.max())
+            grid = np.linspace(lo, hi, 256)
+            for k, lv in enumerate(order):
+                sub = v[g == lv].to_numpy()
+                if sub.size < 2 or np.allclose(sub, sub[0]):
+                    continue
+                kde = gaussian_kde(sub)  # scipy's default bandwidth, like bw.nrd0
+                dens = kde(grid)
+                dens = dens / dens.max() * 0.95   # ridges normalise each row
+                ax.fill_between(grid, k, k + dens, facecolor=colors[lv], alpha=0.9,
+                                edgecolor="black", linewidth=0.5, zorder=len(order) - k)
+            ax.set_yticks(range(len(order)))
+            ax.set_yticklabels(order, fontsize=7)
+            ax.set_ylim(-0.2, len(order) + 0.6)
+            ax.set_xlim(lo, hi)
+            ax.set_xlabel(f)
+            ax.set_ylabel(group_by or "")
+            if sp is not None:
+                ax.set_title(str(sp), fontsize=th.size("plot.title"))
+
+    if group_by is not None and legend_position != "none":
+        legend.add(group_by, [Patch(facecolor=colors[lv], edgecolor="black", label=lv)
+                              for lv in glevels])
+    return pg.finish()
 
 
 def volcano_plot(
@@ -851,4 +1044,118 @@ def volcano_plot(
     ``abs``.  Points are colored by whichever metric is not on x, through a
     zero-anchored diverging ramp.
     """
-    raise NotImplementedError("Milestone 6. Spec: docs/porting_briefs/stat_plots.md §5.")
+    df = de.copy()
+    if pct1_col in df.columns and pct2_col in df.columns:
+        df["diff_pct"] = df[pct1_col] - df[pct2_col]
+    elif x_metric == "diff_pct":
+        raise ValueError(f"`diff_pct` needs {pct1_col!r} and {pct2_col!r} in the table")
+    if x_metric == "diff_pct" and not np.isfinite(df["diff_pct"]).any():
+        # scanpy omits the detection fractions unless asked, and an all-NaN x
+        # would otherwise render as an empty panel with no indication why.
+        raise ValueError(
+            f"{pct1_col!r}/{pct2_col!r} are all missing, so `diff_pct` cannot be computed. "
+            "scanpy only fills them when called as "
+            "sc.tl.rank_genes_groups(..., pts=True); alternatively pass "
+            "x_metric='avg_log2FC'."
+        )
+
+    # DE_threshold is an expression evaluated against the frame, as in R
+    df["DE"] = False
+    df.loc[df.eval(de_threshold), "DE"] = True
+
+    # x clipping: the 1%/99% quantiles, symmetrised when they straddle zero, and
+    # outliers clamped onto the bound rather than dropped.
+    xv = df[lfc_col].to_numpy(dtype=float)
+    finite = xv[np.isfinite(xv)]
+    hi = float(np.quantile(finite, 0.99)) or float(np.max(finite))
+    lo = float(np.quantile(finite, 0.01)) or float(np.min(finite))
+    if hi <= 0:
+        hi = float(np.max(finite))
+    if lo >= 0:
+        lo = float(np.min(finite))
+    if hi > 0 and lo < 0:
+        v = min(abs(hi), abs(lo))
+        hi, lo = v, -v
+    df["border"] = (df[lfc_col] < lo) | (df[lfc_col] > hi)
+    clipped_lfc = df[lfc_col].clip(lo, hi)
+
+    y = -np.log10(df[padj_col].to_numpy(dtype=float))
+    y = np.where(np.isfinite(y), y, np.nanmax(y[np.isfinite(y)]) if np.isfinite(y).any() else 0.0)
+
+    # The signed-y trick: this is not a standard volcano. Down-regulated genes
+    # hang BELOW zero and the axis is relabelled with abs(), so the reader sees
+    # magnitude in both directions.
+    if x_metric == "diff_pct":
+        x = df["diff_pct"].to_numpy(dtype=float)
+        y = np.where(df[lfc_col].to_numpy() < 0, -y, y)
+        sort_key = np.abs(df[lfc_col].to_numpy(dtype=float))
+        color_vals = df[lfc_col].to_numpy(dtype=float)
+        color_name = lfc_col
+    else:
+        x = clipped_lfc.to_numpy(dtype=float)
+        y = np.where(df["diff_pct"].to_numpy() < 0, -y, y)
+        sort_key = np.abs(df["diff_pct"].to_numpy(dtype=float))
+        color_vals = df["diff_pct"].to_numpy(dtype=float)
+        color_name = "diff_pct"
+    df["x"], df["y"] = x, y
+    df["distance"] = x ** 2 + y ** 2
+    df = df.iloc[np.argsort(sort_key, kind="stable")]  # extremes drawn last, on top
+
+    groups = ([str(g) for g in as_ordered_categorical(df[group_col]).cat.categories]
+              if group_col in df.columns else ["all"])
+    th = theme_scp(aspect_ratio=None)
+    legend = LegendColumn(position="right")
+    pg = PanelGrid(len(groups), panel_size=panel_size, nrow=nrow, ncol=ncol,
+                   keys=groups, theme=th, legend=legend)
+
+    # zero-anchored diverging ramp: the colour is the OTHER metric
+    ramp = continuous_palette(palette=palette, palcolor=palcolor, n=100)
+    cmap = LinearSegmentedColormap.from_list("volcano", ramp, N=256)
+    span = np.nanmax(np.abs(color_vals)) or 1.0
+    norm = TwoSlopeNorm(vcenter=0.0, vmin=-span, vmax=span)
+    rng = np.random.default_rng(11)
+
+    for g in groups:
+        ax = pg.axes[g]
+        sub = df if group_col not in df.columns else df[df[group_col].astype(str) == g]
+        gx, gy = sub["x"].to_numpy(dtype=float), sub["y"].to_numpy(dtype=float)
+        border = sub["border"].to_numpy()
+        is_de = sub["DE"].to_numpy()
+        # clamped points fan out so the pile-up on the clip boundary is visible
+        jx = gx + np.where(border, rng.uniform(-0.2, 0.2, len(gx)), 0.0)
+        jy = gy + np.where(border, rng.uniform(-0.2, 0.2, len(gy)), 0.0)
+
+        ax.axhline(0, color="black", linewidth=0.8)
+        ax.axvline(0, color="grey", linewidth=0.8, linestyle="--")
+        ax.scatter(jx[~is_de], jy[~is_de], s=pt_size * 6, c="#BFBFBF",
+                   linewidths=0, zorder=1)
+        ax.scatter(jx[is_de], jy[is_de], s=(pt_size + 0.5) * 14, c="black",
+                   linewidths=0, zorder=2)  # halo
+        ax.scatter(jx[is_de], jy[is_de], s=pt_size * 8,
+                   c=sub[color_name].to_numpy()[is_de], cmap=cmap, norm=norm,
+                   linewidths=0, zorder=3)
+
+        # top nlabel by distance, computed SEPARATELY for each half
+        if features_label is not None:
+            picks = sub[sub[gene_col].astype(str).isin([str(f) for f in features_label])]
+        else:
+            upper = sub[sub["y"] >= 0].nlargest(nlabel, "distance")
+            lower = sub[sub["y"] < 0].nlargest(nlabel, "distance")
+            picks = pd.concat([upper, lower])
+        for _, row in picks.iterrows():
+            t = ax.annotate(str(row[gene_col]), (row["x"], row["y"]),
+                            textcoords="offset points", xytext=(4, 4),
+                            fontsize=7, color="black",
+                            arrowprops=None)
+            halo(t, foreground="white", radius=0.1)
+
+        ax.set_xlabel(x_metric)
+        ax.set_ylabel("-log10(p-adjust)")
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _p: f"{abs(v):g}"))
+        if group_col in df.columns:
+            ax.set_title(g, fontsize=th.size("plot.title"))
+
+    sm = ScalarMappable(norm=norm, cmap=cmap)
+    cb = pg.fig.colorbar(sm, ax=list(pg.axes.values()), fraction=0.02, pad=0.02)
+    cb.set_label(color_name, fontsize=th.size("legend.title"))
+    return pg.finish()
