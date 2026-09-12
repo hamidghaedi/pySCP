@@ -19,12 +19,15 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import LinearSegmentedColormap, Normalize, to_hex, to_rgb
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
-from ..fetch import as_ordered_categorical, default_reduction, reduction_key
+from ..colors import adjcolors, blendcolors
+from ..fetch import as_ordered_categorical, default_reduction, fetch_data, reduction_key
 from ..layout import LegendColumn, PanelGrid
-from ..palettes import NA_COLOR_DEFAULT, discrete_palette
+from ..palettes import NA_COLOR_DEFAULT, continuous_palette, discrete_palette
 from ..theme import Theme, halo, theme_scp
 
 __all__ = ["cell_dim_plot", "feature_dim_plot", "cell_dim_plot_3d", "feature_dim_plot_3d"]
@@ -356,10 +359,229 @@ def feature_dim_plot(
     per-cell color-blending path (``scp.colors.blendcolors``), which produces
     one colorbar per feature rather than a single scale.
     """
-    raise NotImplementedError(
-        "Milestone 3. Spec: docs/porting_briefs/dim_plots.md §2. "
-        "Follow the structure of cell_dim_plot above."
+    rng = np.random.default_rng(seed)
+    for unsupported, name in (
+        (add_density, "add_density"), (graph, "graph"), (lineages, "lineages"),
+    ):
+        if unsupported:
+            raise NotImplementedError(
+                f"`{name}` is specified in docs/porting_briefs/dim_plots.md but not yet "
+                "implemented; see docs/07_milestones.md."
+            )
+
+    # A named mapping flattens to a flat list whose names become subtitles.
+    subtitles: dict[str, str] = {}
+    if isinstance(features, dict):
+        flat: list[str] = []
+        for group, members in features.items():
+            members = [members] if isinstance(members, str) else list(members)
+            flat.extend(members)
+            subtitles.update({m: group for m in members})
+        feats = flat
+    else:
+        feats = [features] if isinstance(features, str) else list(features)
+
+    # R guards at >50 features here, despite the roxygen text saying 100.
+    if len(feats) > 50 and not force:
+        raise ValueError(
+            f"{len(feats)} features will produce an unreadable figure. "
+            "Pass force=True to proceed anyway."
+        )
+
+    reduction = reduction or default_reduction(adata)
+    key = reduction_key(reduction)
+    emb = np.asarray(adata.obsm[reduction])
+    xi, yi = dims[0] - 1, dims[1] - 1
+
+    values = fetch_data(adata, feats, layer=layer, use_raw=use_raw)
+    resolved = [f for f in feats if f in values.columns]
+    if not resolved:
+        raise ValueError("none of `features` could be resolved")
+
+    frame = pd.DataFrame(
+        {"x": emb[:, xi], "y": emb[:, yi]}, index=pd.Index(adata.obs_names)
     )
+    for f in resolved:
+        frame[f] = pd.to_numeric(values[f], errors="coerce").to_numpy()
+
+    if split_by is None:
+        split_levels: list[str | None] = [None]
+        frame["__split__"] = ""
+    else:
+        sp = as_ordered_categorical(adata.obs[split_by])
+        frame["__split__"] = sp.to_numpy()
+        split_levels = list(sp.cat.categories)
+
+    # Global limits, from every cell, so split panels stay comparable.
+    xlim = (float(np.nanmin(emb[:, xi])), float(np.nanmax(emb[:, xi])))
+    ylim = (float(np.nanmin(emb[:, yi])), float(np.nanmax(emb[:, yi])))
+
+    if cells is not None:
+        frame = frame.loc[frame.index.intersection(pd.Index(cells))]
+
+    # bg_cutoff is applied globally and destructively BEFORE plotting: every
+    # value <= it becomes NaN and renders in bg_color.  The comparison is <=,
+    # so exact zeros are background.  Signed scores need bg_cutoff=None.
+    if bg_cutoff is not None:
+        for f in resolved:
+            frame.loc[frame[f] <= bg_cutoff, f] = np.nan
+
+    n_cells = len(frame)
+    size = pt_size if pt_size is not None else _auto_pt_size(n_cells)
+    if raster is None:
+        raster = n_cells > 100_000
+    if show_stat is None:
+        show_stat = not (theme.blank if theme else False)
+
+    blend_path = bool(compare_features) and len(resolved) > 1
+    if calculate_coexp and not blend_path:
+        raise NotImplementedError(
+            "`calculate_coexp` is specified in docs/porting_briefs/dim_plots.md §2.2 "
+            "but not yet implemented."
+        )
+
+    th = theme or theme_scp(aspect_ratio=aspect_ratio, legend_position=legend_position)
+    panel_feats = ["|".join(resolved)] if blend_path else resolved
+    keys = [f"{s or ''}:{f}" for s in split_levels for f in panel_feats]
+    legend = LegendColumn(position=legend_position)
+    pg = PanelGrid(
+        len(keys), panel_size=panel_size,
+        nrow=nrow if nrow is not None else (None if ncol else len(split_levels)),
+        ncol=ncol if ncol is not None else (None if nrow else len(panel_feats)),
+        byrow=byrow, keys=keys, theme=th, legend=legend,
+    )
+
+    def _limits(f: str, panel: pd.DataFrame) -> tuple[float, float]:
+        """Winsorized colour limits; `keep_scale` chooses the pooling scope."""
+        if keep_scale == "all":
+            pool = frame[resolved].to_numpy().ravel()
+        elif keep_scale == "feature":
+            pool = frame[f].to_numpy()
+        else:
+            pool = panel[f].to_numpy()
+        pool = pool[np.isfinite(pool)]
+        if pool.size == 0:
+            return (0.0, 1.0)
+        lo = lower_cutoff if lower_cutoff is not None else float(np.quantile(pool, lower_quantile))
+        hi = upper_cutoff if upper_cutoff is not None else float(np.quantile(pool, upper_quantile))
+        return (lo, hi + 0.001)  # +0.001 so the range can never be degenerate
+
+    ramp = continuous_palette(palette=palette if not blend_path else "Spectral",
+                              palcolor=None if blend_path else palcolor, n=100)
+    cmap = LinearSegmentedColormap.from_list("scp", ramp, N=256).with_extremes(bad=bg_color)
+
+    seen_cbar: set[str] = set()
+    for s in split_levels:
+        # Unlike cell_dim_plot this genuinely partitions -- a split panel holds
+        # only its own cells, with no grey "other split" points.
+        part = frame if s is None else frame[frame["__split__"] == s]
+        for f in panel_feats:
+            ax_p = pg.axes[f"{s or ''}:{f}"]
+
+            if blend_path:
+                hues = discrete_palette(resolved, palette="Set1", palcolor=palcolor)
+                per_feature: list[list] = []
+                for feat in resolved:
+                    lo, hi = _limits(feat, part)
+                    stops = [adjcolors(hues[feat], 0.1), hues[feat]]
+                    sub_cmap = LinearSegmentedColormap.from_list(f"b{feat}", stops, N=256)
+                    norm = Normalize(vmin=lo, vmax=hi, clip=True)
+                    vals = part[feat].to_numpy()
+                    per_feature.append(
+                        [None if not np.isfinite(v) else to_hex(sub_cmap(norm(v))) for v in vals]
+                    )
+                blended = [
+                    blendcolors([c[i] for c in per_feature], mode=color_blend_mode)
+                    for i in range(len(part))
+                ]
+                # Sort brightest-first so the most co-expressing points land on top;
+                # cells with no signal on any feature sort to the bottom.
+                lum = np.array([
+                    np.nan if c is None else float(sum(to_rgb(c))) for c in blended
+                ])
+                order = np.concatenate([
+                    np.flatnonzero(np.isnan(lum)),
+                    np.flatnonzero(~np.isnan(lum))[np.argsort(-lum[~np.isnan(lum)], kind="stable")],
+                ])
+                cvec = [bg_color if blended[i] is None else blended[i] for i in order]
+                d = part.iloc[order]
+                ax_p.scatter(d["x"], d["y"], s=size, c=cvec, alpha=pt_alpha,
+                             linewidths=0, rasterized=raster)
+                for feat in resolved:
+                    if feat in seen_cbar or legend_position == "none":
+                        continue
+                    seen_cbar.add(feat)
+                    lo, hi = _limits(feat, part)
+                    stops = [adjcolors(hues[feat], 0.1), hues[feat]]
+                    sm = ScalarMappable(norm=Normalize(lo, hi),
+                                        cmap=LinearSegmentedColormap.from_list(f"c{feat}", stops))
+                    cb = pg.fig.colorbar(sm, ax=list(pg.axes.values()), fraction=0.02, pad=0.02)
+                    cb.outline.set_edgecolor("black")
+                    cb.set_label(feat, fontsize=th.size("legend.title"))
+            else:
+                lo, hi = _limits(f, part)
+                vals = part[f].to_numpy(dtype=float)
+                # NaN first, then ascending, so the highest expressers draw last.
+                order = np.concatenate([
+                    np.flatnonzero(np.isnan(vals)),
+                    np.flatnonzero(~np.isnan(vals))[np.argsort(vals[~np.isnan(vals)], kind="stable")],
+                ])
+                d = part.iloc[order]
+                v = np.clip(d[f].to_numpy(dtype=float), lo, hi)  # winsorize, never drop
+                # Two layers, as SCP does: background cells first so they can
+                # never overplot a cell that actually carries signal.
+                bg = np.isnan(v)
+                if bg.any():
+                    ax_p.scatter(d["x"][bg], d["y"][bg], s=size, c=bg_color,
+                                 alpha=pt_alpha, linewidths=0, rasterized=raster)
+                if (~bg).any():
+                    ax_p.scatter(d["x"][~bg], d["y"][~bg], s=size, c=v[~bg],
+                                 cmap=cmap, norm=Normalize(lo, hi), alpha=pt_alpha,
+                                 linewidths=0, rasterized=raster)
+                cbar_key = f if keep_scale == "feature" else ("__all__" if keep_scale == "all" else f"{s}:{f}")
+                if cbar_key not in seen_cbar and legend_position != "none":
+                    seen_cbar.add(cbar_key)
+                    sm = ScalarMappable(norm=Normalize(lo, hi), cmap=cmap)
+                    # ax MUST be a list. Handing constrained layout a bare Axes
+                    # here zeroes a height ratio and savefig dies dividing by it.
+                    cb = pg.fig.colorbar(sm, ax=[ax_p], fraction=0.046, pad=0.03)
+                    cb.outline.set_edgecolor("black")
+
+            if cells_highlight is not None:
+                hl = (
+                    part.index[part[resolved].notna().any(axis=1)]
+                    if cells_highlight is True
+                    else part.index.intersection(pd.Index(cells_highlight))
+                )
+                sub = part.loc[hl]
+                ax_p.scatter(sub["x"], sub["y"], s=(sizes_highlight + stroke_highlight) ** 2 * 8,
+                             c=cols_highlight, linewidths=0, rasterized=raster)
+
+            ax_p.set_xlim(*xlim)
+            ax_p.set_ylim(*ylim)
+            ax_p.set_xlabel(xlab if xlab is not None else f"{key}{dims[0]}")
+            ax_p.set_ylabel(ylab if ylab is not None else f"{key}{dims[1]}")
+            strip = "|".join(resolved) if blend_path else f
+            head = title if title else strip
+            if show_stat:
+                # R reports the POSITIVE cells and their share, not the panel
+                # total: cells at or below bg_cutoff are background and excluded.
+                cols = resolved if blend_path else [f]
+                n_pos = int(part[cols].notna().any(axis=1).sum())
+                pct = (100.0 * n_pos / len(part)) if len(part) else 0.0
+                stat = f"nPos:{n_pos}, {pct:.1f}%"
+                if s is not None:
+                    stat = f"{s} | {stat}"
+                if not blend_path and f in subtitles:
+                    stat = f"{subtitles[f]} | {stat}"
+                # Stacked in one title: ggplot puts the subtitle above the strip,
+                # and two matplotlib titles at different loc share a line.
+                ax_p.set_title(f"{stat}\n{head}", fontsize=th.size("plot.subtitle"))
+            else:
+                ax_p.set_title(head, fontsize=th.size("plot.title"))
+
+    _ = rng  # seed is accepted for signature parity; this path has no shuffle
+    return pg.finish()
 
 
 def cell_dim_plot_3d(adata, group_by: str, **kwargs):

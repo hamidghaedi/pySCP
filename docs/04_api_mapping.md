@@ -8,7 +8,7 @@ body raises · **n/a** = nothing to port.
 | R (`SCP-plot.R`) | Line | Python | Status | Milestone |
 |---|---|---|---|---|
 | `CellDimPlot` | 1328 | `scp.pl.cell_dim_plot` | done (core; overlays stub) | 2 |
-| `FeatureDimPlot` | 2042 | `scp.pl.feature_dim_plot` | stub | 3 |
+| `FeatureDimPlot` | 2042 | `scp.pl.feature_dim_plot` | done (standard + blend; `add_density`/`graph`/`lineages`/`hex` stub) | 3 |
 | `CellDimPlot3D` | 2843 | `scp.pl.cell_dim_plot_3d` | stub | 8 |
 | `FeatureDimPlot3D` | 3066 | `scp.pl.feature_dim_plot_3d` | stub | 8 |
 | `FeatureStatPlot` | 3524 | `scp.pl.feature_stat_plot` | stub | 4 |

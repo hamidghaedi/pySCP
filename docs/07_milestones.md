@@ -33,9 +33,13 @@ median position, sized as a fraction of the axis range) · `hex` binning.
 
 Depends on nothing beyond milestone 1.
 
-### 3 — `feature_dim_plot` — M
+### 3 — `feature_dim_plot` — M ✅ done
 
 Brief: `porting_briefs/dim_plots.md` §2.
+
+Landed: both halves, verified against R in `notebooks/01_parity_foundation.ipynb`
+(`nPos` counts and percentages agree exactly). Still stub within it: `add_density`,
+`graph`, `lineages`, `hex` binning and `calculate_coexp`.
 
 Two halves. The standard path is the easier one, but three details define how
 it looks: ascending-value draw order with NaN first, `bg_cutoff=0` NaN-masking
