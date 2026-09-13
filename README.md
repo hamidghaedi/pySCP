@@ -7,103 +7,11 @@ A port of the plotting layer of the R package
 University, GPL-3) — 229 curated palettes, a consistent theme, and ~30 figure
 functions — reading **AnnData** directly instead of Seurat.
 
-> **Status: first pass complete, pre-alpha.** 27 of the 28 functions in
-> `scp.pl` are implemented; 117 tests pass. Options that are not ported raise
-> `NotImplementedError` naming the brief section that specifies them, rather
-> than silently doing something else — see the table at the end of
-> [`docs/07_milestones.md`](docs/07_milestones.md).
->
-> *Implemented* and *verified against R* are different claims, and this README
-> keeps them apart. See [Parity](#parity) below.
-
-```python
-import scanpy as sc
-import scp
-
-adata = sc.datasets.pbmc3k_processed()
-
-scp.pl.cell_dim_plot(adata, "louvain", label=True, theme=scp.theme_blank())
-scp.pl.feature_dim_plot(adata, ["CD3E", "MS4A1"], compare_features=True)   # soon
-scp.pl.group_heatmap(adata, features=genes, group_by="louvain", add_dot=True)  # soon
-```
-
-## Why
-
 scanpy's plotting is deliberately minimal. SCP's is not: it has a coherent
-grammar for grouping, splitting, faceting, labelling and legend composition
-that carries across every figure type, and the results are publication-ready
-without post-processing. That grammar is worth having in Python, but it is
-locked behind Seurat and 14,794 lines of R.
-
-## What exists today
-
-```python
-# dimensional reduction
-scp.pl.cell_dim_plot(adata, "leiden", split_by="batch", label=True)
-scp.pl.feature_dim_plot(adata, ["CD3E", "MS4A1"], compare_features=True)
-scp.pl.cell_dim_plot_3d(adata, "leiden")                       # plotly
-
-# distributions and composition
-scp.pl.feature_stat_plot(adata, "CD3E", group_by="leiden", plot_type="violin")
-scp.pl.cell_stat_plot(adata, "leiden", group_by="batch", plot_type="ring")
-scp.pl.volcano_plot(scp.io.de_from_rank_genes_groups(adata))
-scp.pl.cell_density_plot(adata, "pseudotime", group_by="leiden")
-scp.pl.feature_cor_plot(adata, ["CD3E", "MS4A1", "LYZ"])
-
-# heatmaps
-scp.pl.group_heatmap(adata, features=genes, group_by="leiden", add_dot=True)
-scp.pl.feature_heatmap(adata, features=genes, group_by="leiden")
-scp.pl.cell_cor_heatmap(query, reference, ref_group="celltype")
-
-# trajectory and enrichment
-scp.pl.paga_plot(adata, label=True)
-scp.pl.lineage_plot(adata, ["Lineage1"])
-scp.pl.enrichment_plot(enrichment_df, plot_type="lollipop")
-scp.pl.gsea_plot({"table": tab, "curves": curves})
-
-# the layer everything is built on
-scp.list_palettes()                          # 229, extracted from SCP's own .rda
-scp.discrete_palette(["A", "B"], "Paired")   # verbatim slice, not interpolation
-scp.blendcolors(["#FF0000", "#00FF00"], "screen")
-scp.matrix_process(M, "zscore")              # ddof=1, matching R's scale()
-scp.fetch_data(adata, ["CD3E", "leiden", "UMAP_1"])
-```
-
-## Parity
-
-`notebooks/01_parity_foundation.ipynb` runs SCP and this port side by side on
-`pancreas_sub`, the dataset behind 21 of the 22 plotting examples in
-`SCP-plot.R`, and compares them — numerically wherever a number is available,
-because the risk in a port like this is a figure that looks plausible and is
-quietly wrong.
-
-**Checked against R, and agreeing:**
-
-| | |
-|---|---|
-| Categorical level order | identical end to end |
-| Discrete palettes | byte-identical (verbatim-slice rule) |
-| Interpolated ramp | within 1/255, the documented `colorRampPalette` tolerance |
-| `blendcolors` (4 modes), `adjcolors` | identical |
-| `matrix_process` `zscore` (ddof=1), `log2fc` | identical |
-| `cell_dim_plot` legend | identical text, order and counts |
-| `feature_dim_plot` `nPos` and percentages | identical on all four genes tested |
-| `group_heatmap` matrix vs R's `matrix_list` | identical to 8.6e-07 |
-| `cell_stat_plot` cross-tab and stacking order | identical |
-
-**Implemented but not yet checked against R:** the trajectory family, the
-enrichment and GSEA views, the 3-D plots, the correlation heatmaps, and
-`volcano_plot` / `cell_density_plot` / `feature_cor_plot`. Several of these need
-SCP's own analysis pipeline (`RunSlingshot`, `RunDEtest`, `RunEnrichment`) to
-produce comparable input; standing that up would test the pipeline rather than
-the plotting layer.
-
-**Known not to match, by decision:** anything depending on a fitted GAM.
-`mgcv` selects its smoothing parameter by GCV/REML and `pygam` does not
-reproduce that criterion, so `dynamic_plot`'s smooth differs from R's by more
-than numerical noise and `dynamic_heatmap(use_fitted=True)` raises rather than
-pretending otherwise. The binned form of the figure needs no fit and is
-provided. Reasoning is in `docs/07_milestones.md` §9.
+grammar for grouping, splitting, faceting, labelling and legend composition that
+carries across every figure type, and the results are publication-ready without
+post-processing. That grammar is worth having in Python, but it is locked behind
+Seurat and 14,794 lines of R.
 
 ## Install
 
@@ -111,9 +19,316 @@ provided. Reasoning is in `docs/07_milestones.md` §9.
 pip install -e ".[dev]"
 ```
 
-Core deps are anndata, matplotlib, numpy, pandas, scipy. Everything heavier is
-an extra: `[gam]`, `[graph]`, `[enrich]`, `[velocity]`, `[interactive]`,
-`[raster]`, `[fuzzy]`, or `[all]`.
+Core deps are anndata, matplotlib, numpy, pandas, scipy. Everything heavier is an
+extra: `[gam]`, `[graph]`, `[enrich]`, `[velocity]`, `[interactive]`, `[raster]`,
+`[fuzzy]`, or `[all]`. A function that needs one imports it lazily and tells you
+which extra to install.
+
+## Quick start
+
+- [Dimensional reduction](#dimensional-reduction)
+- [Heatmaps](#heatmaps)
+- [Expression distributions](#expression-distributions)
+- [Cell composition](#cell-composition)
+- [Differential expression](#differential-expression)
+- [Correlation](#correlation)
+- [Trajectory](#trajectory)
+- [Enrichment](#enrichment)
+- [Palettes and themes](#palettes-and-themes)
+
+Every figure below is generated by `tools/make_readme_figures.py` from the code
+shown beside it, on `pancreas_sub` — the mouse pancreatic endocrinogenesis
+dataset SCP itself develops against ([Bastidas-Ponce et al.
+2019](https://doi.org/10.1242/dev.173849)), 1000 cells × 15,958 genes, converted
+to `.h5ad` and committed under `notebooks/data/`.
+
+```python
+import anndata as ad
+import scanpy as sc
+import scp
+
+adata = ad.read_h5ad("notebooks/data/pancreas_sub.h5ad")
+
+# the object arrives with raw counts in X, so normalise first
+adata.X = adata.layers["counts"].copy()
+sc.pp.normalize_total(adata, target_sum=1e4)
+sc.pp.log1p(adata)
+```
+
+### Dimensional reduction
+
+Several grouping variables at once, each panel labelled in situ with a legend
+that carries the key:
+
+```python
+scp.pl.cell_dim_plot(
+    adata, ["CellType", "SubCellType"],
+    label=True, theme=scp.theme_blank(), ncol=2,
+)
+```
+
+<img src="docs/images/dim-1.png" width="100%" />
+
+`split_by` keeps **all** cells in every panel, drawing the ones outside the
+current split in `bg_color`, so panels stay visually comparable:
+
+```python
+scp.pl.cell_dim_plot(
+    adata, "SubCellType", split_by="Phase",
+    label=True, theme=scp.theme_blank(), ncol=3,
+)
+```
+
+<img src="docs/images/dim-2.png" width="100%" />
+
+Continuous features. Draw order is ascending value with background first, so the
+highest expressers land on top, and the colour scale is winsorised at the 99th
+percentile rather than clipped:
+
+```python
+scp.pl.feature_dim_plot(
+    adata, ["Sox9", "Neurog3", "Fev", "Rbp4"],
+    ncol=4, theme=scp.theme_blank(),
+)
+```
+
+<img src="docs/images/dim-3.png" width="100%" />
+
+`compare_features=True` gives each feature a two-stop ramp and blends per cell,
+so co-expression reads directly off the colour:
+
+```python
+scp.pl.feature_dim_plot(
+    adata, ["Ins1", "Gcg"],
+    compare_features=True, theme=scp.theme_blank(),
+)
+```
+
+<img src="docs/images/dim-4.png" width="60%" />
+
+### Heatmaps
+
+The dot form: colour carries scaled expression, dot area carries the fraction of
+cells above `exp_cutoff`. Annotation lanes stack above the body, and the whole
+layout is sized in inches so a 5 mm lane is 5 mm on the page.
+
+```python
+markers = ["Sox9", "Anxa2", "Neurog3", "Hes6", "Fev", "Neurod1",
+           "Rbp4", "Pyy", "Ins1", "Gcg", "Sst", "Ghrl"]
+
+scp.pl.group_heatmap(
+    adata, features=markers, group_by="SubCellType", layer="counts",
+    cell_annotation=["Phase"], add_dot=True, add_reticle=True,
+    show_row_names=True,
+)
+```
+
+<img src="docs/images/heatmap-1.png" width="70%" />
+
+The per-cell form, without aggregation — cells downsampled per group, columns
+split so one group's cells touch:
+
+```python
+scp.pl.feature_heatmap(
+    adata, features=markers, group_by="CellType",
+    max_cells=60, show_row_names=True,
+)
+```
+
+<img src="docs/images/heatmap-2.png" width="85%" />
+
+Both return a `HeatmapResult` carrying the figure, the matrices that were
+drawn, and a `.spec` you can retune and re-render:
+
+```python
+ht = scp.pl.group_heatmap(adata, features=markers, group_by="CellType")
+ht.matrices["CellType"].head()      # the z-scored matrix, as a DataFrame
+ht.spec.body_height_in = 4.0        # then scp.heatmap.render(ht.spec)
+```
+
+### Expression distributions
+
+Five geometries over one grammar — `violin`, `box`, `bar`, `dot`, `col` — with
+overlays and the alternating background striping SCP draws by default:
+
+```python
+scp.pl.feature_stat_plot(
+    adata, ["Ins1", "Gcg"], group_by="CellType", add_box=True, ncol=2,
+)
+```
+
+<img src="docs/images/stat-1.png" width="100%" />
+
+`bg_by` groups the x axis by a coarser variable; `sort` reorders by median:
+
+```python
+scp.pl.feature_stat_plot(
+    adata, "Ins1", group_by="SubCellType", bg_by="CellType",
+    plot_type="box", sort="increasing",
+)
+```
+
+<img src="docs/images/stat-2.png" width="70%" />
+
+### Cell composition
+
+How one categorical column distributes across another. Nine of SCP's eleven
+plot types are available; all are views of the same cross-tab.
+
+```python
+scp.pl.cell_stat_plot(adata, "SubCellType", group_by="Phase", plot_type="bar")
+```
+
+<img src="docs/images/comp-1.png" width="55%" />
+
+```python
+scp.pl.cell_stat_plot(adata, "CellType", group_by="Phase", plot_type="ring")
+scp.pl.cell_stat_plot(adata, "SubCellType", group_by="Phase", plot_type="dot")
+```
+
+<img src="docs/images/comp-2.png" width="46%" /> <img src="docs/images/comp-3.png" width="50%" />
+
+### Differential expression
+
+`volcano_plot` takes a DataFrame, so it works with scanpy's own DE output.
+Note the y axis is **signed** — down-regulated genes hang below zero and the
+axis is relabelled with `abs()`, so it reads as magnitude in both directions:
+
+```python
+sc.tl.rank_genes_groups(adata, "CellType", method="wilcoxon", pts=True)
+de = scp.io.de_from_rank_genes_groups(adata)
+
+scp.pl.volcano_plot(de, ncol=3)
+```
+
+<img src="docs/images/de-1.png" width="100%" />
+
+### Correlation
+
+A full scatter-plot matrix — violins on the diagonal, fitted line with r² and
+p above, correlation block below:
+
+```python
+scp.pl.feature_cor_plot(adata, ["Ins1", "Gcg", "Sst"], group_by="CellType")
+```
+
+<img src="docs/images/cor-1.png" width="60%" />
+
+Query-versus-reference similarity, collapsed to group centroids:
+
+```python
+scp.pl.cell_cor_heatmap(
+    adata, query_group="SubCellType", ref_group="CellType", nfeatures=1000,
+)
+```
+
+<img src="docs/images/cor-2.png" width="55%" />
+
+### Trajectory
+
+PAGA read straight from `adata.uns['paga']` — no conversion, since scanpy's keys
+are the ones SCP reads. Nodes sit at the per-group **median** of the embedding,
+so the same graph can be laid over UMAP, PCA or diffusion coordinates:
+
+```python
+sc.pp.neighbors(adata, use_rep="X_pca")
+sc.tl.paga(adata, groups="SubCellType")
+
+scp.pl.paga_plot(adata, label=True)
+```
+
+<img src="docs/images/traj-1.png" width="50%" />
+
+Given a pseudotime in `obs`, the lineage curve and the features along it:
+
+```python
+scp.pl.lineage_plot(adata, ["Lineage"])
+scp.pl.dynamic_plot(adata, ["Lineage"], ["Sox9", "Neurog3", "Fev", "Ins1"], ncol=4)
+```
+
+<img src="docs/images/traj-2.png" width="42%" />
+
+<img src="docs/images/traj-3.png" width="100%" />
+
+```python
+scp.pl.dynamic_heatmap(adata, ["Lineage"], markers, cell_bins=60, show_row_names=True)
+scp.pl.cell_density_plot(adata, "Lineage", group_by="SubCellType")
+```
+
+<img src="docs/images/traj-4.png" width="48%" /> <img src="docs/images/traj-5.png" width="48%" />
+
+> `dynamic_plot` smooths with `pygam`. That will **not** reproduce R's curve:
+> `mgcv` selects its smoothing parameter by GCV/REML and `pygam` does not
+> implement that criterion. The trend, the peak position and the ordering of
+> features by peak time are stable; the fitted values are not.
+> `dynamic_heatmap(use_fitted=True)` raises rather than imply otherwise — the
+> binned form shown above needs no fit.
+
+### Enrichment
+
+Enrichment computation stays **out** of the plotting layer: pass a table
+matching `scp.io.ENRICHMENT_COLUMNS`, from gseapy, decoupler, or built by hand.
+
+```python
+scp.pl.enrichment_plot(enrichment_df, plot_type="lollipop")
+```
+
+<img src="docs/images/enrich-1.png" width="65%" />
+
+```python
+curve = scp.pl.gsea_scores(ranked_genes, gene_set)
+scp.pl.gsea_plot({"table": gsea_table, "curves": {"GS1": curve}})
+```
+
+<img src="docs/images/enrich-2.png" width="45%" />
+
+### Palettes and themes
+
+229 palettes, extracted from SCP's own `.rda`. The rule that matters: when you
+ask for *n* colours and the palette has at least *n*, you get the first *n*
+**verbatim** — no interpolation, so categorical figures stay stable.
+
+```python
+scp.list_palettes()                          # 229 names
+scp.discrete_palette(["A", "B", "C"], "Paired")
+scp.continuous_palette(palette="Spectral", n=100)
+scp.blendcolors(["#FF0000", "#00FF00"], "screen")
+```
+
+<img src="docs/images/palettes.png" width="70%" />
+
+Two themes, passed as objects rather than strings:
+
+```python
+scp.theme_scp(aspect_ratio=1)                # framed panel, ticks, no axis line
+scp.theme_blank(add_coord=True)              # the published-UMAP idiom
+```
+
+## The data layer
+
+Everything funnels through one resolver, which is what keeps behaviour
+consistent across figures:
+
+```python
+scp.fetch_data(adata, ["Ins1", "CellType", "UMAP_1"])   # genes, obs, embeddings
+scp.default_reduction(adata)                             # -> "X_umap"
+scp.matrix_process(M, "zscore")                          # ddof=1, matching R's scale()
+```
+
+Names resolve genes first, then `obs`, then embedding coordinates; unresolvable
+names warn and drop rather than raise; categorical level order is preserved
+exactly as declared, because that order drives every palette index, legend
+position and facet order downstream.
+
+## Status
+
+The first pass over the whole layer is complete: 27 of the 28 functions in
+`scp.pl` are implemented. Options that are not ported raise
+`NotImplementedError` naming the section of the porting brief that specifies
+them — see the table at the end of [`docs/07_milestones.md`](docs/07_milestones.md).
+
+This is pre-alpha: signatures may still move, and the package has not been
+released to PyPI.
 
 ## Documentation
 
@@ -126,8 +341,13 @@ an extra: `[gam]`, `[graph]`, `[enrich]`, `[velocity]`, `[interactive]`,
 | [API mapping](docs/04_api_mapping.md) | every R function → its Python name and status |
 | [Porting briefs](docs/porting_briefs/) | per-family implementation detail |
 | [Testing](docs/06_testing.md) | golden fixtures over image diffs |
-| [Milestones](docs/07_milestones.md) | ordered work plan |
-| [**Agent handoff**](docs/08_agent_handoff.md) | **start here to contribute** |
+| [Milestones](docs/07_milestones.md) | work plan, and what is deliberately unported |
+| [Agent handoff](docs/08_agent_handoff.md) | start here to contribute |
+
+`notebooks/01_parity_foundation.ipynb` runs this package and R SCP side by side
+on the same cells and compares the numbers they produce. It is a development
+tool — used to find bugs while porting, not a claim about the package — and it
+needs a working R install with SCP to execute.
 
 ## Credit and licence
 
@@ -136,3 +356,7 @@ derivative work of SCP's plotting layer and is licensed **GPL-3.0-or-later**,
 as SCP is.
 
 If you use it, cite SCP: <https://github.com/zhanghao-njmu/SCP>
+
+The bundled `pancreas_sub` dataset is redistributed from SCP under the same
+licence; it originates from [Bastidas-Ponce et al.
+(2019)](https://doi.org/10.1242/dev.173849).

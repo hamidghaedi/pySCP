@@ -97,8 +97,16 @@ class LegendColumn:
                 alignment="left",
             )
             fig.add_artist(leg)
-            fig.canvas.draw_idle()
-            y -= 0.05 + 0.03 * len(handles)
+            # Measure what was actually drawn rather than guessing a per-entry
+            # height: a guess collides as soon as two legends have different
+            # numbers of entries or a longer title wraps.
+            try:
+                fig.canvas.draw()
+                bb = leg.get_window_extent(fig.canvas.get_renderer())
+                height = bb.transformed(fig.transFigure.inverted()).height
+            except Exception:  # pragma: no cover - backend without a renderer
+                height = 0.05 + 0.03 * len(handles)
+            y -= height + 0.03
 
 
 class PanelGrid:

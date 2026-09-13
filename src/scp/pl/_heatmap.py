@@ -300,7 +300,7 @@ def group_heatmap(
     for panel in panels:
         panel.top_tracks = [Track(name=gname, side="top", kind="simple",
                                   values=np.array([str(x) for x in panel.col_labels]),
-                                  colors=gcols, size_in=4 * MM, show_name=False)]
+                                  colors=gcols, size_in=4 * MM, show_name=True)]
         panel.title = panel.title or gname
     legends.append(LegendSpec(title=gname, kind="categorical", mapping=gcols))
 

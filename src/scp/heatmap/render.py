@@ -331,11 +331,17 @@ def render(spec: HeatmapSpec, *, dpi: float = 110.0) -> Figure:
             _blank(tax)
             tax.text(0.5, 0.25, panel.title, ha="center", va="bottom", fontsize=8.5)
 
-        # top tracks share the column subdivision, so blocks stay aligned
-        off = 0.0
-        for track in panel.top_tracks:
+        # Top tracks stack: give each its own row of gs[1, col], then subdivide
+        # that row by the column blocks so the lanes stay aligned with the body.
+        # Drawing them all into the one cell makes each overwrite the last.
+        if panel.top_tracks:
+            lanes = GridSpecFromSubplotSpec(
+                len(panel.top_tracks), 1, subplot_spec=gs[1, col],
+                height_ratios=[max(t.size_in, 1e-6) for t in panel.top_tracks],
+                hspace=0.25)
+        for ti, track in enumerate(panel.top_tracks):
             tcell = GridSpecFromSubplotSpec(
-                1, len(col_blocks), subplot_spec=gs[1, col],
+                1, len(col_blocks), subplot_spec=lanes[ti, 0],
                 width_ratios=[max(len(p), 1) for _, p in col_blocks],
                 wspace=spec.col_gap_in / max(bodies[pi], 1e-6) * len(col_blocks))
             for ci, (_, cols) in enumerate(col_blocks):
@@ -346,7 +352,6 @@ def render(spec: HeatmapSpec, *, dpi: float = 110.0) -> Figure:
                 if track.show_name and ci == len(col_blocks) - 1:
                     tax.text(1.02, 0.5, track.name, transform=tax.transAxes, ha="left",
                              va="center", fontsize=6.5)
-            off += track.size_in
 
     # --- left tracks, sharing the row subdivision --------------------------
     for track in spec.left_tracks:
