@@ -96,7 +96,9 @@ class LegendColumn:
                 title_fontsize=t.size("legend.title"),
                 alignment="left",
             )
-            fig.add_artist(leg)
+            # ``fig.legend`` already registers the legend in ``fig.legends``;
+            # adding it as an artist too draws it twice and breaks
+            # ``leg.remove()``, which then only drops the artist copy.
             # Measure what was actually drawn rather than guessing a per-entry
             # height: a guess collides as soon as two legends have different
             # numbers of entries or a longer title wraps.
