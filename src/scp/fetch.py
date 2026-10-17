@@ -44,6 +44,7 @@ __all__ = [
     "fetch_data",
     "fetch_var",
     "infer_data_type",
+    "calculate_coexp",
     "DEFAULT_REDUCTION_ORDER",
     "REDUCTION_KEY",
 ]
@@ -255,6 +256,55 @@ def resolve_matrix(adata: AnnData, layer: str | None = None, use_raw: bool = Fal
 
 def _densify(x) -> np.ndarray:
     return np.asarray(x.todense()) if sp.issparse(x) else np.asarray(x)
+
+
+def calculate_coexp(
+    adata: AnnData,
+    features: Sequence[str],
+    *,
+    layer: str | None = None,
+    use_raw: bool = False,
+) -> pd.Series:
+    """Per-cell co-expression of ``features``: their geometric mean.
+
+    Port of the ``calculate_coexp`` block SCP repeats inline in
+    ``FeatureDimPlot`` (``SCP-plot.R:2143``), ``FeatureDimPlot3D`` (3152),
+    ``FeatureStatPlot`` (3859) and ``FeatureCorPlot`` (5298) — Hao Zhang,
+    https://github.com/zhanghao-njmu/SCP.  The rule depends on what the matrix
+    holds, as judged by :func:`infer_data_type` over the whole matrix:
+
+    * raw or raw-normalised counts: ``exp(mean(log(x)))``;
+    * log-normalised: ``log1p(exp(mean(log(expm1(x)))))``, i.e. the geometric
+      mean taken on the linear scale and logged back;
+    * anything else raises, as in R.
+
+    A single zero among the features makes the cell's value zero; that is
+    what a geometric mean means, and R does the same.
+
+    Divergence: the ``FeatureCorPlot`` copy reads ``status`` without ever
+    assigning it, so it errors in R whenever ``calculate_coexp=TRUE``.  Every
+    caller here goes through this one function, which defines it.
+
+    Only gene names are accepted; obs columns and embeddings are not part of
+    the product, and the callers drop them with R's warning before calling.
+    """
+    x, var_names = resolve_matrix(adata, layer=layer, use_raw=use_raw)
+    features = list(features)
+    missing = [f for f in features if f not in var_names]
+    if missing:
+        raise KeyError(f"calculate_coexp needs gene features; not in var_names: {missing}")
+    if not features:
+        raise ValueError("calculate_coexp needs at least one gene feature.")
+    status = infer_data_type(x)
+    sub = _densify(x[:, var_names.get_indexer(features)]).astype(float)
+    with np.errstate(divide="ignore"):
+        if status in ("raw_counts", "raw_normalized_counts"):
+            values = np.exp(np.log(sub).mean(axis=1))
+        elif status == "log_normalized_counts":
+            values = np.log1p(np.exp(np.log(np.expm1(sub)).mean(axis=1)))
+        else:
+            raise ValueError("Can not determine the data type of the expression matrix.")
+    return pd.Series(values, index=adata.obs_names, name="CoExp")
 
 
 # --------------------------------------------------------------------------- #

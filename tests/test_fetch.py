@@ -97,3 +97,40 @@ def test_resolve_matrix_layer_semantics(adata):
     assert np.allclose(C, adata.layers["counts"])
     with pytest.raises(KeyError):
         scp.fetch.resolve_matrix(adata, layer="nope")
+
+
+def _coexp_adata(x):
+    import anndata
+
+    return anndata.AnnData(
+        X=np.asarray(x, dtype=np.float32),
+        obs=pd.DataFrame(index=[f"c{i}" for i in range(len(x))]),
+        var=pd.DataFrame(index=["g1", "g2"]),
+    )
+
+
+# Golden values from R: apply(m, 2, function(x) exp(mean(log(x)))) on the
+# genes x cells transpose, and the expm1/log1p form on log1p(1.5 * m).
+COEXP_COUNTS = [[1, 4], [2, 8], [0, 5], [3, 3]]
+COEXP_RAW_R = [2.0, 4.0, 0.0, 3.0000000000000004]
+COEXP_LOG_R = [1.3862943611198906, 1.9459101490553132, 0.0, 1.7047480922384253]
+
+
+def test_calculate_coexp_counts_is_the_geometric_mean():
+    out = scp.fetch.calculate_coexp(_coexp_adata(COEXP_COUNTS), ["g1", "g2"])
+    assert out.name == "CoExp" and list(out.index) == ["c0", "c1", "c2", "c3"]
+    np.testing.assert_allclose(out.to_numpy(), COEXP_RAW_R, rtol=1e-6)
+
+
+def test_calculate_coexp_log_data_is_logged_back():
+    x = np.log1p(np.asarray(COEXP_COUNTS, dtype=float) * 1.5)
+    out = scp.fetch.calculate_coexp(_coexp_adata(x), ["g1", "g2"])
+    np.testing.assert_allclose(out.to_numpy(), COEXP_LOG_R, rtol=1e-6)
+
+
+def test_calculate_coexp_rejects_non_genes_and_unknown_data():
+    ad = _coexp_adata(COEXP_COUNTS)
+    with pytest.raises(KeyError):
+        scp.fetch.calculate_coexp(ad, ["g1", "nope"])
+    with pytest.raises(ValueError):
+        scp.fetch.calculate_coexp(_coexp_adata(np.asarray(COEXP_COUNTS) - 1.0), ["g1", "g2"])
