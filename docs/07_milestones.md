@@ -225,12 +225,26 @@ colors out of `ggplot_build`; unnecessary here — compute the palette directly.
 
 Brief: `porting_briefs/trajectory_enrichment.md` §8.
 
-Ship `bar`, `dot`, `lollipop`, `comparison` first: pure tabular, no graph
-dependency, and they cover most use. Then `network` and `enrichmap` (needs
-`python-igraph` for layout and community detection — its API maps 1:1 onto
-R's igraph, which `networkx` does not). `wordcloud` last; it is the lowest
-fidelity because `simplifyEnrichment::keyword_enrichment_from_GO` has no
-Python equivalent.
+All seven types are in. `network` and `enrichmap` use `python-igraph` (extra
+`graph`) because its layouts and community detection are R igraph's C core:
+the term-gene graph, the term-term overlap graph (shared-gene counts), the
+fast-greedy / walktrap partitions *and their C1, C2, ... numbering*, node and
+gene-blend colours, and both cluster label sets agree exactly with what
+`EnrichmentPlot` builds on `pancreas_sub` (`tests/test_enrich_parity.py`,
+fixtures from `tools/parity/enrich_parity.R`). Coordinates do not: the layouts
+are seeded from Python's RNG, not R's. `adjust_layout` is a transcription of
+`adjustlayout` with its step-2 sign bug fixed.
+
+`wordcloud`'s frequency and feature paths match SCP's word tables exactly.
+The GO path calls `simplifyEnrichment::keyword_enrichment_from_GO`, whose GO
+term-document matrix ships only with the R package; by default GO panels use
+the frequency path instead (documented divergence: on `pancreas_sub` 52 of R's
+53 GO keywords appear in it, but the scores differ in kind). Passing
+`keyword_background` runs the same Fisher/Holm test, which is verified
+against simplifyEnrichment's function to 1e-15. Word placement is a square
+spiral, not ggwordcloud's packer; mark labels are stacked down the panel
+edges rather than placed by ggforce; the `hull` mark is convex, not
+`concaveman`'s concave hull.
 
 Keep enrichment computation **out** of the plotting layer: accept a DataFrame
 matching `io.ENRICHMENT_COLUMNS`, with a pluggable `enrichment_fn` for the
@@ -238,9 +252,14 @@ heatmap tracks.
 
 ### 15 — `gsea_plot` — M ✅ done
 
-Brief: `porting_briefs/trajectory_enrichment.md` §9. `gsea_scores` is already
-implemented. The `line` type is one intricate three-panel figure; the rest
-reuse milestone 14's machinery.
+Brief: `porting_briefs/trajectory_enrichment.md` §9. `line` and `bar` as
+before; `comparison`, `network`, `enrichmap` and `wordcloud` reuse milestone
+14's machinery per result key as R does, with SCP's term selection
+(`direction="both"` takes `ceiling(top_term / 2)` of each sign), its
+`(NES=..., p.adjust=..., stars)` term names -- formatted with R's `round` and
+`format(digits = 3)` rules -- and core-enrichment genes. The comparison frame,
+both graphs, the partitions and the word tables match `GSEAPlot`'s on
+`pancreas_sub`.
 
 ---
 

@@ -32,9 +32,9 @@ body raises · **n/a** = nothing to port.
 | `DynamicPlot` | 12102 | `scp.pl.dynamic_plot` | done | 9 |
 | `GroupTreePlot` | 12472 | — | **n/a — the R function is empty**; use `sc.tl.dendrogram` | — |
 | `ProjectionPlot` | 12511 | `scp.pl.projection_plot` | done | 13 |
-| `EnrichmentPlot` | 12727 | `scp.pl.enrichment_plot` | done | 14 |
-| `adjustlayout` | 13441 | `scp.pl.adjust_layout` | done | 14 |
-| `GSEAPlot` | 13563 | `scp.pl.gsea_plot` | done | 15 |
+| `EnrichmentPlot` | 12727 | `scp.pl.enrichment_plot` | done (all 7 types; network/enrichmap graphs, partitions and word tables verified vs R; GO wordcloud keywords substituted) | 14 |
+| `adjustlayout` | 13441 | `scp.pl.adjust_layout` | done (transcribed; step-2 sign bug fixed) | 14 |
+| `GSEAPlot` | 13563 | `scp.pl.gsea_plot` | done (all 6 types; comparison/network/enrichmap/wordcloud tables verified vs R) | 15 |
 | `gseaScores` | 14602 | `scp.pl.gsea_scores` | **done** | 15 |
 
 ## Infrastructure
@@ -70,6 +70,8 @@ body raises · **n/a** = nothing to port.
 |---|---|---|
 | `feature_stat_plot` | added `title`, `subtitle`, `xlab`, `ylab="Expression level"` | The scaffold signature omitted them; they are parameters of the R original and `ylab`'s default is visible on every panel. |
 | `cell_density_plot` | added `y_min`, `y_max`, `y_nbreaks`, `keep_empty`, `aspect_ratio`, `legend_position`, `nrow`, `ncol`, `byrow` | Same omission; all nine are parameters of `CellDensityPlot` and the layout ones are needed for multi-feature figures. |
+| `enrichment_plot` | added `compare_only_sig`, `network_labelsize`, `network_adjscale`, `network_adjiter`, `enrichmap_layout`, `enrichmap_label`, `enrichmap_labelsize`, `enrichmap_show_keyword`, `enrichmap_expand`, `keyword_background`; `panel_size` now defaults to `None` (per-type size) | The first eight are `EnrichmentPlot` parameters the scaffold left out. `enrichmap_nlabel` keeps its corrected spelling (R: `enrlichmap_nlabel`). `keyword_background` is new: a `{GO ID: term name}` map that lets the GO wordcloud run simplifyEnrichment's keyword test, whose term-document matrix only ships with the R package. |
+| `gsea_plot` | added `group_use`, `id_use`, `pvalue_cutoff`, `compare_only_sig`, `character_width`, `palcolor`, the whole `network_*` / `enrichmap_*` / wordcloud block of `enrichment_plot`, `keyword_background`, `nrow`, `ncol`; `top_term` now defaults to `None` (6, or 100 for `enrichmap`, as R's `ifelse`); `panel_size` defaults to `None` | All are `GSEAPlot` parameters needed by the types it shares with `EnrichmentPlot`. Also accepts SCP's own `{"enrichment": df, "results": {key: df}}` shape. |
 
 ## Argument renaming rules
 

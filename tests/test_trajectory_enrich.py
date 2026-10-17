@@ -64,14 +64,6 @@ def test_enrichment_plot_raises_when_nothing_survives():
         scp.pl.enrichment_plot(df)
 
 
-def test_unimplemented_enrichment_types_raise_with_a_pointer():
-    df = pd.DataFrame({"ID": ["a"], "Description": ["x"], "p.adjust": [0.01],
-                       "Count": [1], "Groups": ["g"], "Database": ["d"]})
-    for t in ("network", "enrichmap", "wordcloud"):
-        with pytest.raises(NotImplementedError, match="trajectory_enrichment.md"):
-            scp.pl.enrichment_plot(df, plot_type=t)
-
-
 def test_gsea_scores_running_score_returns_to_zero():
     """A weighted KS walk ends at Phit - Pmiss = 0 by construction."""
     rng = np.random.default_rng(0)
