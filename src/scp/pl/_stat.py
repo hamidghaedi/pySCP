@@ -396,7 +396,11 @@ def cell_stat_plot(
 ) -> Figure:
     """Composition of one categorical ``obs`` column across groups.
 
-    R original: ``CellStatPlot`` -> ``StatPlot``.  Milestone 5.
+    R original: ``CellStatPlot`` (``SCP-plot.R`` L4463) -> ``StatPlot``
+    (L4564), from SCP by Hao Zhang (GPL-3),
+    https://github.com/zhanghao-njmu/SCP.  Milestone 5.  All eleven
+    ``plot_type``\\ s are implemented; ``sankey``, ``chord`` and ``venn`` are
+    drawn by ``_stat_flow.py`` and ``upset`` by ``_set_plot``.
 
     The aggregation core is a complete cross-tab, not a groupby-count::
 
@@ -409,7 +413,8 @@ def cell_stat_plot(
 
     ``stat_by`` with two or more columns switches to the set-relationship
     types (``sankey``, ``chord``, ``venn``, ``upset``) and forces
-    ``stat_type="count"``.
+    ``stat_type="count"``.  ``individual=True`` gives every group level its
+    own panel (see :func:`stat_plot`).
     """
     if isinstance(stat_by, str):
         stat_cols = [stat_by]
@@ -466,41 +471,65 @@ def stat_plot(
 ) -> Figure:
     """DataFrame engine behind :func:`cell_stat_plot`.
 
-    R original: ``StatPlot``.  The aggregation core is a **complete** cross-tab
-    of ``stat_by x group_by`` within each split level, keeping empty cells, and
-    (for ``stat_type="percent"``) dividing by the group total.  Get that right
-    before worrying about any geometry: every ``plot_type`` is a different view
-    of the same table.
+    R original: ``StatPlot`` (``SCP-plot.R`` L4564), from SCP by Hao Zhang
+    (GPL-3), https://github.com/zhanghao-njmu/SCP.  The aggregation core is a
+    **complete** cross-tab of ``stat_by x group_by`` within each split level,
+    keeping empty cells, and (for ``stat_type="percent"``) dividing by the
+    group total.  Get that right before worrying about any geometry: every
+    ``plot_type`` is a different view of the same table.
 
-    Multi-column ``stat_by`` is only meaningful for the set-like types
-    (``venn``/``upset``), which binarise each column with ``stat_level``.
+    Empty groups follow R's filter, which drops rows whose value is ``NA``:
+    without ``keep_empty`` a group with no cells loses its slot in percent mode
+    (0/0) but keeps it, at zero, in count mode.
+
+    Multi-column ``stat_by`` is only meaningful for the flow and set types:
+    ``sankey`` (2+ columns, one node stack per column), ``chord`` (exactly 2),
+    ``venn`` (1-7 sets) and ``upset``; the last two binarise each column with
+    ``stat_level``. For those four ``group_by`` is ignored with a warning and
+    the statistic is always a count, as in R -- R also warns about the count,
+    but on the *default* ``stat_type``, so every call would warn; that one is
+    not repeated here. The renderers live in ``_stat_flow.py``; see
+    :func:`scp.pl._stat_flow.flow_plot` for the divergences from SCP.
+
+    ``individual=True`` draws one panel per (``split_by`` level, ``group_by``
+    level) pair, each holding that single group, in R's order: group levels
+    vary fastest within each split level (SCP-plot.R:4710).
     """
     stat_cols = list(stat_by)
-    if len(stat_cols) >= 2 and plot_type not in ("sankey", "chord", "venn", "upset"):
+    flow_types = ("sankey", "chord", "venn", "upset")
+    if len(stat_cols) >= 2 and plot_type not in flow_types:
         raise ValueError(
             "several `stat_by` columns are only meaningful for plot_type in "
             "{'sankey', 'chord', 'venn', 'upset'}"
         )
-    if plot_type in ("sankey", "chord"):
-        raise NotImplementedError(
-            f"plot_type={plot_type!r} is specified in docs/porting_briefs/stat_plots.md "
-            "§2.3 but not yet implemented; see docs/07_milestones.md."
-        )
-    if individual:
-        raise NotImplementedError(
-            "`individual` is specified in docs/porting_briefs/stat_plots.md §2.2 "
-            "but not yet implemented."
-        )
+    if plot_type == "chord" and len(stat_cols) != 2:
+        raise ValueError("`stat_by` must name exactly 2 columns when plot_type is 'chord'")
+    if plot_type == "venn" and len(stat_cols) > 7:
+        raise ValueError("`stat_by` can name at most 7 columns when plot_type is 'venn'")
     if plot_type in ("rose", "ring", "pie"):
         aspect_ratio = 1.0
 
-    if plot_type in ("venn", "upset"):
-        return _set_plot(data, stat_cols, plot_type, stat_level=stat_level, palette=palette,
-                         palcolor=palcolor, alpha=alpha, panel_size=panel_size,
-                         legend_position=legend_position, label_size=label_size)
+    if plot_type in flow_types:
+        if group_by is not None:
+            warnings.warn("`group_by` is not used for sankey, chord, venn or upset plots",
+                          stacklevel=2)
+        if plot_type == "upset":
+            return _set_plot(data, stat_cols, plot_type, stat_level=stat_level, palette=palette,
+                             palcolor=palcolor, alpha=alpha, panel_size=panel_size,
+                             legend_position=legend_position, label_size=label_size)
+        from ._stat_flow import flow_plot
+
+        return flow_plot(data, stat_cols, plot_type, split_by=split_by, stat_level=stat_level,
+                         palette=palette, palcolor=palcolor, alpha=alpha, na_color=na_color,
+                         label_size=label_size, panel_size=panel_size,
+                         legend_position=legend_position, nrow=nrow, ncol=ncol, byrow=byrow)
 
     stat_col = stat_cols[0]
-    stat_cat = as_ordered_categorical(data[stat_col], show_na=na_stat)
+    # Levels come from the columns as given: the same column may serve as
+    # stat_by and split_by (or group_by), and reading it back after it was
+    # turned into strings would re-derive its levels by first appearance.
+    original = data
+    stat_cat = as_ordered_categorical(original[stat_col], show_na=na_stat)
     stat_levels = [str(x) for x in stat_cat.cat.categories]
     data = data.copy()
     data[stat_col] = np.asarray(stat_cat).astype(str)
@@ -510,30 +539,41 @@ def stat_plot(
         data[group_by] = ""
         group_levels = [""]
     else:
-        gcat = as_ordered_categorical(data[group_by])
+        gcat = as_ordered_categorical(original[group_by])
         group_levels = [str(x) for x in gcat.cat.categories]
-        data[group_by] = np.asarray(gcat).astype(str)
+        if group_by != stat_col:
+            data[group_by] = np.asarray(gcat).astype(str)
 
     if split_by is None:
         split_levels: list[str | None] = [None]
     else:
-        scat = as_ordered_categorical(data[split_by])
+        scat = as_ordered_categorical(original[split_by])
         split_levels = [str(x) for x in scat.cat.categories]
-        data[split_by] = np.asarray(scat).astype(str)
+        if split_by != stat_col:
+            data[split_by] = np.asarray(scat).astype(str)
 
     colors = discrete_palette(stat_levels, palette=palette, palcolor=palcolor)
     if "NA" in stat_levels:
         colors["NA"] = na_color
 
     th = theme_scp(aspect_ratio=aspect_ratio, legend_position=legend_position)
-    keys = [str(s) for s in split_levels]
+    # One panel per split level, or -- individual=TRUE -- per (split, group)
+    # pair with the group level varying fastest, named "group:element:split"
+    # as R names them.
+    if individual:
+        g_name = "" if group_by == "__all__" else group_by
+        panels = [(f"{g_name}:{g}:{'' if sp is None else sp}", sp, [g])
+                  for sp in split_levels for g in group_levels]
+    else:
+        panels = [(str(sp), sp, list(group_levels)) for sp in split_levels]
+    keys = [k for k, _, _ in panels]
     legend = LegendColumn(position=legend_position)
     pg = PanelGrid(len(keys), panel_size=panel_size, nrow=nrow, ncol=ncol, byrow=byrow,
                    keys=keys, theme=th, legend=legend,
                    polar=plot_type in ("rose", "ring", "pie"))
 
-    for sp in split_levels:
-        ax = pg.axes[str(sp)]
+    for key, sp, elements in panels:
+        ax = pg.axes[key]
         block = data if sp is None else data[data[split_by] == sp]
 
         # The aggregation core: a COMPLETE cross-tab, empty cells retained, then
@@ -546,12 +586,23 @@ def stat_plot(
         else:
             values = tab.astype(float)
 
-        levels_x = list(group_levels)
+        levels_x = list(elements)
         if not keep_empty:
-            nonempty = [g for g in levels_x if tab[g].sum() > 0]
-            levels_x = nonempty or levels_x
+            # R drops a group only when its rows were filtered out, i.e. when
+            # its value is NA: percent of an empty group (0/0). In count mode
+            # an empty group still has rows (Freq = 0) and keeps its slot.
+            kept = [g for g in levels_x if stat_type == "count" or tab[g].sum() > 0]
+            # an individual panel whose one group is empty is left blank, as
+            # R leaves it; a shared panel never loses every slot
+            levels_x = kept if individual else (kept or levels_x)
         if flip and plot_type not in ("pie", "rose"):
             levels_x = levels_x[::-1]
+
+        if not levels_x:
+            ax.set_xticks([])
+            if sp is not None:
+                ax.set_title(str(sp), fontsize=th.size("plot.title"))
+            continue
 
         _draw_stat_panel(ax, values[levels_x], stat_levels, levels_x, colors,
                          plot_type=plot_type, stat_type=stat_type, position=position,
@@ -684,51 +735,18 @@ def _draw_stat_panel(ax, values, stat_levels, levels_x, colors, *, plot_type, st
 
 def _set_plot(data, stat_cols, plot_type, *, stat_level, palette, palcolor, alpha,
               panel_size, legend_position, label_size):
-    """``venn`` and ``upset`` — the set-membership views.
+    """``upset`` — intersection sizes of the set-membership view.
 
-    ``stat_level`` binarises each ``stat_by`` column into set membership; it has
-    no effect on any other plot type.  Defaults to each column's first level,
-    with a message, exactly as R does.
+    ``stat_level`` binarises each ``stat_by`` column into set membership (see
+    :func:`scp.pl._stat_flow.resolve_stat_level`); it has no effect on any
+    other plot type.  ``venn`` shares that binarisation and is drawn by
+    ``_stat_flow.flow_plot``.
     """
-    if stat_level is None:
-        stat_level = {c: [str(as_ordered_categorical(data[c]).cat.categories[0])]
-                      for c in stat_cols}
-        warnings.warn(
-            "`stat_level` not given; using the first level of each column: "
-            + ", ".join(f"{k}={v[0]}" for k, v in stat_level.items()),
-            stacklevel=3,
-        )
-    elif isinstance(stat_level, str):
-        stat_level = {c: [stat_level] for c in stat_cols}
-    elif not isinstance(stat_level, dict):
-        stat_level = {c: list(stat_level) for c in stat_cols}
-    else:
-        stat_level = {k: ([v] if isinstance(v, str) else list(v)) for k, v in stat_level.items()}
+    from ._stat_flow import _membership, resolve_stat_level
 
-    sets = {c: set(data.index[data[c].astype(str).isin([str(x) for x in stat_level[c]])])
-            for c in stat_cols}
+    members_all = _membership(data, stat_cols, resolve_stat_level(data, stat_cols, stat_level))
+    sets = {c: set(data.index[members_all[c].to_numpy()]) for c in stat_cols}
     colors = discrete_palette(list(sets), palette=palette, palcolor=palcolor)
-
-    if plot_type == "venn":
-        if len(sets) > 3:
-            raise NotImplementedError(
-                "venn beyond 3 sets needs a custom renderer; "
-                "docs/porting_briefs/stat_plots.md §2.3."
-            )
-        try:
-            from matplotlib_venn import venn2, venn3
-        except ImportError as e:  # pragma: no cover - optional dependency
-            raise ImportError("venn plots need `pip install matplotlib-venn`") from e
-        fig, ax = plt.subplots(figsize=panel_size)
-        names = list(sets)
-        draw = venn2 if len(sets) == 2 else venn3
-        v = draw([sets[n] for n in names], set_labels=names, ax=ax)
-        for i, n in enumerate(names):
-            patch = v.get_patch_by_id("A" if i == 0 else ("B" if i == 1 else "C"))
-            if patch is not None:
-                patch.set_color(colors[n])
-                patch.set_alpha(alpha * 0.6)
-        return fig
 
     # upset: intersection sizes, largest first, with a membership matrix beneath
     members = pd.DataFrame({c: data.index.isin(list(sets[c])) for c in stat_cols},

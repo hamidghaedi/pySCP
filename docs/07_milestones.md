@@ -75,27 +75,41 @@ For significance brackets there is no `ggpubr`; `statannotations` is the
 closest, or hand-roll — a bracket is two `hlines` and a `text`, and the
 `step.increase=0.1` stacking rule is in the brief.
 
-### 5 — `cell_stat_plot` / `stat_plot` — L (9 of 11 done)
+### 5 — `cell_stat_plot` / `stat_plot` — L ✅ done
 
 Brief: `porting_briefs/stat_plots.md` §2.
 
 Landed: the aggregation core (complete cross-tab, empty cells retained,
-percent within group) plus `bar`, `trend`, `area`, `dot`, `rose`, `ring`,
-`pie`, `venn` and `upset`. Verified against R in
+percent within group) plus all eleven `plot_type`s and `individual`. The
+cartesian and polar types were verified against R in
 `notebooks/01_parity_foundation.ipynb` §9.
 
-Still stub: `sankey` and `chord`, which have no good Python equivalent, and
-`individual`.
+`sankey`, `chord` and `venn` are hand-rolled in `pl/_stat_flow.py`, each as a
+pure layout function plus a renderer into the panel's `Axes`. They are pinned
+against SCP 0.5.6 on `pancreas_sub` by `tests/test_stat_flow.py`, from a
+fixture written by `tools/parity/cell_stat_flow.R`:
 
-Eleven `plot_type`s. Ship `bar`, `trend`, `area`, `dot` first (cartesian),
-then `rose`/`ring`/`pie` (polar — note the dummy `"   "` level that reserves
-the donut hole), then `sankey` (`plotly` or hand-rolled bezier ribbons),
-`venn` (`matplotlib-venn` up to 3 sets, custom beyond), `upset`
-(`UpSetPlot`), `chord` (no good Python library — consider deferring or
-bezier-by-hand).
+* sankey -- ggsankey's node rectangles and flow ribbons from `ggplot_build`,
+  agreeing to 4e-13 (16 nodes, 23 flows over three columns; 8 and 12 over
+  two);
+* chord -- circlize's sector order, degrees (to 4e-14) and every link's two
+  end positions (exact), for a table with disjoint level names (two-group
+  layout) and one whose sides share names (merged sectors, self links);
+* venn -- region ids, exclusive counts and percentages for 4 and 5 sets,
+  exact, computed by ggVennDiagram's own set operations; outlines are
+  ggVennDiagram 1.2.2's shapes for 1-7 sets (`tools/parity/cell_stat_venn_shapes.R`
+  generates `pl/_venn_shapes.py`), and R's cap of seven sets is kept;
+* individual -- `StatPlot(individual = TRUE)`'s panel order, titles and
+  per-panel values, with and without a split.
 
-The aggregation core is a complete cross-tab with empty cells retained; get
-that right before any drawing.
+Deliberate divergences, each documented in the docstrings: sankey ribbons
+leave a node in target order (SCP sorts them alphabetically because
+`next_node` is never made a factor, so ribbons cross); split sankey and chord
+panels carry the split level as a title; chord names a missing row level
+`NA` as it does a column one and never reinterprets the table as an edge list.
+In this R stack `StatPlot(plot_type = "sankey")` itself errors while splicing
+the legends onto the gtable, after the plot is built; the fixture script
+rebuilds that plot from SCP's own lines.
 
 ### 6 — `feature_cor_plot`, `cell_density_plot`, `volcano_plot` — M ✅ done
 

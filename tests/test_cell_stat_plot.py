@@ -91,7 +91,10 @@ def test_upset_counts_intersections(adata):
     assert sum(heights) <= adata.n_obs
 
 
-def test_unimplemented_types_raise_with_a_pointer(adata):
-    for t in ("sankey", "chord"):
-        with pytest.raises(NotImplementedError, match="stat_plots.md"):
-            scp.pl.cell_stat_plot(adata, ["leiden", "batch"], plot_type=t)
+@pytest.mark.parametrize("plot_type", ["sankey", "chord", "venn"])
+def test_flow_and_set_types_draw_into_the_panel_grid(adata, plot_type):
+    """Detailed parity for these lives in test_stat_flow.py."""
+    fig = scp.pl.cell_stat_plot(adata, ["leiden", "batch"], plot_type=plot_type,
+                                stat_level={"leiden": "A", "batch": "b1"})
+    assert len(fig.axes) == 1
+    assert fig.axes[0].patches or fig.axes[0].collections

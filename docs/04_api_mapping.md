@@ -13,8 +13,8 @@ body raises · **n/a** = nothing to port.
 | `FeatureDimPlot3D` | 3066 | `scp.pl.feature_dim_plot_3d` | done | 8 |
 | `FeatureStatPlot` | 3524 | `scp.pl.feature_stat_plot` | done (5 plot_types + bg_by/overlays; `stack`/`plot_by='feature'`/stats stub) | 4 |
 | `ExpressionStatPlot` | 3723 | `scp.pl.expression_stat_plot` | stub | 4 |
-| `CellStatPlot` | 4463 | `scp.pl.cell_stat_plot` | done (9/11 types; sankey+chord stub) | 5 |
-| `StatPlot` | 4564 | `scp.pl.stat_plot` | done (9/11 types; sankey+chord stub) | 5 |
+| `CellStatPlot` | 4463 | `scp.pl.cell_stat_plot` | done (11/11 types + `individual`; sankey/chord/venn verified vs R) | 5 |
+| `StatPlot` | 4564 | `scp.pl.stat_plot` | done (11/11 types + `individual`; sankey/chord/venn verified vs R) | 5 |
 | `FeatureCorPlot` | 5232 | `scp.pl.feature_cor_plot` | done | 6 |
 | `CellDensityPlot` | 5679 | `scp.pl.cell_density_plot` | done | 6 |
 | `VolcanoPlot` | 7088 | `scp.pl.volcano_plot` | done | 6 |
@@ -54,6 +54,10 @@ body raises · **n/a** = nothing to port.
 | `cluster_within_group2` | `scp.heatmap` (todo) | stub |
 | `heatmap_enrichment` | pluggable `enrichment_fn` | stub |
 | `get_legend` / `add_grob` | `scp.layout.LegendColumn` | done |
+| `theme_sankey`, `theme_alluvial`, `theme_sankey_bump` (vendored `ggsankey.R`) | — n/a: exported by SCP but used by no SCP function; `StatPlot`'s sankey draws on `theme_void()` + x-axis text, which `stat_plot(plot_type="sankey")` reproduces on `theme_blank(add_coord=False)` | — |
+| `make_long` / `geom_sankey` (vendored `ggsankey.R`) | `scp.pl._stat_flow.sankey_layout` (node/flow geometry) | done |
+| `circlize::chordDiagram` (as `StatPlot` calls it) | `scp.pl._stat_flow.chord_layout` (sectors, link positions) | done |
+| `ggVennDiagram::process_data` (1.2.x shapes) | `scp.pl._stat_flow.venn_regions` + `scp.pl._venn_shapes` | done |
 | `DefaultReduction` | `scp.default_reduction` | done |
 | `FetchData` (SCP's own resolver) | `scp.fetch_data` | done |
 | `check_DataType` | `scp.fetch.infer_data_type` | done |
