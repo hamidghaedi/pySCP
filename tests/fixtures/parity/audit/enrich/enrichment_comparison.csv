@@ -1,0 +1,44 @@
+"Groups","Description","x","y","fill","size","ID","p.adjust","GeneRatio_num"
+"Ductal","Second band of markers distinguishing the ductal
+compartment from the other pancreatic lineages",1,10,"#9E0142",4.02287039792884,"SET:Ductal_band",9.5017363274328e-26,0.206422018348624
+"Ductal","Second band of markers distinguishing the ngn3
+low ep compartment from the other pancreatic
+lineages",1,9,"#9E0142",3.69676277922611,"SET:Ngn3lowEP_band",6.73791297674376e-15,0.174311926605505
+"Ductal","Genes most strongly up in ductal cells",1,8,"#9E0142",2.99847055814684,"SET:Ductal_top",4.19266857754126e-14,0.114678899082569
+"Ductal","Genes most strongly up in ngn3 low ep cells",1,7,"grey80",1.89639929214007,"SET:Ngn3lowEP_top",0.46645301055109,0.0458715596330275
+"Ngn3 low EP","Second band of markers distinguishing the ngn3
+low ep compartment from the other pancreatic
+lineages",2,9,"#9E0142",5.939696961967,"SET:Ngn3lowEP_band",4.92277666412245e-44,0.45
+"Ngn3 low EP","Genes most strongly up in ngn3 low ep cells",2,7,"#9E0142",4.42718872423573,"SET:Ngn3lowEP_top",3.09376286295888e-23,0.25
+"Ngn3 low EP","Second band of markers distinguishing the ductal
+compartment from the other pancreatic lineages",2,10,"grey80",2.34264807429541,"SET:Ductal_band",0.998361825391531,0.07
+"Ngn3 low EP","Genes most strongly up in ductal cells",2,8,"grey80",0.885437744847146,"SET:Ductal_top",0.998361825391531,0.01
+"Ngn3 low EP","Second band of markers distinguishing the ngn3
+high ep compartment from the other pancreatic
+lineages",2,6,"grey80",0.885437744847146,"SET:Ngn3highEP_band",0.998361825391531,0.01
+"Ngn3 high EP","Second band of markers distinguishing the ngn3
+high ep compartment from the other pancreatic
+lineages",3,6,"#9E0142",5.6377108637978,"SET:Ngn3highEP_band",2.28312672907192e-41,0.405405405405405
+"Ngn3 high EP","Genes most strongly up in ngn3 high ep cells",3,5,"#9E0142",4.20210157631365,"SET:Ngn3highEP_top",6.29956788800141e-22,0.225225225225225
+"Ngn3 high EP","Second band of markers distinguishing the
+pre-endocrine compartment from the other
+pancreatic lineages",3,4,"grey80",2.37706761587685,"SET:Preendocrine_band",0.993094936388051,0.0720720720720721
+"Ngn3 high EP","Genes most strongly up in ngn3 low ep cells",3,7,"grey80",1.18853380793842,"SET:Ngn3lowEP_top",0.993094936388051,0.018018018018018
+"Ngn3 high EP","Second band of markers distinguishing the ngn3
+low ep compartment from the other pancreatic
+lineages",3,9,"grey80",1.18853380793842,"SET:Ngn3lowEP_band",0.993094936388051,0.018018018018018
+"Pre-endocrine","Second band of markers distinguishing the
+pre-endocrine compartment from the other
+pancreatic lineages",4,4,"#9E0142",6,"SET:Preendocrine_band",1.39910494664532e-44,0.459183673469388
+"Pre-endocrine","Genes most strongly up in pre-endocrine cells",4,3,"#9E0142",4.47213595499958,"SET:Preendocrine_top",1.64309893678677e-23,0.255102040816327
+"Pre-endocrine","Second band of markers distinguishing the ngn3
+high ep compartment from the other pancreatic
+lineages",4,6,"grey80",1.26491106406735,"SET:Ngn3highEP_band",0.985022670809171,0.0204081632653061
+"Endocrine","Second band of markers distinguishing the
+endocrine compartment from the other pancreatic
+lineages",5,2,"#9E0142",4.7253691838893,"SET:Endocrine_band",6.14829825855708e-33,0.284810126582278
+"Endocrine","Genes most strongly up in endocrine cells",5,1,"#9E0142",3.52208223798639,"SET:Endocrine_top",1.13268694453996e-17,0.158227848101266
+"Endocrine","Second band of markers distinguishing the
+pre-endocrine compartment from the other
+pancreatic lineages",5,4,"grey80",2.22756039569204,"SET:Preendocrine_band",0.918914605135942,0.0632911392405063
+"Endocrine","Genes most strongly up in pre-endocrine cells",5,3,"grey80",0.704416447597279,"SET:Preendocrine_top",0.996976677204683,0.00632911392405063

@@ -1,0 +1,8 @@
+Ductal
+Ngn3 low EP
+Ngn3 high EP
+Pre-endocrine
+Beta
+Alpha
+Delta
+Epsilon

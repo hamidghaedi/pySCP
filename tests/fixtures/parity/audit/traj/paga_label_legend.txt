@@ -1,0 +1,8 @@
+1: Ductal
+2: Ngn3 low EP
+3: Ngn3 high EP
+4: Pre-endocrine
+5: Beta
+6: Alpha
+7: Delta
+8: Epsilon

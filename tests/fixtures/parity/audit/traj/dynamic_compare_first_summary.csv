@@ -1,0 +1,5 @@
+"layer","geom","n","colours","fills"
+1,"NewNewGeomPoint",940,"#1F78B4;#A6CEE3;#FDBF6F;#B2DF8A;#FF7F00;#33A02C;#E31A1C;#FB9A99","NA"
+2,"NewGeomRug",940,"#1F78B4;#A6CEE3;#FDBF6F;#B2DF8A;#FF7F00;#33A02C;#E31A1C;#FB9A99","NA"
+3,"NewNewGeomRibbon",1492,"grey90","#1B9E77;#D95F02"
+4,"NewGeomLine",1492,"#1B9E77;#D95F02","NA"

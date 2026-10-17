@@ -1,0 +1,33 @@
+{
+  "scp": "0.5.6",
+  "clusterProfiler": "4.18.4",
+  "stringr_wrap_examples": {
+    "genes most strongly up in ductal cells": "Genes most strongly up in ductal cells",
+    "second band of markers distinguishing the ductal compartment from the other pancreatic lineages": "Second band of markers distinguishing the ductal\ncompartment from the other pancreatic lineages",
+    "diluted ductal signature": "Diluted ductal signature",
+    "genes most strongly up in ngn3 low ep cells": "Genes most strongly up in ngn3 low ep cells",
+    "second band of markers distinguishing the ngn3 low ep compartment from the other pancreatic lineages": "Second band of markers distinguishing the ngn3 low\nep compartment from the other pancreatic lineages",
+    "diluted ngn3 low ep signature": "Diluted ngn3 low ep signature",
+    "genes most strongly up in ngn3 high ep cells": "Genes most strongly up in ngn3 high ep cells",
+    "second band of markers distinguishing the ngn3 high ep compartment from the other pancreatic lineages": "Second band of markers distinguishing the ngn3\nhigh ep compartment from the other pancreatic\nlineages",
+    "diluted ngn3 high ep signature": "Diluted ngn3 high ep signature",
+    "genes most strongly up in pre-endocrine cells": "Genes most strongly up in pre-endocrine cells",
+    "second band of markers distinguishing the pre-endocrine compartment from the other pancreatic lineages": "Second band of markers distinguishing the\npre-endocrine compartment from the other\npancreatic lineages",
+    "diluted pre-endocrine signature": "Diluted pre-endocrine signature",
+    "genes most strongly up in endocrine cells": "Genes most strongly up in endocrine cells",
+    "second band of markers distinguishing the endocrine compartment from the other pancreatic lineages": "Second band of markers distinguishing the\nendocrine compartment from the other pancreatic\nlineages",
+    "diluted endocrine signature": "Diluted endocrine signature",
+    "random gene set number 1 drawn from the expressed universe": "Random gene set number 1 drawn from the expressed\nuniverse",
+    "random gene set number 2 drawn from the expressed universe": "Random gene set number 2 drawn from the expressed\nuniverse",
+    "random gene set number 3 drawn from the expressed universe": "Random gene set number 3 drawn from the expressed\nuniverse",
+    "random gene set number 4 drawn from the expressed universe": "Random gene set number 4 drawn from the expressed\nuniverse",
+    "random gene set number 5 drawn from the expressed universe": "Random gene set number 5 drawn from the expressed\nuniverse",
+    "random gene set number 6 drawn from the expressed universe": "Random gene set number 6 drawn from the expressed\nuniverse",
+    "random gene set number 7 drawn from the expressed universe": "Random gene set number 7 drawn from the expressed\nuniverse",
+    "random gene set number 8 drawn from the expressed universe": "Random gene set number 8 drawn from the expressed\nuniverse",
+    "random gene set number 9 drawn from the expressed universe": "Random gene set number 9 drawn from the expressed\nuniverse",
+    "random gene set number 10 drawn from the expressed universe": "Random gene set number 10 drawn from the expressed\nuniverse",
+    "random gene set number 11 drawn from the expressed universe": "Random gene set number 11 drawn from the expressed\nuniverse",
+    "random gene set number 12 drawn from the expressed universe": "Random gene set number 12 drawn from the expressed\nuniverse"
+  }
+}

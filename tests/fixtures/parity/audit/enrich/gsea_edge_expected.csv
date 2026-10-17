@@ -1,0 +1,7 @@
+"direction","selection_rank","ID","NES","axis_pos"
+"pos",1,"SET:Ductal_mix",1.9984781059707,1
+"pos",2,"SET:Ngn3lowEP_top",2.08802067476166,2
+"pos",3,"SET:Ngn3lowEP_band",3.03022298679303,3
+"both",3,"SET:Endocrine_band",-2.8236517845603,1
+"both",1,"SET:Ductal_mix",1.9984781059707,2
+"both",2,"SET:Ngn3lowEP_top",2.08802067476166,3

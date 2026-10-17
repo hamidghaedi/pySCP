@@ -1,0 +1,10 @@
+{
+  "SubCellType": ["Ductal", "Ngn3 low EP", "Ngn3 high EP", "Pre-endocrine", "Beta", "Alpha", "Delta", "Epsilon"],
+  "CellType": ["Ductal", "Ngn3 low EP", "Ngn3 high EP", "Pre-endocrine", "Endocrine"],
+  "genes": ["Nnat", "Irx1", "Sox9", "Neurod2", "Isl1", "Rbp4", "Pyy"],
+  "lineages": ["Lineage1", "Lineage2", "Lineage3"],
+  "reduction_key": ["umap_"],
+  "scp_version": ["0.5.6"],
+  "ggplot2_version": ["4.0.3"],
+  "slingshot_version": ["2.18.0"]
+}
