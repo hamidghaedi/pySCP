@@ -529,9 +529,6 @@ def test_dynamic_heatmap_r_matrix_is_joint_zscore_of_lib_normalised_cells(inputs
     np.testing.assert_allclose(scp.matrix_process(raw, "zscore"), M.to_numpy(), atol=1e-6)
 
 
-@pytest.mark.xfail(strict=True, reason="bins cells into cell_bins quantile bins and z-scores "
-                   "each lineage separately with no lib-normalisation; R keeps every cell "
-                   "and z-scores the concatenated, lib-normalised matrix once")
 def test_dynamic_heatmap_matrix_matches_r(r_adata, dynheat):
     M, order, _f = dynheat
     with warnings.catch_warnings():
@@ -554,8 +551,6 @@ def test_dynamic_heatmap_feature_order_matches_r(r_adata, dynheat):
     assert list(res.matrices["Lineage1"].index) == feats["feature"].tolist()
 
 
-@pytest.mark.xfail(strict=True, reason="default palette is RdBu; DynamicHeatmap's "
-                   "heatmap_palette default is viridis")
 def test_dynamic_heatmap_default_palette(r_adata, dynheat):
     M, _o, _f = dynheat
     with warnings.catch_warnings():

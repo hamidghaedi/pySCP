@@ -169,8 +169,6 @@ CLUSTER_CASES = [("self_cosine", "cosine", False), ("self_spearman", "spearman",
                  ("panc8_cosine", "cosine", True), ("panc8_spearman", "spearman", True)]
 
 
-@pytest.mark.xfail(strict=True, reason="scipy leaves_list order is used as-is; ComplexHeatmap "
-                   "reorders each dendrogram by -rowMeans/-colMeans (reorder.dendrogram, mean)")
 @pytest.mark.parametrize("case, metric, use_panc8", CLUSTER_CASES)
 def test_cellcor_cluster_order(query, panc8, case, metric, use_panc8):
     ref, rg = (panc8, "celltype") if use_panc8 else (query, "SubCellType")
