@@ -56,6 +56,26 @@ def test_first_level_stacks_on_top(adata):
     assert to_hex(top.get_facecolor()).lower() == colors[first].lower()
 
 
+@pytest.mark.parametrize("plot_type", ["bar", "area", "trend", "dot"])
+def test_flip_transposes_the_panel(adata, plot_type):
+    """coord_flip: groups up the y axis, first level on top; values along x."""
+    groups = [str(c) for c in adata.obs["batch"].cat.categories]
+    flat = scp.pl.cell_stat_plot(adata, "leiden", group_by="batch", plot_type=plot_type)
+    fig = scp.pl.cell_stat_plot(adata, "leiden", group_by="batch", plot_type=plot_type,
+                                flip=True)
+    ax, ax0 = fig.axes[0], flat.axes[0]
+    assert [t.get_text() for t in ax.get_yticklabels()] == groups[::-1]
+    assert ax.get_xlim() == pytest.approx(ax0.get_ylim())
+    if plot_type == "bar":
+        # the stacked bars are horizontal and still fill 0..1 per group
+        widths = {}
+        for p in ax.patches:
+            y = round(p.get_y() + p.get_height() / 2, 6)
+            widths[y] = widths.get(y, 0.0) + p.get_width()
+        assert sorted(widths) == list(range(len(groups)))
+        assert all(w == pytest.approx(1.0) for w in widths.values())
+
+
 def test_split_by_gives_one_panel_per_level(adata):
     fig = scp.pl.cell_stat_plot(adata, "leiden", group_by="batch", split_by="batch")
     assert len(fig.axes) == adata.obs["batch"].nunique()

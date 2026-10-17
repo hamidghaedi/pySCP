@@ -84,7 +84,7 @@ per-feature two-stop ramps from `adjcolors(hue, 0.1)` → `hue`, per-cell
 `blendcolors`, draw order by descending RGB sum, and **one colorbar per
 feature** tiled `min(ceil(sqrt(N)), 3)` per row.
 
-### 4 — `feature_stat_plot` / `expression_stat_plot` — L ✅ done (except `flip`)
+### 4 — `feature_stat_plot` / `expression_stat_plot` — L ✅ done
 
 Brief: `porting_briefs/stat_plots.md` §1.
 
@@ -114,7 +114,27 @@ violins, `cut()`-label bin centres for `dot`, jitter of `0.4/(ndodge+2)`, and
 the bar plot's lower limit taken from its error bars. Fill colours are keyed by
 level name, so `sort` no longer recolours the groups.
 
-Still stub: `flip` (`coord_flip`), which raises `NotImplementedError`.
+`flip=True` is R's `coord_flip`: every layer is drawn through one
+(position, value) adapter (`_Ax` in `pl/_stat_feature.py`) that transposes the
+geometry, the stripes, the reference lines, the significance layer, the
+limits and the ticks together; the group factor is reversed (first level on
+top), `aspect_ratio` inverted, and `col` numbers its cells from the top. Under
+`stack` the panels sit side by side (R's `cbind`), one row per group column,
+group labels once at the left, two value ticks per column turned 90 degrees,
+strips on top. `feature_stat_layers.R` writes `layers_flip.json` from SCP's own
+`coord_flip` plots (eleven cases: violin, box with brackets, split
+`comparisons=True`, `multiplegroup_comparisons`, `bar` with `bg_by`, split
+trend, dot, `col`, `sort` with `aspect.ratio`, `plot_by="feature"`, `stack`);
+`tests/test_expression_stat_flip.py` matches both axes' ranges, the group
+labels bottom-up, the aspect ratio, stripe edges and colours, bracket, p-value,
+trend, dot and bar data to 1e-9, and checks that each artist was drawn
+transposed. Two R behaviours are not copied, both documented: under flip
+SCP reverses the factor after building ggpubr's group key, so
+`multiplegroup_comparisons` without a split loses its label in R (kruskal.test
+fails per x); the port keeps it at the bottom position. ggsignif places a
+flipped bracket's label above the bracket's upper end; the port puts it beside
+the bracket. Making `col` match R also fixed its unflipped cell-axis range,
+which now follows R's (bars and finite stripe edges, padded by 0.6).
 
 ### 5 — `cell_stat_plot` / `stat_plot` — L ✅ done
 
@@ -152,11 +172,31 @@ In this R stack `StatPlot(plot_type = "sankey")` itself errors while splicing
 the legends onto the gtable, after the plot is built; the fixture script
 rebuilds that plot from SCP's own lines.
 
+`upset` (`upset_layout` + `upset_plot` in `pl/_stat_flow.py`) no longer builds a
+private figure: each `split_by` level gets one `PanelGrid` panel, divided into
+the count bars over ggupset's combination matrix. `tools/parity/cell_stat_upset.R`
+(ggupset 0.4.1, installed in a scratch library) dumps SCP's plots for four and
+six sets, with and without a five-level split, and
+`tests/test_stat_upset.py` matches, per block, the bar order (count
+descending, ties in C-collated name order, the first 20), every count, the
+matrix rows and their order, the count labels and the material-indigo fills
+(within 6/255; R interpolates in Lab).
+
+`flip=True` on the cartesian types (`bar`, `area`, `trend`, `dot`) now
+transposes the panel through the same adapter as `feature_stat_plot`; it
+previously only reversed the group order. This is structural (tested in
+`test_cell_stat_plot.py`), not pinned against an R dump.
+
 ### 6 — `feature_cor_plot`, `cell_density_plot`, `volcano_plot` — M ✅ done
 
 Brief: `porting_briefs/stat_plots.md` §3–§5.
 
-All three landed; see `notebooks/01_parity_foundation.ipynb` §10. `volcano_plot`
+All three landed; see `notebooks/01_parity_foundation.ipynb` §10.
+`feature_cor_plot`'s four audit findings are fixed (`docs/parity_audit.md`):
+the diagonal violins use `bw.nrd0` (to 5e-4 of R's `violinwidth`), `split_by`
+draws one matrix per level on a `PanelGrid` with per-split correlations (to the
+printed 3 decimals), the r²/p text no longer depends on `add_smooth`, and the
+docstring's triangles are right. `volcano_plot`
 raises a pointed error when the detection fractions are missing, since scanpy
 only fills them for `rank_genes_groups(..., pts=True)` and an all-NaN x would
 otherwise render as an empty panel.

@@ -73,9 +73,16 @@ def test_split_by_dodges_within_group(adata):
     assert len(xs) >= adata.obs["leiden"].nunique() * 2
 
 
-def test_unimplemented_features_raise_with_a_pointer(adata):
-    with pytest.raises(NotImplementedError, match="stat_plots.md"):
-        scp.pl.feature_stat_plot(adata, "g0", group_by="leiden", flip=True)
+def test_flip_puts_groups_on_y_first_level_on_top(adata):
+    """coord_flip: values along x, the factor reversed up the y axis."""
+    levels = list(scp.fetch.as_ordered_categorical(adata.obs["leiden"]).cat.categories)
+    flat = scp.pl.feature_stat_plot(adata, "g0", group_by="leiden")
+    fig = scp.pl.feature_stat_plot(adata, "g0", group_by="leiden", flip=True)
+    ax, ax0 = fig.axes[0], flat.axes[0]
+    assert [t.get_text() for t in ax.get_yticklabels()] == levels[::-1]
+    assert ax.get_xlim() == pytest.approx(ax0.get_ylim())
+    assert ax.get_ylim() == pytest.approx(ax0.get_xlim())
+    assert ax.get_xlabel() == "Expression level" and ax.get_ylabel() == "leiden"
 
 
 # --------------------------------------------------------------------------- #

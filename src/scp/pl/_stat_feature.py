@@ -19,6 +19,7 @@ Spec: ``docs/porting_briefs/stat_plots.md`` §1.
 
 from __future__ import annotations
 
+import inspect
 import math
 import warnings
 from collections.abc import Callable, Sequence
@@ -27,6 +28,7 @@ from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
+from matplotlib.axes import Axes
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.figure import Figure
@@ -49,6 +51,8 @@ ExprPlotType = Literal["violin", "box", "bar", "dot", "col"]
 _PT = 72.27 / 25.4
 _DODGE = 0.9
 _ALL = "All.groups"
+#: matplotlib 3.10 replaced ``vert=`` by ``orientation=`` on violinplot/boxplot
+_HAS_ORIENTATION = "orientation" in inspect.signature(Axes.violinplot).parameters
 
 
 def _lw(linewidth: float) -> float:
@@ -84,6 +88,7 @@ class _Panel:
     individual: bool
     ncells: int
     median_of: dict = field(default_factory=dict)
+    flip: bool = False             # coord_flip: positions reversed, axes transposed
 
 
 @dataclass
@@ -400,11 +405,151 @@ def _span(vals: list[float]) -> tuple[float, float]:
     return (float(a.min()), float(a.max())) if a.size else (0.0, 1.0)
 
 
+class _Ax:
+    """An ``Axes`` addressed in (position, value) space.
+
+    Every layer of a panel is drawn through this, so ``flip=True`` — ggplot's
+    ``coord_flip`` — is one switch: the position (group) axis becomes the
+    vertical one and the value axis the horizontal one, for the geometry, the
+    stripes, the reference lines, the significance layer and the limits alike.
+    """
+
+    def __init__(self, ax, flip: bool) -> None:
+        self.ax = ax
+        self.flip = flip
+
+    def xy(self, p, v):
+        return (v, p) if self.flip else (p, v)
+
+    @property
+    def value_axis(self):
+        return self.ax.xaxis if self.flip else self.ax.yaxis
+
+    @property
+    def pos_axis(self):
+        return self.ax.yaxis if self.flip else self.ax.xaxis
+
+    def plot(self, p, v, **kw):
+        return self.ax.plot(*self.xy(p, v), **kw)
+
+    def scatter(self, p, v, **kw):
+        return self.ax.scatter(*self.xy(p, v), **kw)
+
+    def text(self, p, v, s, **kw):
+        return self.ax.text(*self.xy(p, v), s, **kw)
+
+    def pos_span(self, p0, p1, **kw):
+        """A band across the whole value range (``geom_rect(ymin=-Inf, ymax=Inf)``)."""
+        return (self.ax.axhspan if self.flip else self.ax.axvspan)(p0, p1, **kw)
+
+    def value_line(self, v, **kw):
+        """``geom_hline(yintercept = v)``."""
+        return (self.ax.axvline if self.flip else self.ax.axhline)(v, **kw)
+
+    def pos_line(self, p, **kw):
+        """``geom_vline(xintercept = p)``."""
+        return (self.ax.axhline if self.flip else self.ax.axvline)(p, **kw)
+
+    def bar(self, p, v, width, *, bottom=None, **kw):
+        if self.flip:
+            return self.ax.barh(p, v, height=width, left=bottom, **kw)
+        return self.ax.bar(p, v, width=width, bottom=bottom, **kw)
+
+    def fill_between(self, p, v0, v1, **kw):
+        if self.flip:
+            return self.ax.fill_betweenx(p, v0, v1, **kw)
+        return self.ax.fill_between(p, v0, v1, **kw)
+
+    def value_segments(self, p, v0, v1, **kw):
+        """Segments along the value axis at position(s) ``p``."""
+        return (self.ax.hlines if self.flip else self.ax.vlines)(p, v0, v1, **kw)
+
+    def pos_segments(self, v, p0, p1, **kw):
+        """Segments along the position axis at value(s) ``v``."""
+        return (self.ax.vlines if self.flip else self.ax.hlines)(v, p0, p1, **kw)
+
+    def _orientation(self) -> dict:
+        if _HAS_ORIENTATION:
+            return {"orientation": "horizontal" if self.flip else "vertical"}
+        return {"vert": not self.flip}
+
+    def violinplot(self, data, **kw):
+        return self.ax.violinplot(data, **self._orientation(), **kw)
+
+    def boxplot(self, data, **kw):
+        return self.ax.boxplot(data, **self._orientation(), **kw)
+
+    def set_value_lim(self, lo, hi) -> None:
+        (self.ax.set_xlim if self.flip else self.ax.set_ylim)(lo, hi)
+
+    def get_value_lim(self) -> tuple[float, float]:
+        return self.ax.get_xlim() if self.flip else self.ax.get_ylim()
+
+    def set_pos_lim(self, lo, hi) -> None:
+        (self.ax.set_ylim if self.flip else self.ax.set_xlim)(lo, hi)
+
+    def get_pos_lim(self) -> tuple[float, float]:
+        return self.ax.get_ylim() if self.flip else self.ax.get_xlim()
+
+    def set_value_log(self, base: float) -> None:
+        (self.ax.set_xscale if self.flip else self.ax.set_yscale)("log", base=base)
+
+    def set_value_label(self, s: str) -> None:
+        (self.ax.set_xlabel if self.flip else self.ax.set_ylabel)(s)
+
+    def set_pos_label(self, s: str) -> None:
+        (self.ax.set_ylabel if self.flip else self.ax.set_xlabel)(s)
+
+    def value_grid(self, **kw) -> None:
+        self.value_axis.grid(True, **kw)
+
+    def set_pos_ticks(self, ticks, labels) -> None:
+        if self.flip:
+            self.ax.set_yticks(ticks)
+            self.ax.set_yticklabels(labels)
+        else:
+            self.ax.set_xticks(ticks)
+            self.ax.set_xticklabels(labels, rotation=45, ha="right")
+
+    def hide_pos_ticks(self) -> None:
+        (self.ax.set_yticks if self.flip else self.ax.set_xticks)([])
+
+
+def _positions(P: _Panel) -> dict[str, float]:
+    """x position of each level: in level order, or reversed under ``flip``
+    (R reverses the factor so that the first level ends up on top)."""
+    n = len(P.levels)
+    return {lv: float(n - 1 - i if P.flip else i) for i, lv in enumerate(P.levels)}
+
+
+def _col_range(bounds: list[tuple[str, float, float, int]], n: int,
+               individual: bool) -> tuple[float, float]:
+    """The cell-axis range R trains for ``plot_type = "col"``.
+
+    The bars span ``[0.55, n + 0.45]``; the stripes add their finite edges,
+    computed with R's test ``xmin == min(xmax)`` for the open left edge
+    (SCP-plot.R:4102), so the left stripe usually stays finite at ``0.5``.
+    ``scale_x_discrete`` then pads a continuous range by 0.6 on either side.
+    """
+    lo, hi = 0.55, n + 0.45
+    if not individual and bounds:
+        min_of_max = min(b for _lv, _a, b, _i in bounds)
+        max_of_max = max(b for _lv, _a, b, _i in bounds)
+        for _lv, a, b, _i in bounds:
+            if a != min_of_max:
+                lo = min(lo, a - 0.5)
+            if b != max_of_max:
+                hi = max(hi, b + 0.5)
+    return lo - 0.6, hi + 0.6
+
+
 def _draw_panel(ax, P: _Panel, o: dict, *, stacked: bool = False) -> dict:
     """Draw one ``ExpressionStatPlot`` panel into ``ax``; return what the layout needs."""
     plot_type = o["plot_type"]
+    A = _Ax(ax, P.flip)
     o["_extra"] = {"dots": [], "trend": []}
-    xpos = {lv: float(i) for i, lv in enumerate(P.levels)}
+    xpos = _positions(P)
+    n_lv = len(P.levels)
     split_violin = P.fill_by == "group" and P.has_split
     y_lo, y_hi = P.y_lo, P.y_hi
     vals = P.frame["value"].to_numpy()
@@ -412,17 +557,18 @@ def _draw_panel(ax, P: _Panel, o: dict, *, stacked: bool = False) -> dict:
 
     # ---- background stripes: full height, outermost bleeding past the edge
     if not P.individual and plot_type != "col":
-        for i, (_lv, col) in enumerate(P.bg):
+        for lv, col in P.bg:
             if col == "transparent":
                 continue
-            x0 = -1e6 if i == 0 else i - 0.5
-            x1 = 1e6 if i == len(P.bg) - 1 else i + 0.5
-            ax.axvspan(x0, x1, color=col, alpha=o["bg_alpha"], zorder=0.6, linewidth=0)
+            p = xpos[lv]
+            x0 = -1e6 if p == 0 else p - 0.5
+            x1 = 1e6 if p == n_lv - 1 else p + 0.5
+            A.pos_span(x0, x1, color=col, alpha=o["bg_alpha"], zorder=0.6, linewidth=0)
 
     final: list[float] = []      # the y range ggplot trains after the stats
     raw: list[float] = list(finite)  # ... and before them (what ggsignif measures)
     if plot_type in ("bar", "col"):
-        ax.axhline(0, linestyle="--", color="black", linewidth=_lw(0.5), zorder=1.5)
+        A.value_line(0, linestyle="--", color="black", linewidth=_lw(0.5), zorder=1.5)
         final.append(0.0)
         raw.append(0.0)
 
@@ -433,12 +579,12 @@ def _draw_panel(ax, P: _Panel, o: dict, *, stacked: bool = False) -> dict:
             w = _DODGE / n
             final.extend([v.min(), v.max()])
             if np.ptp(v) == 0:
-                ax.plot([pos - w / 2, pos + w / 2], [v[0], v[0]], color="#333333",
-                        linewidth=_lw(0.5), zorder=2)
+                A.plot([pos - w / 2, pos + w / 2], [v[0], v[0]], color="#333333",
+                       linewidth=_lw(0.5), zorder=2)
                 continue
-            parts = ax.violinplot([v], positions=[pos], widths=w, showextrema=False,
-                                  bw_method=_nrd0(v) / float(np.std(v, ddof=1)),
-                                  points=512)
+            parts = A.violinplot([v], positions=[pos], widths=w, showextrema=False,
+                                 bw_method=_nrd0(v) / float(np.std(v, ddof=1)),
+                                 points=512)
             for body in parts["bodies"]:
                 body.set(facecolor=P.color_of(lv, sp), alpha=o["alpha"],
                          edgecolor="#333333", linewidth=_lw(0.5), zorder=2)
@@ -446,28 +592,29 @@ def _draw_panel(ax, P: _Panel, o: dict, *, stacked: bool = False) -> dict:
         for lv, sp, k, n, v in _cells(P):
             pos = xpos[lv] + _dodge(n, k)
             final.extend([v.min(), v.max()])
-            bp = ax.boxplot([v], positions=[pos], widths=0.8 / n, patch_artist=True,
-                            showfliers=False, manage_ticks=False, zorder=2,
-                            medianprops=dict(color="black", linewidth=_lw(0.5) * 2),
-                            whiskerprops=dict(color="black", linewidth=_lw(0.5)),
-                            capprops=dict(linewidth=0))
+            bp = A.boxplot([v], positions=[pos], widths=0.8 / n, patch_artist=True,
+                           showfliers=False, manage_ticks=False, zorder=2,
+                           medianprops=dict(color="black", linewidth=_lw(0.5) * 2),
+                           whiskerprops=dict(color="black", linewidth=_lw(0.5)),
+                           capprops=dict(linewidth=0))
             for box in bp["boxes"]:
                 box.set(facecolor=P.color_of(lv, sp), edgecolor="black", linewidth=_lw(0.5))
-            ax.scatter([pos], [np.median(v)], s=(1.5 * _PT) ** 2, facecolor="white",
-                       edgecolor="black", linewidths=0.5, zorder=4)
+            A.scatter([pos], [np.median(v)], s=(1.5 * _PT) ** 2, facecolor="white",
+                      edgecolor="black", linewidths=0.5, zorder=4)
     elif plot_type == "bar":
         for lv, sp, k, n, v in _cells(P):
             pos = xpos[lv] + _dodge(n, k)
             m = float(v.mean())
             sd = float(v.std(ddof=1)) if v.size > 1 else np.nan
-            ax.bar(pos, m, width=0.8 / n, color=P.color_of(lv, sp), edgecolor="black",
-                   linewidth=_lw(0.5), zorder=2)
+            A.bar(pos, m, 0.8 / n, color=P.color_of(lv, sp), edgecolor="black",
+                  linewidth=_lw(0.5), zorder=2)
             final.extend([0.0, m])
             if np.isfinite(sd):
                 cap = 0.2 / n / 2
-                ax.vlines(pos, m - sd, m + sd, color="black", linewidth=_lw(0.5), zorder=3)
-                ax.hlines([m - sd, m + sd], pos - cap, pos + cap, color="black",
-                          linewidth=_lw(0.5), zorder=3)
+                A.value_segments(pos, m - sd, m + sd, color="black", linewidth=_lw(0.5),
+                                 zorder=3)
+                A.pos_segments([m - sd, m + sd], pos - cap, pos + cap, color="black",
+                               linewidth=_lw(0.5), zorder=3)
                 final.extend([m - sd, m + sd])
         # R resets the lower limit to what the bars and error bars span
         y_lo = _span(final)[0]
@@ -484,8 +631,8 @@ def _draw_panel(ax, P: _Panel, o: dict, *, stacked: bool = False) -> dict:
             for lv, sp, k, n, u, c in groups:
                 pos = xpos[lv] + _dodge(n, k)
                 diam = 6.0 * np.sqrt(c / cmax) * _PT
-                ax.scatter(np.full(u.size, pos), mids[u], s=diam**2, facecolor=P.color_of(lv, sp),
-                           edgecolor="black", linewidths=0.5, alpha=o["alpha"], zorder=3)
+                A.scatter(np.full(u.size, pos), mids[u], s=diam**2, facecolor=P.color_of(lv, sp),
+                          edgecolor="black", linewidths=0.5, alpha=o["alpha"], zorder=3)
                 final.extend(mids[u].tolist())
                 o["_extra"]["dots"].extend(zip([pos] * u.size, mids[u].tolist(), c.tolist(),
                                                strict=True))
@@ -493,10 +640,11 @@ def _draw_panel(ax, P: _Panel, o: dict, *, stacked: bool = False) -> dict:
     elif plot_type == "col":
         fr = P.frame
         n = fr.shape[0]
-        idx = np.arange(1, n + 1, dtype=float)
+        # rows stay in level order; under flip R numbers them from the top
+        idx = np.arange(n, 0, -1, dtype=float) if P.flip else np.arange(1, n + 1, dtype=float)
         colors = [P.color_of(g, s) for g, s in zip(fr["group"], fr["split"], strict=True)]
-        ax.bar(idx, np.nan_to_num(fr["value"].to_numpy()), width=0.9, color=colors,
-               linewidth=0, zorder=2)
+        A.bar(idx, np.nan_to_num(fr["value"].to_numpy()), 0.9, color=colors,
+              linewidth=0, zorder=2)
         final.extend(finite.tolist())
         bounds = []
         for i, lv in enumerate(P.levels):
@@ -504,24 +652,26 @@ def _draw_panel(ax, P: _Panel, o: dict, *, stacked: bool = False) -> dict:
             if where.size == 0:
                 continue
             bounds.append((lv, where.min(), where.max(), i))
-        if not P.individual:
+        if not P.individual and bounds:
             # R tests `xmin == min(xmax)` for the left edge, a typo for min(xmin)
-            # that leaves a white gutter on the left; both edges bleed here.
-            for j, (_lv, a, b, i) in enumerate(bounds):
+            # that leaves a gutter on the left; both edges bleed here.
+            lowest = min(a for _lv, a, _b, _i in bounds)
+            highest = max(b for _lv, _a, b, _i in bounds)
+            for _lv, a, b, i in bounds:
                 col = P.bg[i][1] if i < len(P.bg) else "transparent"
                 if col == "transparent":
                     continue
-                x0 = -1e9 if j == 0 else a - 0.5
-                x1 = 1e9 if j == len(bounds) - 1 else b + 0.5
-                ax.axvspan(x0, x1, color=col, alpha=o["bg_alpha"], zorder=0.6, linewidth=0)
+                x0 = -1e9 if a == lowest else a - 0.5
+                x1 = 1e9 if b == highest else b + 0.5
+                A.pos_span(x0, x1, color=col, alpha=o["bg_alpha"], zorder=0.6, linewidth=0)
             if len(P.levels) > 1:
-                for _lv, a, _b, _i in bounds[1:]:
-                    ax.axvline(a - 0.5, linestyle="--", color="black", alpha=0.5,
-                               linewidth=_lw(0.5), zorder=1.5)
-        lo_x, hi_x = 0.55, n + 0.45
-        pad = 0.05 * (hi_x - lo_x)
-        ax.set_xlim(lo_x - pad, hi_x + pad)
-        ax.set_xticks([])
+                # a dashed border below every group but the lowest-numbered one
+                for _lv, a, _b, _i in bounds:
+                    if a != lowest:
+                        A.pos_line(a - 0.5, linestyle="--", color="black", alpha=0.5,
+                                   linewidth=_lw(0.5), zorder=1.5)
+        A.set_pos_lim(*_col_range(bounds, n, P.individual))
+        A.hide_pos_ticks()
 
     # ---- significance (never for col; validated by the caller)
     # SCP reads ggplot's trained y range back after each layer it adds
@@ -563,9 +713,9 @@ def _draw_panel(ax, P: _Panel, o: dict, *, stacked: bool = False) -> dict:
 
     # ---- overlays, drawn over the comparison layers as in R
     if plot_type != "col":
-        _overlays(ax, P, o, xpos, split_violin)
+        _overlays(A, P, o, xpos, split_violin)
     if add_line is not None:
-        ax.axhline(add_line, color=o["line_color"], linewidth=_lw(o["line_size"]), zorder=6)
+        A.value_line(add_line, color=o["line_color"], linewidth=_lw(o["line_size"]), zorder=6)
 
     # ---- limits: coord_cartesian(ylim) plus its default 5 % expansion
     lo, hi = y_lo, y_hi
@@ -574,48 +724,66 @@ def _draw_panel(ax, P: _Panel, o: dict, *, stacked: bool = False) -> dict:
     trans = o["y_trans"]
     if trans in ("log2", "log10"):
         base = 2.0 if trans == "log2" else 10.0
-        ax.set_yscale("log", base=base)
+        A.set_value_log(base)
         tl, th = math.log(max(lo, 1e-300), base), math.log(max(hi, 1e-300), base)
         d = 0.05 * ((th - tl) or 1.0)
-        ax.set_ylim(base ** (tl - d), base ** (th + d))
+        A.set_value_lim(base ** (tl - d), base ** (th + d))
     else:
         # a zero-width range is expanded as if it were one unit wide (ggplot2 4)
         d = 0.05 * ((hi - lo) or 1.0)
-        ax.set_ylim(lo - d, hi + d)
-    span_d = ax.get_ylim()[1] - ax.get_ylim()[0]
+        A.set_value_lim(lo - d, hi + d)
+    span_d = A.get_value_lim()[1] - A.get_value_lim()[0]
 
     for x1, x2, ytop, ytip, lab, _p in brackets:
         lw = _lw(0.3)
-        ax.plot([x1, x1, x2, x2], [ytip, ytop, ytop, ytip], color="black", linewidth=lw,
-                zorder=7, clip_on=False)
-        ax.text((x1 + x2) / 2, ytop + 0.01 * span_d, lab, ha="center", va="bottom",
-                fontsize=o["sig_labelsize"] * _PT, zorder=7)
+        A.plot([x1, x1, x2, x2], [ytip, ytop, ytop, ytip], color="black", linewidth=lw,
+               zorder=7, clip_on=False)
+        if P.flip:
+            # beside the bracket, not over it (see expression_stat_plot)
+            A.text((x1 + x2) / 2, ytop + 0.01 * span_d, lab, ha="left", va="center",
+                   fontsize=o["sig_labelsize"] * _PT, zorder=7)
+        else:
+            A.text((x1 + x2) / 2, ytop + 0.01 * span_d, lab, ha="center", va="bottom",
+                   fontsize=o["sig_labelsize"] * _PT, zorder=7)
     for x, y, lab, ha, va_off in texts:
-        ax.annotate(lab, (x, y), xytext=(0, -va_off * o["sig_labelsize"] * _PT),
+        # geom_text keeps its screen-space justification under coord_flip
+        ax.annotate(lab, A.xy(x, y), xytext=(0, -va_off * o["sig_labelsize"] * _PT),
                     textcoords="offset points", ha=ha, va="top",
                     fontsize=o["sig_labelsize"] * _PT, zorder=7, annotation_clip=False)
     o["record"][P.key] = {
-        "y_use": (y_lo, y_hi), "ylim": ax.get_ylim(), "sig": sig_rows,
+        "y_use": (y_lo, y_hi), "ylim": A.get_value_lim(), "pos_lim": A.get_pos_lim(),
+        "sig": sig_rows,
         "texts": [(x, y, lab) for x, y, lab, _h, _v in texts],
         "brackets": [(x1, x2, yt, yp, lab) for x1, x2, yt, yp, lab, _p in brackets],
         **o.pop("_extra"),
     }
 
     if stacked:
-        ax.yaxis.set_major_locator(FixedLocator([y_lo, y_hi]))
-        ax.set_yticklabels([_r_round1(y_lo), _r_round1(y_hi)])
-        labs = ax.get_yticklabels()
-        labs[0].set_va("bottom")
-        labs[-1].set_va("top")
+        A.value_axis.set_major_locator(FixedLocator([y_lo, y_hi]))
+        if P.flip:
+            ax.set_xticklabels([_r_round1(y_lo), _r_round1(y_hi)], rotation=90)
+            labs = ax.get_xticklabels()
+            labs[0].set_ha("left")
+            labs[-1].set_ha("right")
+        else:
+            ax.set_yticklabels([_r_round1(y_lo), _r_round1(y_hi)])
+            labs = ax.get_yticklabels()
+            labs[0].set_va("bottom")
+            labs[-1].set_va("top")
     else:
-        ax.yaxis.set_major_locator(MaxNLocator(o["y_nbreaks"]))
+        A.value_axis.set_major_locator(MaxNLocator(o["y_nbreaks"]))
         ax.set_axisbelow(True)
-        ax.yaxis.grid(True, color="grey", linestyle=(0, (4, 4)), linewidth=_lw(0.5) * 0.6)
+        A.value_grid(color="grey", linestyle=(0, (4, 4)), linewidth=_lw(0.5) * 0.6)
+        if P.flip:
+            # axis.text.x = element_text(angle = 45, hjust = 1): the value axis now
+            ax.tick_params(axis="x", labelrotation=45)
+            for t in ax.get_xticklabels():
+                t.set_ha("right")
 
     if plot_type != "col":
-        ax.set_xticks(range(len(P.levels)))
-        ax.set_xticklabels(P.levels, rotation=45, ha="right")
-        ax.set_xlim(-0.6, len(P.levels) - 0.4)
+        order = sorted(P.levels, key=xpos.__getitem__)
+        A.set_pos_ticks([xpos[lv] for lv in order], order)
+        A.set_pos_lim(-0.6, n_lv - 0.4)
     return {"y_lo": y_lo, "y_hi": y_hi, "brackets": brackets, "texts": texts}
 
 
@@ -675,10 +843,12 @@ def _sig_multi(P: _Panel, o: dict) -> list[tuple[str, float]]:
                 rows.append((lv, sig.multigroup_p(groups, method)))
     elif P.levels:
         groups = [fr.loc[fr["group"] == lv, "value"].to_numpy() for lv in P.levels]
+        # label.x.npc = "left": the first x position, which flip puts at the bottom
+        first = P.levels[-1] if P.flip else P.levels[0]
         if method in sig.PAIRWISE_METHODS:
-            rows = [(P.levels[0], p) for _i, _j, p in sig.pairwise_p(groups, method)]
+            rows = [(first, p) for _i, _j, p in sig.pairwise_p(groups, method)]
         else:
-            rows = [(P.levels[0], sig.multigroup_p(groups, method))]
+            rows = [(first, sig.multigroup_p(groups, method))]
     return rows
 
 
@@ -694,7 +864,7 @@ def _emit(rows, o, xpos, y, texts, *, ha, va_off) -> None:
         texts.append((xpos[lv], y, lab, ha, va_off))
 
 
-def _overlays(ax, P: _Panel, o: dict, xpos: dict, split_violin: bool) -> None:
+def _overlays(A: _Ax, P: _Panel, o: dict, xpos: dict, split_violin: bool) -> None:
     plot_type = o["plot_type"]
     if o["add_point"]:
         # position_jitterdodge(seed = 11): R hardcodes the seed, so does this.
@@ -707,19 +877,19 @@ def _overlays(ax, P: _Panel, o: dict, xpos: dict, split_violin: bool) -> None:
             pos = xpos[lv] + _dodge(n, k)
             jx = pos + rng.uniform(-jw, jw, v.size)
             jy = v + rng.uniform(-o["jitter_height"], o["jitter_height"], v.size)
-            ax.scatter(jx, jy, s=(size * _PT) ** 2, color=o["pt_color"], alpha=o["pt_alpha"],
-                       linewidths=0, zorder=3.5)
+            A.scatter(jx, jy, s=(size * _PT) ** 2, color=o["pt_color"], alpha=o["pt_alpha"],
+                      linewidths=0, zorder=3.5)
     if o["add_box"] and plot_type != "box":
         for lv, _sp, k, n, v in _cells(P):
             pos = xpos[lv] + _dodge(n, k)
             bc = o["box_color"]
-            ax.boxplot([v], positions=[pos], widths=o["box_width"] / n, patch_artist=True,
-                       showfliers=False, manage_ticks=False, zorder=4,
-                       boxprops=dict(facecolor=bc, edgecolor=bc),
-                       whiskerprops=dict(color=bc), capprops=dict(linewidth=0),
-                       medianprops=dict(color=bc))
-            ax.scatter([pos], [np.median(v)], s=(o["box_ptsize"] * _PT) ** 2,
-                       facecolor="white", edgecolor="black", linewidths=0.5, zorder=4.5)
+            A.boxplot([v], positions=[pos], widths=o["box_width"] / n, patch_artist=True,
+                      showfliers=False, manage_ticks=False, zorder=4,
+                      boxprops=dict(facecolor=bc, edgecolor=bc),
+                      whiskerprops=dict(color=bc), capprops=dict(linewidth=0),
+                      medianprops=dict(color=bc))
+            A.scatter([pos], [np.median(v)], s=(o["box_ptsize"] * _PT) ** 2,
+                      facecolor="white", edgecolor="black", linewidths=0.5, zorder=4.5)
     if o["add_trend"] and plot_type in ("violin", "box", "bar"):
         fun = np.mean if plot_type == "bar" else np.median
         pts = [(lv, xpos[lv] + _dodge(n, k), float(fun(v))) for lv, _sp, k, n, v in _cells(P)]
@@ -730,18 +900,18 @@ def _overlays(ax, P: _Panel, o: dict, xpos: dict, split_violin: bool) -> None:
             for lv in P.levels:
                 xy = sorted((x, y) for g, x, y in pts if g == lv)
                 if len(xy) > 1:
-                    ax.plot(*zip(*xy, strict=True), color=o["trend_color"], linewidth=lw, zorder=5)
+                    A.plot(*zip(*xy, strict=True), color=o["trend_color"], linewidth=lw, zorder=5)
         elif len(pts) > 1:
-            ax.plot([x for _g, x, _y in pts], [y for *_, y in pts], color=o["trend_color"],
-                    linewidth=lw, zorder=5)
-        ax.scatter([x for _g, x, _y in pts], [y for *_, y in pts],
-                   s=(o["trend_ptsize"] * _PT) ** 2, facecolor="white", edgecolor="black",
-                   linewidths=0.5, zorder=5.5)
+            A.plot([x for _g, x, _y in pts], [y for *_, y in pts], color=o["trend_color"],
+                   linewidth=lw, zorder=5)
+        A.scatter([x for _g, x, _y in pts], [y for *_, y in pts],
+                  s=(o["trend_ptsize"] * _PT) ** 2, facecolor="white", edgecolor="black",
+                  linewidths=0.5, zorder=5.5)
     if o["add_stat"] != "none":
         fun = np.mean if o["add_stat"] == "mean" else np.median
         for lv, _sp, k, n, v in _cells(P):
-            ax.scatter([xpos[lv] + _dodge(n, k)], [float(fun(v))], marker="v",
-                       s=(o["stat_size"] * _PT * 1.5) ** 2, color=o["stat_color"], zorder=6)
+            A.scatter([xpos[lv] + _dodge(n, k)], [float(fun(v))], marker="v",
+                      s=(o["stat_size"] * _PT * 1.5) ** 2, color=o["stat_color"], zorder=6)
 
 
 # --------------------------------------------------------------------------- #
@@ -775,16 +945,22 @@ def _title(ax, P: _Panel, o: dict, th) -> None:
 
 
 def _layout_grid(panels: list[_Panel], legend: _Legend, o: dict) -> Figure:
-    th = theme_scp(aspect_ratio=o["aspect_ratio"], legend_position=o["legend_position"])
-    pg = PanelGrid(len(panels), panel_size=o["panel_size"], nrow=o["nrow"], ncol=o["ncol"],
-                   byrow=o["byrow"], keys=[p.key for p in panels], theme=th,
+    flip = o["flip"]
+    aspect = o["aspect_ratio"]
+    if flip and aspect:
+        aspect = 1 / aspect  # R inverts aspect.ratio under coord_flip
+    w, h = o["panel_size"]
+    th = theme_scp(aspect_ratio=aspect, legend_position=o["legend_position"])
+    pg = PanelGrid(len(panels), panel_size=(h, w) if flip else (w, h), nrow=o["nrow"],
+                   ncol=o["ncol"], byrow=o["byrow"], keys=[p.key for p in panels], theme=th,
                    legend=LegendColumn(position=o["legend_position"]))
     for P in panels:
         ax = pg.axes[P.key]
         _draw_panel(ax, P, o, stacked=o["stack"])
-        ax.set_xlabel(P.xlab)
-        ax.set_ylabel(o["ylab"])
-        if o["stack"]:
+        A = _Ax(ax, P.flip)
+        A.set_pos_label(P.xlab)
+        A.set_value_label(o["ylab"])
+        if o["stack"] and not flip:
             # a stacked panel keeps its strip on the right, as facet_grid(f ~ .)
             ax.text(1.02, 0.5, P.title, transform=ax.transAxes, ha="left", va="center",
                     fontsize=th.size("strip.text"))
@@ -846,6 +1022,62 @@ def _layout_stack(panels: list[_Panel], legend: _Legend, o: dict) -> Figure:
     engine = fig.get_layout_engine()
     if isinstance(engine, ConstrainedLayoutEngine):
         engine.set(h_pad=0.0, hspace=0.0)
+    return fig
+
+
+def _layout_stack_flip(panels: list[_Panel], legend: _Legend, o: dict) -> Figure:
+    """The stacked figure under ``flip``: R binds the panels side by side
+    (``cbind``) instead of on top of each other — one row per group column,
+    one column per feature, the groups on a shared y axis shown once at the
+    left, per-column value limits with exactly two ticks, the feature strips on
+    top with their text turned 90 degrees, and one value label at the bottom
+    (SCP-plot.R:3635)."""
+    th = theme_scp(aspect_ratio=None, legend_position=o["legend_position"])
+    rows = list(dict.fromkeys(p.g for p in panels))
+    by_row = {g: [p for p in panels if p.g == g] for g in rows}
+    ncol = max(len(v) for v in by_row.values())
+    ordered: list[_Panel | None] = []
+    for g in rows:
+        ordered.extend(by_row[g] + [None] * (ncol - len(by_row[g])))
+    keys = [p.key if p is not None else f"__empty{i}" for i, p in enumerate(ordered)]
+    w, h = o["panel_size"]
+    pg = PanelGrid(len(keys), panel_size=(h * 0.45, w), nrow=len(rows), ncol=ncol,
+                   byrow=True, keys=keys, theme=th, wspace=0.0,
+                   legend=LegendColumn(position=o["legend_position"]))
+    for ri, g in enumerate(rows):
+        row_axes = [pg.axes[keys[ri * ncol + c]] for c in range(ncol)]
+        first = row_axes[0]
+        for c, ax in enumerate(row_axes):
+            P = ordered[ri * ncol + c]
+            if P is None:
+                ax.set_visible(False)
+                continue
+            if c > 0:
+                ax.sharey(first)
+            _draw_panel(ax, P, o, stacked=True)
+            ax.text(0.5, 1.02, P.title, transform=ax.transAxes, rotation=90, ha="center",
+                    va="bottom", fontsize=th.size("strip.text"))
+            ax.tick_params(axis="y", length=0)
+            if c > 0:
+                ax.tick_params(axis="y", labelleft=False)
+                ax.set_ylabel("")
+            else:
+                ax.set_ylabel(P.xlab)
+            ax.set_xlabel("")
+        if len(rows) > 1:
+            mid = row_axes[(len(by_row[g]) - 1) // 2]
+            mid.set_xlabel(o["ylab"] or "Expression level")
+    if len(rows) == 1:
+        pg.fig.supxlabel(o["ylab"] or "Expression level", fontsize=th.size("axis.title"))
+    if o["title"] or o["subtitle"]:
+        t = o["title"] or ""
+        pg.fig.suptitle(f"{o['subtitle']}\n{t}" if o["subtitle"] else t,
+                        fontsize=th.size("plot.title"))
+    _finish_legend(pg, legend, o)
+    fig = pg.finish()
+    engine = fig.get_layout_engine()
+    if isinstance(engine, ConstrainedLayoutEngine):
+        engine.set(w_pad=0.0, wspace=0.0)
     return fig
 
 
@@ -951,20 +1183,33 @@ def expression_stat_plot(
     * ``keep_empty`` is inert in R (absent levels are dropped before the scale
       sees them); here it keeps declared-but-absent levels on the axis.
     * the ``col`` stripes bleed past both panel edges; R's left-edge test
-      compares ``xmin`` with ``min(xmax)`` and leaves a gutter.
+      compares ``xmin`` with ``min(xmax)`` and leaves a gutter.  The cell
+      axis's *range* is still R's, typo included: the bars plus the finite
+      stripe edges, padded by ``scale_x_discrete``'s 0.6.
     * under ``stack``, each row is ``0.45 * panel_size[1]`` tall and the title
       is drawn once over the stack.
     * ``seed`` is accepted for signature parity; jitter uses seed 11 as R's
       ``position_jitterdodge(seed = 11)`` does, so it cannot be changed there
       either.  Jitter positions are not R's — only the RNG seed is shared.
 
-    Not ported (raise ``NotImplementedError``): ``flip``.
+    ``flip=True`` is ``coord_flip``: the values run along x and the groups up
+    y, with the factor reversed so the first level is on top, ``aspect_ratio``
+    inverted (and ``panel_size`` turned with it), ``col`` cells numbered from
+    the top, and every layer — stripes, reference lines, bars and error bars,
+    violins, boxes, dots, trend, jitter, brackets and p-values — transposed
+    together.  Text keeps its screen-space justification, as ``geom_text``
+    does.  Under ``stack`` the panels sit side by side (R's ``cbind``), one row
+    per group column, the group labels once at the left, the feature strips on
+    top turned 90 degrees, two value ticks per column, and the value label once
+    at the bottom; a title becomes the figure's title.  Two divergences:
+
+    * R bug fixed: SCP reverses the factor *after* building the group key it
+      hands ggpubr, so an unsplit ``multiplegroup_comparisons`` is tested per
+      x position, ``kruskal.test`` fails and R draws no label.  Here the label
+      is drawn, at the first (bottom) position.
+    * ggsignif positions a flipped bracket's label from mixed coordinates,
+      above the bracket's upper end; here it sits beside the bracket's middle.
     """
-    if flip:
-        raise NotImplementedError(
-            "`flip` (coord_flip) is specified in docs/porting_briefs/stat_plots.md §1.4 "
-            "but not yet implemented."
-        )
     if plot_type not in ("violin", "box", "bar", "dot", "col"):
         raise ValueError(f"unknown plot_type {plot_type!r}")
     if fill_by not in ("group", "feature", "expression"):
@@ -1024,7 +1269,7 @@ def expression_stat_plot(
         box_color="black", box_width=0.1, box_ptsize=2.0, pt_color="#4D4D4D", pt_size=None,
         pt_alpha=1.0, trend_color="black", trend_linewidth=1.0, trend_ptsize=2.0,
         stat_color="black", stat_size=1.0, line_color="red", line_size=1.0,
-        record={},
+        flip=flip, record={},
     )
     legend = _Legend()
     common: dict[str, Any] = dict(fill_by=fill_by, plot_type=plot_type, keep_empty=keep_empty,
@@ -1047,9 +1292,12 @@ def expression_stat_plot(
             raise ValueError(f"`ref_group` {ref_group!r} is not on the x axis {lv_all}")
         o["comparisons"] = [(ref_group, lv) for lv in lv_all if lv != ref_group]
 
+    for P in panels:
+        P.flip = flip
+
     n_feats = len(feats)
     if stack and n_feats > 1 and not individual:
-        fig = _layout_stack(panels, legend, o)
+        fig = (_layout_stack_flip if flip else _layout_stack)(panels, legend, o)
     else:
         fig = _layout_grid(panels, legend, o)
     # what was computed per panel (y limits, p-values, labels): kept for tests

@@ -6,6 +6,9 @@
 #   layers.json   per case and panel: the plist names, the final y range of the
 #                 panel (coord_cartesian with its expansion), the y breaks, and
 #                 the computed data of the significance / trend / count layers
+#   layers_flip.json  the same for flip = TRUE (coord_flip), with both axes'
+#                 ranges, breaks and labels as drawn (after coord_flip the
+#                 horizontal axis is the value axis) and the stripe rectangles
 #
 #   Rscript tools/parity/feature_stat_layers.R tests/fixtures/parity/feature_stat
 #
@@ -66,22 +69,43 @@ dump_plot <- function(p) {
        layers = layers)
 }
 
-run <- function(...) {
+# flip = TRUE: coord_flip swaps the axes of the panel parameters, so pp$x is
+# the (horizontal) value axis and pp$y the (vertical) group axis.  Layer data
+# stay in aesthetic space (x = group position, y = value).
+dump_flip <- function(p) {
+  b <- ggplot_build(p)
+  pp <- b$layout$panel_params[[1]]
+  layers <- lapply(seq_along(p$layers), function(i) {
+    k <- layer_kind(p$layers[[i]])
+    d <- b$data[[i]]
+    keep <- intersect(colnames(d), c("x", "xend", "y", "yend", "xmin", "xmax", "annotation",
+                                     "label", "p", "group", "n", "ymin", "ymax", "fill"))
+    if (!grepl("Signif|CompareMeans|GeomLine|GeomPoint|StatSum|GeomErrorbar|GeomCol|GeomRect", k)) {
+      return(list(kind = k))
+    }
+    list(kind = k, data = d[, keep, drop = FALSE])
+  })
+  list(x_range = pp$x.range, x_breaks = pp$x$breaks, x_labels = pp$x$get_labels(),
+       y_range = pp$y.range, y_labels = pp$y$get_labels(),
+       aspect_ratio = p$theme$aspect.ratio %||% NA, layers = layers)
+}
+
+run <- function(..., .dump = dump_plot) {
   pl <- FeatureStatPlot(pn, ..., combine = FALSE)
   if (inherits(pl, "ggplot")) pl <- list(pl)
   list(names = names(pl), panels = lapply(pl, function(p) {
-    if (inherits(p, "ggplot")) dump_plot(p) else list(kind = class(p)[1])
+    if (inherits(p, "ggplot")) .dump(p) else list(kind = class(p)[1])
   }))
 }
-run_engine <- function(...) {
+run_engine <- function(..., .dump = dump_plot) {
   # ExpressionStatPlot directly: FeatureStatPlot's stack output is a gtable,
   # but the per-row panels (limits, two breaks) are what we compare
   pl <- SCP:::ExpressionStatPlot(exp.data = GetAssayData(pn, layer = "data"),
                                  meta.data = cbind(pn@meta.data, cells = colnames(pn)), ...)
-  list(names = names(pl), panels = lapply(pl, dump_plot))
+  list(names = names(pl), panels = lapply(pl, .dump))
 }
 
-run_by_feature <- function(stat.by, group.by, ...) {
+run_by_feature <- function(stat.by, group.by, ..., .dump = dump_plot) {
   # FeatureStatPlot's plot.by = "feature" branch (SCP-plot.R:3555), verbatim
   # except FetchData(layer =): SCP 0.5.6 passes slot =, which SeuratObject 5
   # made defunct, so the shipped branch errors in a current install.
@@ -101,7 +125,7 @@ run_by_feature <- function(stat.by, group.by, ...) {
       group.by = "Features", cells = rownames(meta.reshape)[meta.reshape[[group.by]] == g], ...)
     plist <- append(plist, p)
   }
-  list(names = names(plist), panels = lapply(plist, dump_plot))
+  list(names = names(plist), panels = lapply(plist, .dump))
 }
 
 cases <- list()
@@ -159,3 +183,37 @@ res <- list(
 jsonlite::write_json(res, file.path(out_dir, "layers.json"), digits = NA, auto_unbox = TRUE,
                      null = "null", na = "null", force = TRUE)
 cat("wrote", file.path(out_dir, "layers.json"), "\n")
+
+flip <- list()
+flip$violin <- run(stat.by = c("G2M_score", "Neurog3"), group.by = "CellType", flip = TRUE,
+  .dump = dump_flip)
+flip$box_brackets <- run(stat.by = "G2M_score", group.by = "CellType", plot_type = "box",
+  comparisons = list(c("Ductal", "Ngn3 low EP"), c("Ngn3 high EP", "Endocrine"),
+                     c("Ductal", "Endocrine")), flip = TRUE, .dump = dump_flip)
+flip$split_true_kruskal <- run(stat.by = "S_score", group.by = "CellType", split.by = "Phase",
+  comparisons = TRUE, sig_label = "p.format", flip = TRUE, .dump = dump_flip)
+flip$multi_only <- run(stat.by = "G2M_score", group.by = "CellType",
+  multiplegroup_comparisons = TRUE, sig_label = "p.format", flip = TRUE, .dump = dump_flip)
+flip$bar_bg <- run(stat.by = "G2M_score", group.by = "SubCellType", bg.by = "CellType",
+  plot_type = "bar", flip = TRUE, .dump = dump_flip)
+flip$violin_trend_split <- run(stat.by = "G2M_score", group.by = "CellType", split.by = "Phase",
+  add_trend = TRUE, flip = TRUE, .dump = dump_flip)
+flip$dot <- run(stat.by = "G2M_score", group.by = "CellType", plot_type = "dot", flip = TRUE,
+  .dump = dump_flip)
+flip$col <- run(stat.by = "G2M_score", group.by = "CellType", cells = small, plot_type = "col",
+  flip = TRUE, .dump = dump_flip)
+flip$sorted <- run(stat.by = "Neurog3", group.by = "SubCellType", sort = TRUE, flip = TRUE,
+  aspect.ratio = 0.5, .dump = dump_flip)
+flip$by_feature <- run_by_feature(stat.by = c("Neurog3", "Sox9", "G2M_score"),
+  group.by = "CellType", flip = TRUE, .dump = dump_flip)
+flip$stack <- run_engine(stat.by = c("Neurog3", "Sox9", "Ins1", "Gcg"), group.by = "SubCellType",
+  stack = TRUE, flip = TRUE, .dump = dump_flip)
+
+jsonlite::write_json(list(r_version = R.version.string,
+                          scp_version = as.character(packageVersion("SCP")),
+                          ggplot2_version = as.character(packageVersion("ggplot2")),
+                          ggpubr_version = as.character(packageVersion("ggpubr")),
+                          cases = flip),
+                     file.path(out_dir, "layers_flip.json"), digits = NA, auto_unbox = TRUE,
+                     null = "null", na = "null", force = TRUE)
+cat("wrote", file.path(out_dir, "layers_flip.json"), "\n")

@@ -1,16 +1,16 @@
-"""Flow and set views of :func:`scp.pl.cell_stat_plot`: sankey, chord, venn.
+"""Flow and set views of :func:`scp.pl.cell_stat_plot`: sankey, chord, venn, upset.
 
-These three ``plot_type``\\ s share nothing with the bar/pie family except the
+These four ``plot_type``\\ s share nothing with the bar/pie family except the
 input: several categorical ``obs`` columns (``stat_by``) read row-wise, one
 panel per ``split_by`` level, ``group_by`` ignored. R reaches for three
-different packages (SCP's vendored ``ggsankey``, ``circlize`` and
-``ggVennDiagram``); here each is a pure layout function that returns plain
+different packages (SCP's vendored ``ggsankey``, ``circlize``,
+``ggVennDiagram`` and ``ggupset``); here each is a pure layout function that returns plain
 tables, plus a renderer that draws those tables into a given ``Axes``. The
 layout functions are what the parity tests pin against R.
 
 Ported from SCP (Hao Zhang, GPL-3), https://github.com/zhanghao-njmu/SCP,
-``SCP-plot.R`` ``StatPlot`` (L4564), branches at L4981 (venn), L5072 (sankey)
-and L5115 (chord). Spec: ``docs/porting_briefs/stat_plots.md`` §2.3.
+``SCP-plot.R`` ``StatPlot`` (L4564), branches at L4981 (venn), L5044 (upset),
+L5072 (sankey) and L5115 (chord). Spec: ``docs/porting_briefs/stat_plots.md`` §2.3.
 """
 
 from __future__ import annotations
@@ -40,8 +40,10 @@ __all__ = [
     "sankey_layout",
     "chord_layout",
     "venn_regions",
+    "upset_layout",
     "resolve_stat_level",
     "flow_plot",
+    "upset_plot",
 ]
 
 _SANKEY_WIDTH = 0.1  # geom_sankey(width = .1)
@@ -779,4 +781,156 @@ def flow_plot(
             lvls = [str(x) for x in _categorical(data[c], show_na=False).cat.categories]
             legend.add(c, [Patch(facecolor=colors[lv], edgecolor="black", label=lv)
                            for lv in lvls])
+    return pg.finish()
+
+
+# --------------------------------------------------------------------------- #
+# upset
+# --------------------------------------------------------------------------- #
+#: ggupset joins the set names of an intersection with this before tabling it
+_UPSET_SEP = "-__-__-_-"
+_UPSET_N = 20  # scale_x_upset(n_intersections = 20)
+
+
+def upset_layout(members: pd.DataFrame, stat_cols: Sequence[str],
+                 n_intersections: int = _UPSET_N) -> tuple[pd.DataFrame, list[str]]:
+    """Bars and matrix rows of SCP's upset plot, as ``ggupset`` orders them.
+
+    ``members`` is the binarised cell x set table.  Cells in no set are dropped
+    (SCP-plot.R:5047).  Each cell's intersection is the *sorted* list of its
+    set names; ``scale_x_upset`` tables the intersections (``table()`` sorts
+    the names, C collation as in the reference R session) and orders them by
+    ``sort(decreasing = TRUE)`` — a stable radix sort, so equal counts keep
+    that alphabetical order — keeping the first ``n_intersections``.  The
+    matrix lists the ``stat_by`` columns that occur in a shown intersection,
+    in ``stat_by`` order from the top.
+
+    Returns ``(bars, sets)``: ``bars`` has one row per bar, left to right, with
+    the ``intersection`` (a tuple of set names) and its ``count``.
+    """
+    stat_cols = list(stat_cols)
+    m = members[stat_cols].to_numpy(bool)
+    keys = [_UPSET_SEP.join(sorted(c for c, on in zip(stat_cols, row, strict=True) if on))
+            for row in m if row.any()]
+    counts = pd.Series(keys, dtype=object).value_counts()
+    order = sorted(counts.index, key=lambda k: (-int(counts[k]), k))[:n_intersections]
+    bars = pd.DataFrame({"intersection": [tuple(k.split(_UPSET_SEP)) for k in order],
+                         "count": [int(counts[k]) for k in order]})
+    shown = {s for t in bars["intersection"] for s in t}
+    return bars, [c for c in stat_cols if c in shown]
+
+
+def _draw_upset(bar_ax: Axes, mat_ax: Axes, bars: pd.DataFrame, sets: list[str], *,
+                label_size: float, theme: Theme) -> None:
+    """One upset block: count bars over the combination matrix."""
+    from matplotlib.colors import LinearSegmentedColormap, Normalize
+
+    from ..palettes import continuous_palette
+
+    pt = 72.27 / 25.4  # ggplot .pt
+    n = len(bars)
+    xs = np.arange(n)
+    counts = bars["count"].to_numpy(dtype=float)
+    # geom_bar(fill = after_stat(count)) on scale_fill_gradientn(material-indigo)
+    cmap = LinearSegmentedColormap.from_list(
+        "upset", continuous_palette(palette="material-indigo", n=100), N=256)
+    lo, hi = (counts.min(), counts.max()) if n else (0.0, 1.0)
+    norm = Normalize(lo, hi if hi > lo else lo + 1)
+    bar_ax.bar(xs, counts, width=0.5, color=[cmap(norm(c)) for c in counts],
+               edgecolor="black", linewidth=0.5, zorder=2)
+    for x, c in zip(xs, counts, strict=True):
+        t = bar_ax.text(float(x), c, f"{int(c)}", ha="center", va="center",
+                        fontsize=label_size * pt, zorder=3)
+        halo(t, foreground="white", radius=0.1)
+    top = counts.max() if n else 1.0
+    bar_ax.set_ylim(-0.05 * top, 1.05 * top)
+    bar_ax.set_xlim(-0.6, n - 0.4)
+    bar_ax.set_ylabel("Intersection size")
+    bar_ax.set_axisbelow(True)
+    bar_ax.grid(True, color="#CCCCCC", linestyle=(0, (4, 4)), linewidth=0.5)
+    bar_ax.tick_params(axis="x", bottom=False, labelbottom=False)
+
+    # the matrix: discrete y with the first set on top, striped from the bottom
+    rows = list(reversed(sets))  # bottom-up, as make_combination_matrix_plot gets them
+    for k in range(len(rows)):
+        # index %% 2 == 0 -> "color.one" (white); index is 1-based from the bottom
+        if (k + 1) % 2:
+            mat_ax.axhspan(k - 0.5, k + 0.5, color="#F7F7F7", zorder=0, linewidth=0)
+    ypos = {s: k for k, s in enumerate(rows)}
+    for x, inter in zip(xs, bars["intersection"], strict=True):
+        on = sorted(ypos[s] for s in inter)
+        if len(on) > 1:
+            mat_ax.plot([x, x], [on[0], on[-1]], color="black", linewidth=1.2 * pt * 72 / 96,
+                        zorder=2, solid_capstyle="butt")
+        mat_ax.scatter(np.full(len(rows), x), range(len(rows)), s=(3 * pt) ** 2,
+                       c=["black" if s in inter else "#E0E0E0" for s in rows],
+                       linewidths=0, zorder=3)
+    mat_ax.set_ylim(-0.5, max(len(rows), 1) - 0.5)
+    mat_ax.set_yticks(range(len(rows)))
+    mat_ax.set_yticklabels(rows, fontsize=theme.size("axis.title"))
+    mat_ax.tick_params(axis="both", length=0)
+    mat_ax.tick_params(axis="x", labelbottom=False)
+    for side in ("top", "right", "bottom", "left"):
+        mat_ax.spines[side].set_visible(False)
+
+
+def upset_plot(
+    data: pd.DataFrame,
+    stat_cols: Sequence[str],
+    *,
+    split_by: str | None,
+    stat_level,
+    label_size: float,
+    panel_size: tuple[float, float],
+    nrow: int | None,
+    ncol: int | None,
+    byrow: bool,
+) -> Figure:
+    """``StatPlot``'s upset branch (SCP-plot.R:5044-5070): one block per
+    ``split_by`` level, each a column of intersection-size bars over ggupset's
+    combination matrix, drawn into the two halves of one :class:`PanelGrid`
+    panel.  Bars, counts and matrix rows follow :func:`upset_layout`; the
+    split level labels the block, as R's ``labs(x = sp)`` does.  As in R,
+    ``palette``/``palcolor``/``alpha`` have no effect (the bars are coloured by
+    count) and there is no legend.  The panel is ``0.6`` as tall as it is wide
+    (R's ``aspect.ratio = 0.6``), wide enough for the bars, with the matrix
+    below sized to the number of sets.
+    """
+    from ..theme import apply_theme, theme_scp
+
+    stat_cols = list(stat_cols)
+    members = _membership(data, stat_cols, resolve_stat_level(data, stat_cols, stat_level))
+    if split_by is None:
+        split_levels: list[str | None] = [None]
+        split_of = None
+    else:
+        scat = as_ordered_categorical(data[split_by])
+        split_levels = [str(x) for x in scat.cat.categories]
+        split_of = np.asarray(scat).astype(str)
+    blocks = []
+    for sp in split_levels:
+        mem = members if sp is None else members.loc[split_of == sp]
+        blocks.append((sp, *upset_layout(mem, stat_cols)))
+
+    n_bars = max((len(b) for _sp, b, _s in blocks), default=1)
+    n_sets = max((len(s) for _sp, _b, s in blocks), default=1)
+    width = max(panel_size[0], 0.28 * n_bars + 0.4)
+    bar_h = 0.6 * width
+    # ggupset: (text size + extra spacing) per set, plus 10 pt
+    mat_h = ((12 + 6) * max(n_sets, 1) + 10) / 72.0
+    th = theme_scp(legend_position="none")
+    keys = ["" if sp is None else str(sp) for sp in split_levels]
+    pg = PanelGrid(len(keys), panel_size=(width, bar_h + mat_h), nrow=nrow, ncol=ncol,
+                   byrow=byrow, keys=keys, theme=th, legend=LegendColumn(position="none"))
+    for key, (sp, bars, sets) in zip(keys, blocks, strict=True):
+        holder = pg.axes[key]
+        spec = holder.get_subplotspec()
+        assert spec is not None
+        holder.remove()
+        sub = spec.subgridspec(2, 1, height_ratios=[bar_h, mat_h], hspace=0.0)
+        bar_ax = apply_theme(pg.fig.add_subplot(sub[0]), th)
+        mat_ax = pg.fig.add_subplot(sub[1], sharex=bar_ax)
+        _draw_upset(bar_ax, mat_ax, bars, sets, label_size=label_size, theme=th)
+        if sp is not None:
+            mat_ax.set_xlabel(str(sp))
     return pg.finish()

@@ -286,8 +286,6 @@ def test_featcor_violin_extent(featcor_adata):
     plt.close(fig)
 
 
-@pytest.mark.xfail(strict=True, reason="diagonal violins use matplotlib's Scott bandwidth; "
-                   "ggplot's geom_violin uses bw.nrd0 (width profile off by up to 0.46)")
 def test_featcor_violin_shape(featcor_adata):
     n = len(FC_FEATS)
     fig = scp.pl.feature_cor_plot(featcor_adata, FC_FEATS, group_by="CellType")
@@ -301,8 +299,6 @@ def test_featcor_violin_shape(featcor_adata):
     plt.close(fig)
 
 
-@pytest.mark.xfail(strict=True, reason="split_by is accepted but never used: one SPLOM over all "
-                   "cells instead of one per split with per-split correlations (SCP-plot.R:5371)")
 def test_featcor_split_by(featcor_adata):
     n = len(FC_FEATS)
     fig = scp.pl.feature_cor_plot(featcor_adata, FC_FEATS, group_by="CellType", split_by="Phase")
@@ -318,8 +314,6 @@ def test_featcor_split_by(featcor_adata):
     np.testing.assert_allclose(got, sorted(want), atol=5e-4)
 
 
-@pytest.mark.xfail(strict=True, reason="r2/p text is drawn only inside `if add_smooth`; R draws "
-                   "it whenever add_r2/add_pvalue/add_equation is set (SCP-plot.R:5439)")
 def test_featcor_stats_without_smooth(featcor_adata):
     n = len(FC_FEATS)
     fig = scp.pl.feature_cor_plot(featcor_adata, FC_FEATS, group_by="CellType", add_smooth=False)

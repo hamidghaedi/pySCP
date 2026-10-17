@@ -13,9 +13,8 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Sequence
-from typing import Literal
+from typing import Literal, cast
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.cm import ScalarMappable
@@ -23,14 +22,15 @@ from matplotlib.colors import LinearSegmentedColormap, Normalize, TwoSlopeNorm
 from matplotlib.figure import Figure
 from matplotlib.patches import Patch, Rectangle
 from matplotlib.ticker import FuncFormatter, PercentFormatter
+from matplotlib.transforms import Bbox
 from scipy.stats import gaussian_kde, linregress
 
 from ..fetch import as_ordered_categorical, fetch_data
 from ..fetch import calculate_coexp as calculate_coexp_fn
 from ..layout import LegendColumn, PanelGrid
 from ..palettes import continuous_palette, discrete_palette
-from ..theme import halo, theme_scp
-from ._stat_feature import ExprPlotType, expression_stat_plot
+from ..theme import apply_theme, halo, theme_scp
+from ._stat_feature import ExprPlotType, _Ax, expression_stat_plot
 
 __all__ = [
     "feature_stat_plot",
@@ -229,8 +229,8 @@ def cell_stat_plot(
     R original: ``CellStatPlot`` (``SCP-plot.R`` L4463) -> ``StatPlot``
     (L4564), from SCP by Hao Zhang (GPL-3),
     https://github.com/zhanghao-njmu/SCP.  Milestone 5.  All eleven
-    ``plot_type``\\ s are implemented; ``sankey``, ``chord`` and ``venn`` are
-    drawn by ``_stat_flow.py`` and ``upset`` by ``_set_plot``.
+    ``plot_type``\\ s are implemented; ``sankey``, ``chord``, ``venn`` and
+    ``upset`` are drawn by ``_stat_flow.py``.
 
     The aggregation core is a complete cross-tab, not a groupby-count::
 
@@ -319,7 +319,17 @@ def stat_plot(
     the statistic is always a count, as in R -- R also warns about the count,
     but on the *default* ``stat_type``, so every call would warn; that one is
     not repeated here. The renderers live in ``_stat_flow.py``; see
-    :func:`scp.pl._stat_flow.flow_plot` for the divergences from SCP.
+    :func:`scp.pl._stat_flow.flow_plot` for the divergences from SCP and
+    :func:`scp.pl._stat_flow.upset_layout` for how the upset bars are ordered.
+    Like the other three, ``upset`` draws one block per ``split_by`` level.
+
+    ``flip=True`` is ``coord_flip`` for ``bar``, ``area``, ``trend`` and
+    ``dot``: the group order is reversed (first level on top), the panel and
+    its ``aspect_ratio`` turn, and every layer is transposed (SCP-plot.R:4771,
+    4955).  ``pie`` and ``rose`` start their polar angle at ``pi/2`` instead,
+    as in R.  ``ring`` does the same here; R adds ``coord_flip`` to it, which
+    replaces ``coord_polar`` and turns the ring into a flat bar with its dummy
+    hole level showing — not reproduced.
 
     ``individual=True`` draws one panel per (``split_by`` level, ``group_by``
     level) pair, each holding that single group, in R's order: group levels
@@ -344,9 +354,11 @@ def stat_plot(
             warnings.warn("`group_by` is not used for sankey, chord, venn or upset plots",
                           stacklevel=2)
         if plot_type == "upset":
-            return _set_plot(data, stat_cols, plot_type, stat_level=stat_level, palette=palette,
-                             palcolor=palcolor, alpha=alpha, panel_size=panel_size,
-                             legend_position=legend_position, label_size=label_size)
+            from ._stat_flow import upset_plot
+
+            return upset_plot(data, stat_cols, split_by=split_by, stat_level=stat_level,
+                              label_size=label_size, panel_size=panel_size, nrow=nrow,
+                              ncol=ncol, byrow=byrow)
         from ._stat_flow import flow_plot
 
         return flow_plot(data, stat_cols, plot_type, split_by=split_by, stat_level=stat_level,
@@ -386,6 +398,11 @@ def stat_plot(
     if "NA" in stat_levels:
         colors["NA"] = na_color
 
+    cartesian_flip = flip and plot_type in ("bar", "area", "trend", "dot")
+    if cartesian_flip:
+        # coord_flip: R inverts aspect.ratio; the panel turns with it
+        aspect_ratio = 1 / aspect_ratio if aspect_ratio else aspect_ratio
+        panel_size = (panel_size[1], panel_size[0])
     th = theme_scp(aspect_ratio=aspect_ratio, legend_position=legend_position)
     # One panel per split level, or -- individual=TRUE -- per (split, group)
     # pair with the group level varying fastest, named "group:element:split"
@@ -450,9 +467,15 @@ def stat_plot(
 
 def _draw_stat_panel(ax, values, stat_levels, levels_x, colors, *, plot_type, stat_type,
                      position, alpha, label, label_size, flip, bg_by, block, group_by, theme):
-    """Draw one panel of the aggregated table."""
+    """Draw one panel of the aggregated table.
+
+    The cartesian types go through :class:`~scp.pl._stat_feature._Ax`, so
+    ``flip`` (R's ``coord_flip``) transposes every layer; the caller has
+    already reversed the group order, as R reverses the factor.
+    """
     n_x = len(levels_x)
     x = np.arange(n_x)
+    A = _Ax(ax, flip and plot_type in ("bar", "area", "trend", "dot"))
 
     if plot_type in ("bar", "area", "trend"):
         if position == "stack":
@@ -463,23 +486,23 @@ def _draw_stat_panel(ax, values, stat_levels, levels_x, colors, *, plot_type, st
             for lv in reversed(stat_levels):
                 v = np.nan_to_num(values.loc[lv].to_numpy())
                 if plot_type == "bar":
-                    ax.bar(x, v, bottom=bottom, width=0.8, color=colors[lv], alpha=alpha,
-                           edgecolor="black", linewidth=0.5)
+                    A.bar(x, v, 0.8, bottom=bottom, color=colors[lv], alpha=alpha,
+                          edgecolor="black", linewidth=0.5)
                 elif plot_type == "area":
-                    ax.fill_between(x, bottom, bottom + v, color=colors[lv], alpha=alpha,
-                                    edgecolor="black", linewidth=0.5)
+                    A.fill_between(x, bottom, bottom + v, color=colors[lv], alpha=alpha,
+                                   edgecolor="black", linewidth=0.5)
                 else:  # trend: a ribbon joining adjacent bars, plus a narrow bar
-                    ax.fill_between(x, bottom, bottom + v, color=colors[lv],
-                                    alpha=alpha / 2, edgecolor="#7F7F7F", linewidth=0.5)
-                    ax.bar(x, v, bottom=bottom, width=0.6, color=colors[lv], alpha=alpha,
-                           edgecolor="black", linewidth=0.5)
+                    A.fill_between(x, bottom, bottom + v, color=colors[lv],
+                                   alpha=alpha / 2, edgecolor="#7F7F7F", linewidth=0.5)
+                    A.bar(x, v, 0.6, bottom=bottom, color=colors[lv], alpha=alpha,
+                          edgecolor="black", linewidth=0.5)
                 if label:
                     for xi, (b, vv) in enumerate(zip(bottom, v, strict=True)):
                         if vv <= 0:
                             continue
                         txt = f"{vv * 100:.1f}%" if stat_type == "percent" else f"{vv:g}"
-                        t = ax.text(xi, b + vv / 2, txt, ha="center", va="center",
-                                    fontsize=label_size * 2, color="black")
+                        t = A.text(xi, b + vv / 2, txt, ha="center", va="center",
+                                   fontsize=label_size * 2, color="black")
                         halo(t, foreground="white", radius=0.1)
                 bottom = bottom + v
         else:
@@ -487,26 +510,24 @@ def _draw_stat_panel(ax, values, stat_levels, levels_x, colors, *, plot_type, st
             for i, lv in enumerate(stat_levels):
                 v = np.nan_to_num(values.loc[lv].to_numpy())
                 off = (i - (len(stat_levels) - 1) / 2) * w
-                ax.bar(x + off, v, width=w * 0.95, color=colors[lv], alpha=alpha,
-                       edgecolor="black", linewidth=0.5)
-        ax.set_xticks(x)
-        ax.set_xticklabels(levels_x, rotation=45, ha="right")
+                A.bar(x + off, v, w * 0.95, color=colors[lv], alpha=alpha,
+                      edgecolor="black", linewidth=0.5)
+        A.set_pos_ticks(x, levels_x)
         if stat_type == "percent" and position == "stack":
-            ax.set_ylim(0, 1)
-            ax.yaxis.set_major_formatter(PercentFormatter(xmax=1))
+            A.set_value_lim(0, 1)
+            A.value_axis.set_major_formatter(PercentFormatter(xmax=1))
 
     elif plot_type == "dot":
         # y is the CATEGORY, not the value: a dot matrix sized by the statistic
         vmax = np.nanmax(values.to_numpy()) or 1.0
         for yi, lv in enumerate(stat_levels):
             v = np.nan_to_num(values.loc[lv].to_numpy())
-            ax.scatter(x, np.full(n_x, yi), s=12 ** 2 * v / vmax, facecolor=colors[lv],
-                       edgecolor="black", linewidth=0.5, alpha=alpha)
-        ax.set_xticks(x)
-        ax.set_xticklabels(levels_x, rotation=45, ha="right")
-        ax.set_yticks(range(len(stat_levels)))
-        ax.set_yticklabels(stat_levels)
-        ax.set_ylim(-0.6, len(stat_levels) - 0.4)
+            A.scatter(x, np.full(n_x, yi), s=12 ** 2 * v / vmax, facecolor=colors[lv],
+                      edgecolor="black", linewidth=0.5, alpha=alpha)
+        A.set_pos_ticks(x, levels_x)
+        A.value_axis.set_ticks(range(len(stat_levels)))
+        A.value_axis.set_ticklabels(stat_levels)
+        A.set_value_lim(-0.6, len(stat_levels) - 0.4)
 
     elif plot_type == "rose":
         # Nightingale rose: group levels around the circle, radius = value
@@ -559,58 +580,8 @@ def _draw_stat_panel(ax, values, stat_levels, levels_x, colors, *, plot_type, st
         for i, lv in enumerate(levels_x):
             b = mapping.get(lv)
             if b is not None:
-                ax.axvspan(i - 0.5, i + 0.5, color=bg_colors[str(b)], alpha=0.2,
+                A.pos_span(i - 0.5, i + 0.5, color=bg_colors[str(b)], alpha=0.2,
                            zorder=0, linewidth=0)
-
-
-def _set_plot(data, stat_cols, plot_type, *, stat_level, palette, palcolor, alpha,
-              panel_size, legend_position, label_size):
-    """``upset`` — intersection sizes of the set-membership view.
-
-    ``stat_level`` binarises each ``stat_by`` column into set membership (see
-    :func:`scp.pl._stat_flow.resolve_stat_level`); it has no effect on any
-    other plot type.  ``venn`` shares that binarisation and is drawn by
-    ``_stat_flow.flow_plot``.
-    """
-    from ._stat_flow import _membership, resolve_stat_level
-
-    members_all = _membership(data, stat_cols, resolve_stat_level(data, stat_cols, stat_level))
-    sets = {c: set(data.index[members_all[c].to_numpy()]) for c in stat_cols}
-    colors = discrete_palette(list(sets), palette=palette, palcolor=palcolor)
-
-    # upset: intersection sizes, largest first, with a membership matrix beneath
-    members = pd.DataFrame({c: data.index.isin(list(sets[c])) for c in stat_cols},
-                           index=data.index)
-    members = members[members.any(axis=1)]
-    combos = members.apply(lambda r: tuple(c for c in stat_cols if r[c]), axis=1)
-    counts = combos.value_counts().head(20)
-
-    fig = plt.figure(figsize=(max(panel_size[0], 0.5 * len(counts) + 1), panel_size[1] * 1.7))
-    gs = fig.add_gridspec(2, 1, height_ratios=[2.2, 1], hspace=0.06)
-    bar_ax, mat_ax = fig.add_subplot(gs[0]), fig.add_subplot(gs[1])
-    xs = np.arange(len(counts))
-    bar_ax.bar(xs, counts.to_numpy(), width=0.7, color="#3C3C3C")
-    for xi, c in zip(xs, counts.to_numpy(), strict=True):
-        bar_ax.text(xi, c, str(c), ha="center", va="bottom", fontsize=label_size * 2)
-    bar_ax.set_xticks([])
-    bar_ax.set_ylabel("Intersection size")
-    bar_ax.set_xlim(-0.6, len(counts) - 0.4)
-    for yi, c in enumerate(stat_cols):
-        for xi, combo in enumerate(counts.index):
-            on = c in combo
-            mat_ax.scatter(xi, yi, s=60, color=colors[c] if on else "#DDDDDD",
-                           zorder=3 if on else 2)
-        hits = [xi for xi, combo in enumerate(counts.index) if c in combo]
-        if hits:
-            mat_ax.plot([min(hits), max(hits)], [yi, yi], color="#DDDDDD", linewidth=1, zorder=1)
-    mat_ax.set_yticks(range(len(stat_cols)))
-    mat_ax.set_yticklabels(stat_cols)
-    mat_ax.set_xticks([])
-    mat_ax.set_xlim(-0.6, len(counts) - 0.4)
-    mat_ax.set_ylim(-0.6, len(stat_cols) - 0.4)
-    for side in ("top", "right", "bottom", "left"):
-        mat_ax.spines[side].set_visible(False)
-    return fig
 
 
 def feature_cor_plot(
@@ -622,6 +593,7 @@ def feature_cor_plot(
     layer: str | None = None,
     cells: Sequence[str] | None = None,
     cor_method: Literal["pearson", "spearman"] = "pearson",
+    adjust: float = 1.0,
     add_equation: bool = False,
     add_r2: bool = True,
     add_pvalue: bool = True,
@@ -634,6 +606,9 @@ def feature_cor_plot(
     raster: bool | None = None,
     calculate_coexp: bool = False,
     panel_size: tuple[float, float] = (1.4, 1.4),
+    nrow: int | None = None,
+    ncol: int | None = None,
+    byrow: bool = True,
     force: bool = False,
     seed: int = 11,
 ) -> Figure:
@@ -642,9 +617,24 @@ def feature_cor_plot(
     R original: ``FeatureCorPlot`` (``SCP-plot.R:5232``) — Hao Zhang,
     https://github.com/zhanghao-njmu/SCP.
 
-    Lower triangle = solid correlation blocks, diagonal = per-group violins,
-    upper triangle = scatter with an optional ``lm`` fit and r2/p annotation.
-    Spearman is Pearson on row-ranked values, matching ``proxyC::simil``.
+    The grid puts feature ``f1`` on the column and ``f2`` on the row, as R
+    does.  Below the diagonal (row > column, ``f1`` before ``f2``) is the
+    scatter, coloured by group, with an optional ``lm`` fit line; above it
+    (row < column) is a solid block whose colour and text give the
+    correlation; the diagonal holds one violin per group (``geom_violin(scale
+    = "width", trim = TRUE)``, bandwidth ``bw.nrd0 * adjust`` as ggplot's
+    ``stat_ydensity`` computes it).  Spearman is Pearson on per-feature ranks,
+    matching ``proxyC::simil``.
+
+    The equation / r² / p text of the scatter panels follows ``add_equation``,
+    ``add_r2`` and ``add_pvalue`` alone; ``add_smooth`` only draws the fit
+    line, as in R (SCP-plot.R:5434-5439).
+
+    ``split_by`` draws one matrix per split level, titled with the level, and
+    computes the correlations, fits and violins within that split
+    (SCP-plot.R:5371).  The matrices are panels of a :class:`PanelGrid`
+    (``nrow`` / ``ncol`` / ``byrow``); each is ``n * panel_size`` across.
+    Split levels without cells are skipped (R would attempt an empty matrix).
 
     ``calculate_coexp=True`` appends a ``CoExp`` feature, the per-cell
     geometric mean of the gene features (any number of them, as in R), from
@@ -652,7 +642,12 @@ def feature_cor_plot(
     product with R's warning.  R bug fixed: ``FeatureCorPlot``'s copy of this
     block reads a ``status`` variable it never assigns, so in R the option
     always errors; the shared function computes the data type itself.
+
+    ``pt_size`` is in ggplot millimetres; ``None`` is R's
+    ``min(3000 / n_cells, 0.5)``.
     """
+    from ._stat_feature import _PT, _nrd0
+
     feats = list(features)
     coexp = None
     if calculate_coexp:
@@ -684,67 +679,145 @@ def feature_cor_plot(
         dat = dat.loc[dat.index.intersection(pd.Index(cells))]
     dat = dat[np.isfinite(dat.to_numpy()).all(axis=1)]
 
-    if group_by is None:
-        gvals = pd.Series(["all"] * len(dat), index=dat.index)
-        glevels = ["all"]
-    else:
-        gcat = as_ordered_categorical(adata.obs[group_by]).loc[dat.index]
-        gvals = pd.Series(np.asarray(gcat).astype(str), index=dat.index)
-        glevels = [str(c) for c in gcat.cat.categories]
-    colors = discrete_palette(glevels, palette=palette, palcolor=palcolor)
+    def _levels(col: str | None) -> tuple[pd.Series, list[str]]:
+        if col is None:
+            return pd.Series([""] * len(dat), index=dat.index), [""]
+        cat = as_ordered_categorical(adata.obs[col]).loc[dat.index]
+        return (pd.Series(np.asarray(cat).astype(str), index=dat.index),
+                [str(c) for c in cat.cat.categories])
 
-    # Spearman is Pearson on row-ranked values, which is what proxyC::simil does
-    mat = dat.to_numpy(dtype=float)
-    ranked = np.apply_along_axis(lambda c: pd.Series(c).rank().to_numpy(), 0, mat)
-    corr = np.corrcoef((ranked if cor_method == "spearman" else mat), rowvar=False)
+    gvals, glevels = _levels(group_by)
+    svals, slevels = _levels(split_by)
+    slevels = [s for s in slevels if (svals == s).any()]
+    colors = discrete_palette(glevels, palette=palette, palcolor=palcolor)
 
     n = len(feats)
     cor_ramp = continuous_palette(palette=cor_palette, n=200)
     cor_cmap = LinearSegmentedColormap.from_list("cor", cor_ramp, N=256)
     cor_norm = Normalize(*cor_range)
+    size_mm = pt_size if pt_size is not None else min(3000 / max(len(dat), 1), 0.5)
+    raster = raster if raster is not None else len(dat) * n * (n - 1) / 2 > 1e5
 
-    fig, axes = plt.subplots(n, n, figsize=(panel_size[0] * n, panel_size[1] * n),
-                             squeeze=False)
-    size = pt_size if pt_size is not None else max(2000 / max(len(dat), 1), 1.0)
-    for i, f1 in enumerate(feats):          # column
-        for j, f2 in enumerate(feats):      # row
+    th = theme_scp()
+    legend = LegendColumn(position="right")
+    keys = [s if split_by is not None else "all" for s in slevels]
+    pg = PanelGrid(len(keys), panel_size=(panel_size[0] * n, panel_size[1] * n),
+                   nrow=nrow, ncol=ncol, byrow=byrow, keys=keys, theme=th, legend=legend)
+    fig = pg.fig
+    grid_axes: list = []
+    for key, s in zip(keys, slevels, strict=True):
+        holder = pg.axes[key]
+        spec = holder.get_subplotspec()
+        assert spec is not None
+        sub = spec.subgridspec(n, n, wspace=0.08, hspace=0.08)
+        holder.remove()
+        rows = (svals == s).to_numpy()
+        d = dat.loc[rows]
+        g = gvals.loc[rows]
+        _splom(fig, sub, d, g, glevels, colors, feats, cor_method=cor_method, adjust=adjust,
+               add_equation=add_equation, add_r2=add_r2, add_pvalue=add_pvalue,
+               add_smooth=add_smooth, cor_cmap=cor_cmap, cor_norm=cor_norm,
+               s=(size_mm * _PT) ** 2, raster=raster, nrd0=_nrd0, axes_out=grid_axes)
+        mine = grid_axes[-n * n:]
+        if split_by is not None:
+            _matrix_title(mine[:n], s)
+        # R binds the correlation legend to each matrix; a colorbar spanning
+        # axes of several sub-grids would defeat the layout engine
+        cb = fig.colorbar(ScalarMappable(norm=cor_norm, cmap=cor_cmap), ax=mine,
+                          fraction=0.04, pad=0.03, shrink=0.6)
+        cb.set_label("Correlation", fontsize=th.size("legend.title"))
+        cb.set_ticks(np.linspace(*cor_range, 3).tolist())  # n.breaks = 3: -1, 0, 1 by default
+        cb.ax.set_ylim(*cor_range)
+        cb.outline.set_edgecolor("black")
+
+    if group_by is not None and len(glevels) > 1:
+        legend.add(group_by, [Patch(facecolor=colors[lv], edgecolor="black", label=lv)
+                              for lv in glevels])
+    return pg.finish()
+
+
+def _matrix_title(top_row: list, text: str) -> None:
+    """R's bold split title over one matrix, centred on its top row.
+
+    A blank title on the first axes reserves the strip in the layout; the
+    text itself spans the row, which no single axes' title can.
+    """
+    top_row[0].set_title(" ", fontsize=13, fontweight="bold")
+
+    def row_box(renderer):
+        return Bbox.union([a.get_window_extent(renderer) for a in top_row])
+
+    ann = top_row[0].annotate(text, xy=(0.5, 1.0), xycoords=row_box, xytext=(0, 5),
+                              textcoords="offset points", ha="center", va="bottom",
+                              fontsize=13, fontweight="bold", annotation_clip=False)
+    ann.set_in_layout(False)
+
+
+def _splom(fig, sub, dat, gvals, glevels, colors, feats, *, cor_method, adjust, add_equation,
+           add_r2, add_pvalue, add_smooth, cor_cmap, cor_norm, s, raster, nrd0,
+           axes_out) -> None:
+    """One ``FeatureCorPlot`` matrix, drawn into the cells of ``sub``."""
+    n = len(feats)
+    mat = dat.to_numpy(dtype=float)
+    if cor_method == "spearman":
+        mat_c = np.apply_along_axis(lambda c: pd.Series(c).rank().to_numpy(), 0, mat)
+    else:
+        mat_c = mat
+    with np.errstate(invalid="ignore", divide="ignore"):
+        corr = np.corrcoef(mat_c, rowvar=False) if len(dat) > 1 else np.full((n, n), np.nan)
+    present = [lv for lv in glevels if (gvals == lv).any()]
+    cell_colors = [colors[v] for v in gvals]
+
+    th = theme_scp()
+    axes = [[apply_theme(fig.add_subplot(sub[j, i]), th) for i in range(n)]
+            for j in range(n)]  # row-major, as the tests and R's rbind of rows
+    for j, f2 in enumerate(feats):          # row
+        for i, f1 in enumerate(feats):      # column
             ax = axes[j][i]
+            axes_out.append(ax)
             if i == j:
-                # diagonal: the distribution of that feature per group
-                for k, lv in enumerate(glevels):
-                    v = dat.loc[gvals == lv, f1].to_numpy()
+                # diagonal: geom_violin(scale = "width", trim = TRUE), bw.nrd0
+                for k, lv in enumerate(present):
+                    v = dat.loc[(gvals == lv).to_numpy(), f1].to_numpy(dtype=float)
                     if v.size < 2:
+                        continue  # stat_ydensity drops groups of fewer than two
+                    if np.ptp(v) == 0:
+                        ax.plot([k - 0.45, k + 0.45], [v[0], v[0]], color="black",
+                                linewidth=0.4)
                         continue
-                    parts = ax.violinplot([v], positions=[k], widths=0.85,
-                                          showextrema=False)
-                    for body in parts["bodies"]:
-                        body.set(facecolor=colors[lv], alpha=0.9, edgecolor="black",
+                    parts = ax.violinplot([v], positions=[k], widths=0.9, showextrema=False,
+                                          bw_method=nrd0(v) * adjust / float(np.std(v, ddof=1)),
+                                          points=512)
+                    for body in cast(list, parts["bodies"]):
+                        body.set(facecolor=colors[lv], alpha=1.0, edgecolor="black",
                                  linewidth=0.4)
-                ax.set_xticks(range(len(glevels)))
+                ax.set_xticks(range(len(present)))
                 ax.set_xticklabels([])
+                ax.set_xlim(-0.6, len(present) - 0.4)
             elif i < j:
-                # upper: scatter coloured by group, with an lm fit and its stats
-                ax.scatter(dat[f1], dat[f2], s=size,
-                           c=[colors[g] for g in gvals], linewidths=0, alpha=0.9,
-                           rasterized=len(dat) > 20000)
-                if add_smooth and len(dat) > 2:
-                    slope, intercept, r, pv, _ = linregress(dat[f1], dat[f2])
-                    xs = np.linspace(dat[f1].min(), dat[f1].max(), 50)
-                    ax.plot(xs, intercept + slope * xs, color="red", linewidth=1,
-                            alpha=0.7)
-                    lines = []
+                # f1 before f2: scatter coloured by group, fit line, fit stats
+                ax.scatter(dat[f1], dat[f2], s=s, c=cell_colors, linewidths=0,
+                           rasterized=raster)
+                x, y = dat[f1].to_numpy(dtype=float), dat[f2].to_numpy(dtype=float)
+                fit = linregress(x, y) if len(dat) > 2 and np.ptp(x) > 0 else None
+                if add_smooth and fit is not None:
+                    xs = np.linspace(x.min(), x.max(), 80)
+                    ax.plot(xs, fit.intercept + fit.slope * xs, color="red", linewidth=1)
+                lines = []
+                if fit is not None:
                     if add_equation:
-                        sign = "-" if slope < 0 else "+"
-                        lines.append(f"y = {intercept:.2g} {sign} {abs(slope):.2g}x")
+                        sign = "-" if fit.slope < 0 else "+"
+                        lines.append(f"y = {fit.intercept:.2g} {sign} {abs(fit.slope):.2g}x")
                     if add_r2:
-                        lines.append(f"$r^2$ = {r ** 2:.2g}")
+                        lines.append(f"$r^2$ = {fit.rvalue ** 2:.2g}")
                     if add_pvalue:
-                        lines.append(f"p = {pv:.2g}")
-                    if lines:
-                        ax.text(0.04, 0.96, "\n".join(lines), transform=ax.transAxes,
+                        lines.append(f"p = {fit.pvalue:.2g}")
+                if lines:
+                    t = ax.text(0.04, 0.96, "\n".join(lines), transform=ax.transAxes,
                                 ha="left", va="top", fontsize=6)
+                    halo(t, foreground="white", radius=0.1)
             else:
-                # lower: a solid block whose colour encodes the correlation
+                # f1 after f2: a solid block whose colour encodes the correlation
                 r = corr[i, j]
                 ax.add_patch(Rectangle((0, 0), 1, 1, transform=ax.transAxes,
                                        facecolor=cor_cmap(cor_norm(r)), edgecolor="none"))
@@ -756,24 +829,13 @@ def feature_cor_plot(
             # axis decoration only on the outer edges, as R does
             if i != 0 or i == j:
                 ax.set_yticklabels([])
-            if j != n - 1:
+            if j != n - 1 or i == j:
                 ax.set_xticklabels([])
             if i == 0:
                 ax.set_ylabel(f2, fontsize=7.5)
             if j == n - 1:
                 ax.set_xlabel(f1, fontsize=7.5)
             ax.tick_params(labelsize=6)
-
-    handles = [Patch(facecolor=colors[lv], edgecolor="black", label=lv) for lv in glevels]
-    if group_by is not None:
-        fig.legend(handles=handles, title=group_by, loc="upper left",
-                   bbox_to_anchor=(1.0, 0.98), frameon=False, fontsize=7,
-                   title_fontsize=7.5)
-    cb = fig.colorbar(ScalarMappable(norm=cor_norm, cmap=cor_cmap),
-                      ax=list(axes.ravel()), fraction=0.02, pad=0.02)
-    cb.set_label(f"{cor_method} correlation", fontsize=7.5)
-    fig.set_layout_engine("constrained")
-    return fig
 
 
 def cell_density_plot(

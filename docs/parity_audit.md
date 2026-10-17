@@ -69,7 +69,7 @@ fails for the reason it states, and not because of a bug in the test.
 | `cell_dim_plot_3d` | traces, level order, colours, membership, xyz, exact | 3, all fixed: NA handling, NA colour, defaults/layout | highlight, lineages (not ported) |
 | `feature_dim_plot_3d` | colour values to 1e-12 | 1, fixed: `bg_cutoff` default masks 76-80% | split dropdown (not ported) |
 | `cell_cor_heatmap` | similarity to 1.6e-9 (cosine, pearson, spearman; self and panc8 reference), collapsing, limits, labelled cells | 5: `reference=None`, uncollapsed row order, cluster leaf order, label defaults, default features | annotations, `bulk_ref` (not ported) |
-| `feature_cor_plot` | placement, scatter, r to 5e-4, lm fit to 1e-9, r²/p | 4: violin bandwidth, `split_by`, stats tied to `add_smooth`, docstring | `calculate_coexp` (broken in R) |
+| `feature_cor_plot` | placement, scatter, r to 5e-4, lm fit to 1e-9, r²/p; since fixed: violin shape to 5e-4, per-split r, r²/p without the fit line | 0 open (4 fixed: violin bandwidth, `split_by`, stats tied to `add_smooth`, docstring) | `calculate_coexp` (broken in R) |
 | `feature_cor_heatmap` | — | — | R's `FeatureCorHeatmap` is an empty stub |
 
 **None of the mismatches is a documented deliberate divergence.** Several
@@ -94,7 +94,8 @@ tests assert those as intended behaviour rather than xfailing them.
 
 * a ComplexHeatmap-style dendrogram reorder helper. It is verified against 8
   R orders and is needed by every heatmap that clusters.
-* an R `bw.nrd0` bandwidth for every violin (`_stat.py:270`, `:844`).
+* an R `bw.nrd0` bandwidth for every violin — done: `expression_stat_plot`
+  and `feature_cor_plot` share `pl/_stat_feature._nrd0`.
 * `LegendColumn` registration in `graph_plot`, `lineage_plot` and
   `velocity_plot`. None of them has a legend. *Done:* all three register
   through `legend=` (or their own `PanelGrid` without `ax=`).
@@ -897,40 +898,40 @@ Python does not.
 | `lm` fit line slope/intercept | **match** to 1e-9 relative |
 | r² / p annotation values | **match** at R's `format(digits = 2)`. Text `0.0004` vs R `4e-04` is cosmetic |
 | violin extent (`trim = TRUE`) | **matches** exactly (data min/max) |
-| violin shape | **differs**: up to 0.46 in normalised half-width |
-| `split_by` | **differs**: ignored |
-| `add_smooth=False` | **differs**: r²/p text disappears |
-| `cells.highlight`, `calculate_coexp`, `reverse`, `adjust`, raster | not checkable: not ported (`calculate_coexp` is broken in R anyway) |
+| violin shape (`bw.nrd0`, `scale = "width"`) | **matches**: normalised half-width within 5e-4 of R's `violinwidth`, all 15 violins (test tolerance 0.01) |
+| `split_by` | **matches**: one matrix per split level, correlations computed within the split, all 9 values to the 3 printed decimals (max 4.8e-4) |
+| `add_smooth=False` | **matches**: the r²/p text stays, only the fit line goes |
+| `cells.highlight`, `reverse`, raster | not checkable: not ported |
+| `calculate_coexp` | not checkable: broken in R (undefined `status`); ported through `scp.fetch.calculate_coexp` |
 
-**Violin bandwidth** (`src/scp/pl/_stat.py:844`). `ax.violinplot` uses
-matplotlib's Scott factor (`n^-1/5 · sd`). ggplot's `geom_violin` uses
-`density(bw = "nrd0")` = `0.9 · min(sd, IQR/1.34) · n^-1/5`, falling back to
-`sd` when the IQR is 0. On this zero-inflated data that is a factor 0.9 at
-best, and the Endocrine violins are visibly different (0.46). This is a real
-bug, and the same call is at `_stat.py:270` in `feature_stat_plot`, which
-was outside this audit.
-Fix: pass `bw_method=lambda kde: bw_nrd0(v) / np.std(v, ddof=1)` (times
-`adjust`). Checked offline: that reproduces R's `violinwidth` to 4e-4 for all
-15 violins.
+All four findings below are fixed; the strict xfails that recorded them are
+gone from `tests/test_parity_cor.py`.
 
-**`split_by` ignored** (`_stat.py:773`). It is in the signature but never
-read. R builds one SPLOM per split level, with the correlations computed
-within the split (SCP-plot.R:5371-5385). This is a real bug: the parameter
-silently does nothing.
-Fix: loop over the split levels, compute `corr` on each split's cells, and
-put the SPLOMs on a `PanelGrid`, or raise `NotImplementedError` until then.
+**Violin bandwidth** (fixed). `ax.violinplot` used matplotlib's Scott factor
+(`n^-1/5 · sd`); ggplot's `geom_violin` uses `density(bw = "nrd0")` =
+`0.9 · min(sd, IQR/1.34) · n^-1/5`, falling back to `sd` when the IQR is 0.
+On this zero-inflated data the Endocrine violins differed by 0.46. The
+diagonal now passes `bw.nrd0 · adjust / sd` as the KDE factor, reusing the
+stat engine's `_nrd0` (`pl/_stat_feature.py`), with 512 evaluation points and
+R's default width 0.9; `adjust` (R's argument) is now a parameter.
 
-**Stats tied to `add_smooth`** (`_stat.py:856`). R draws the
-equation/r²/p annotation whenever `add_equation`, `add_r2` or `add_pvalue` is
-set (SCP-plot.R:5439, outside the `add_smooth` block at 5434). Python
-computes `linregress` and the text only inside `if add_smooth`.
-Fix: compute `linregress` unconditionally and gate only the red line on
-`add_smooth`.
+**`split_by` ignored** (fixed). R builds one SPLOM per split level, with the
+correlations, fits and violins computed within the split
+(SCP-plot.R:5371-5385). Each split now gets a `PanelGrid` panel, subdivided
+into the n x n matrix, titled with the level (bold, over the top row) and
+carrying its own correlation colourbar, as R binds one legend per matrix; the
+group legend is registered once with the `LegendColumn`. `nrow`, `ncol` and
+`byrow` were added to the signature for the split layout. The function no
+longer creates its own figure with `plt.subplots`.
 
-**Docstring** (`_stat.py:793`). It says "Lower triangle = solid correlation
-blocks ... upper triangle = scatter". The code (correctly, like R) draws the
-scatter at row > column, which is the lower-left triangle, and the blocks
-upper-right. Only the docstring needs fixing.
+**Stats tied to `add_smooth`** (fixed). R draws the equation/r²/p annotation
+whenever `add_equation`, `add_r2` or `add_pvalue` is set (SCP-plot.R:5439,
+outside the `add_smooth` block at 5434). `linregress` now runs regardless and
+only the red line is gated on `add_smooth`.
+
+**Docstring** (fixed). It now says what R and the code do: the scatter where
+the row is below the column's feature (lower-left), the correlation blocks
+upper-right.
 
 ### feature_cor_heatmap
 
