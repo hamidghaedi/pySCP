@@ -28,6 +28,7 @@ from matplotlib.quiver import Quiver
 from matplotlib.text import Annotation
 
 import scp
+from scp.pl import _dim_layers as layers
 from scp.pl._traj import shorten_segments
 
 anndata = pytest.importorskip("anndata")
@@ -423,6 +424,48 @@ def test_velocity_stream_grid_matches_r(velocity_xv):
     np.testing.assert_array_equal(np.isnan(u), R.u.isna().to_numpy())
     assert R.u.isna().any() and not np.isnan(v).any()
     ok = R.u.notna().to_numpy()
+    np.testing.assert_allclose(u[ok], R.u[ok], rtol=1e-8, atol=1e-12)
+    np.testing.assert_allclose(v, R.v, rtol=1e-8, atol=1e-12)
+
+
+def test_cell_dim_plot_velocity_grid_matches_r(r_adata):
+    """CellDimPlot's velocity layer calls VelocityPlot: the overlay pins to the same R grid."""
+    R = _csv("velocity_grid_layers.csv")
+    fig = scp.pl.cell_dim_plot(r_adata, "SubCellType", reduction="X_umap", velocity="velocity",
+                               velocity_plot_type="grid")
+    arrows = [a for a in fig.axes[0].artists if isinstance(a, layers._ArrowField)]
+    assert len(arrows) == 1
+    seg = arrows[0]._seg
+    np.testing.assert_allclose(seg[:, :2], R[["x", "y"]].to_numpy(), atol=ATOL)
+    np.testing.assert_allclose(seg[:, 2:], R[["xend", "yend"]].to_numpy(), atol=ATOL)
+
+
+@pytest.mark.parametrize("caller", ["cell_dim_plot", "velocity_plot"])
+def test_stream_layer_is_fed_rs_stream_grid(r_adata, monkeypatch, caller):
+    """Both stream paths draw through one layer, and that layer gets R's field and NA mask."""
+    seen = []
+    real = layers._velocity_grid
+
+    def spy(*a, **kw):
+        out = real(*a, **kw)
+        seen.append(out)
+        return out
+
+    monkeypatch.setattr(layers, "_velocity_grid", spy)
+    if caller == "cell_dim_plot":
+        scp.pl.cell_dim_plot(r_adata, "SubCellType", reduction="X_umap", velocity="velocity",
+                             velocity_plot_type="stream", velocity_density=0.6)
+    else:
+        scp.pl.velocity_plot(r_adata, basis="umap", plot_type="stream", density=0.6)
+    assert len(seen) == 1
+    gx, gv = seen[0]
+    R = _csv("velocity_stream_grid.csv")
+    i, j = R.i.to_numpy() - 1, R.j.to_numpy() - 1
+    np.testing.assert_allclose(gx[0, i], R.x, atol=ATOL)
+    np.testing.assert_allclose(gx[1, j], R.y, atol=ATOL)
+    u, v = gv[0, j, i], gv[1, j, i]
+    ok = R.u.notna().to_numpy()
+    np.testing.assert_array_equal(np.isnan(u), ~ok)
     np.testing.assert_allclose(u[ok], R.u[ok], rtol=1e-8, atol=1e-12)
     np.testing.assert_allclose(v, R.v, rtol=1e-8, atol=1e-12)
 

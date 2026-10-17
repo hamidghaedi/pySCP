@@ -11,6 +11,11 @@ are implemented as artists that finish their geometry at draw time, from the
 axes' actual transform.  That is the matplotlib analogue of grid's
 ``makeContent`` and keeps them correct whatever size the panel ends up.
 
+The lineage and velocity layers here are also what :func:`scp.pl.lineage_plot`
+and :func:`scp.pl.velocity_plot` draw with (``lineage_curves`` /
+``draw_lineages``, ``velocity_embedding`` / ``draw_velocity``), so a layer and
+its standalone plot cannot drift apart.
+
 Upstream: ``CellDimPlot`` / ``FeatureDimPlot`` (``SCP-plot.R:1328`` and
 ``:2042``), ``LineagePlot`` (``:5918``), ``VelocityPlot`` (``:6745``) by Hao
 Zhang, https://github.com/zhanghao-njmu/SCP.
@@ -44,8 +49,12 @@ __all__ = [
     "draw_marks",
     "draw_hex_groups",
     "draw_hex_values",
+    "loess_available",
+    "smooth_on_pseudotime",
     "fit_lineages",
+    "lineage_curves",
     "draw_lineages",
+    "velocity_embedding",
     "draw_velocity",
     "draw_stat_insets",
 ]
@@ -338,6 +347,40 @@ def _loess(t: np.ndarray, v: np.ndarray, span: float) -> np.ndarray:
     return np.asarray(fit.outputs.fitted_values)
 
 
+def loess_available() -> bool:
+    """Whether ``skmisc``'s LOESS is importable; warns (once per call) when not."""
+    try:
+        import skmisc.loess  # noqa: F401
+    except ImportError:
+        warnings.warn(
+            "skmisc is not installed, so lineage curves fall back to a rolling mean "
+            "rather than the degree-2 LOESS SCP uses (`pip install scp-plot[stats]`).",
+            stacklevel=4,
+        )
+        return False
+    return True
+
+
+def smooth_on_pseudotime(t: np.ndarray, raw: np.ndarray, span: float, *,
+                         have_loess: bool) -> np.ndarray:
+    """Each column of ``raw`` LOESS-smoothed against ``t`` independently.
+
+    ``loess(axis ~ lineage, span = span, degree = 2)`` per embedding axis, as
+    both ``LineagePlot`` and ``CellDimPlot3D`` fit; ``t`` must already be in
+    pseudotime order.  Without ``skmisc`` a centred rolling mean stands in.
+    Returns the fitted values, one column per axis.
+    """
+    cols = []
+    for d in range(raw.shape[1]):
+        if have_loess:
+            cols.append(_loess(t, raw[:, d], span))
+        else:
+            w = max(len(t) // 20, 3)
+            cols.append(pd.Series(raw[:, d]).rolling(w, center=True, min_periods=1)
+                        .mean().to_numpy())
+    return np.column_stack(cols)
+
+
 def fit_lineages(emb: np.ndarray, pseudotime: Mapping[str, np.ndarray], *,
                  trim: tuple[float, float], span: float) -> dict[str, pd.DataFrame]:
     """``LineagePlot``'s principal curves: per-axis degree-2 LOESS on pseudotime.
@@ -349,16 +392,7 @@ def fit_lineages(emb: np.ndarray, pseudotime: Mapping[str, np.ndarray], *,
     lineage a frame of ``x``, ``y`` (fitted), ``raw_x``, ``raw_y`` and
     ``index`` (row in ``emb``).
     """
-    try:
-        import skmisc.loess  # noqa: F401
-        have_loess = True
-    except ImportError:
-        have_loess = False
-        warnings.warn(
-            "skmisc is not installed, so lineage curves fall back to a rolling mean "
-            "rather than the degree-2 LOESS SCP uses (`pip install scp-plot[stats]`).",
-            stacklevel=3,
-        )
+    have_loess = loess_available()
     out: dict[str, pd.DataFrame] = {}
     for name, pt in pseudotime.items():
         pt = np.asarray(pt, dtype=float)
@@ -370,18 +404,29 @@ def fit_lineages(emb: np.ndarray, pseudotime: Mapping[str, np.ndarray], *,
         idx = idx[np.argsort(pt[idx], kind="stable")]
         if len(idx) < 3:
             continue
-        t = pt[idx]
         raw = emb[idx]
-        if have_loess:
-            fx, fy = _loess(t, raw[:, 0], span), _loess(t, raw[:, 1], span)
-        else:
-            w = max(len(t) // 20, 3)
-            fx = pd.Series(raw[:, 0]).rolling(w, center=True, min_periods=1).mean().to_numpy()
-            fy = pd.Series(raw[:, 1]).rolling(w, center=True, min_periods=1).mean().to_numpy()
-        df = pd.DataFrame({"x": fx, "y": fy, "raw_x": raw[:, 0], "raw_y": raw[:, 1],
-                           "index": idx})
+        fit = smooth_on_pseudotime(pt[idx], raw, span, have_loess=have_loess)
+        df = pd.DataFrame({"x": fit[:, 0], "y": fit[:, 1], "raw_x": raw[:, 0],
+                           "raw_y": raw[:, 1], "index": idx})
         out[name] = df.dropna().drop_duplicates()
     return out
+
+
+def lineage_curves(adata, lineages: Sequence[str], emb: np.ndarray, rows: np.ndarray, *,
+                   trim: tuple[float, float], span: float) -> dict[str, pd.DataFrame]:
+    """:func:`fit_lineages` on the cells at ``rows`` of ``adata``.
+
+    The one entry point for ``lineage_plot`` and the ``lineages=`` overlay of
+    ``cell_dim_plot`` / ``feature_dim_plot``, so all three fit the same curves.
+    ``emb`` is the 2-column embedding over every cell; ``lineages`` are
+    ``obs`` columns of pseudotime (NaN off-lineage).
+    """
+    missing = [lin for lin in lineages if lin not in adata.obs.columns]
+    if missing:
+        raise KeyError(f"lineages not in adata.obs: {missing}")
+    pts = {lin: pd.to_numeric(adata.obs[lin], errors="coerce").to_numpy(dtype=float)[rows]
+           for lin in lineages}
+    return fit_lineages(np.asarray(emb, dtype=float)[rows], pts, trim=trim, span=span)
 
 
 def _arrowhead(ax: Axes, xy0, xy1, *, color, lw, length_in: float, zorder: float) -> None:
@@ -485,25 +530,38 @@ class _ArrowField(Artist):
             art.draw(renderer)
 
 
+def velocity_embedding(adata, reduction: str, vkey: str) -> np.ndarray:
+    """The per-cell velocity in embedding space, every column.
+
+    Reads ``adata.obsm[f"{vkey}_{basis}"]`` -- scvelo's naming, so
+    ``reduction="X_umap", vkey="velocity"`` reads ``velocity_umap`` -- and
+    falls back to ``f"{vkey}_{reduction}"``.  Shared by ``velocity_plot`` and
+    ``cell_dim_plot(velocity=...)``.
+    """
+    basis = reduction[2:] if reduction.startswith("X_") else reduction
+    for k in (f"{vkey}_{basis}", f"{vkey}_{reduction}"):
+        if k in adata.obsm:
+            return np.asarray(adata.obsm[k], dtype=float)
+    raise KeyError(
+        f"velocity embedding {vkey}_{basis!s} not in adata.obsm; run "
+        f"scvelo.tl.velocity_embedding(adata, basis={basis!r}) first"
+    )
+
+
 def _velocity_grid(X, V, *, density, smooth, n_neighbors, min_mass, cutoff_perc,
                    adjust_for_stream):
-    """scvelo's ``compute_velocity_on_grid``, called with SCP's parameters.
+    """SCP's ``compute_velocity_on_grid`` (:func:`scp.pl._dim_geom.compute_velocity_on_grid`).
 
-    Called directly rather than through ``scp.pl.compute_velocity_on_grid``:
-    scvelo already maps ``min_mass -> 10 ** (min_mass - 6)`` in stream mode,
-    and grid mode must not autoscale, because ``VelocityPlot`` multiplies by
-    ``scale`` itself.
+    The numpy port that :func:`scp.pl.velocity_plot` uses too, so the overlay
+    and the standalone plot compute the same, R-exact field and nothing needs
+    scvelo.  ``scale`` stays at 1 here: :func:`draw_velocity` multiplies the
+    grid vectors itself, as ``VelocityPlot`` passes ``scale`` in grid mode
+    and 1 in stream mode.
     """
-    try:
-        from scvelo.plotting.velocity_embedding_grid import compute_velocity_on_grid
-    except ImportError as e:  # pragma: no cover - optional dependency
-        raise ImportError(
-            "velocity_plot_type='grid' or 'stream' needs `pip install scp-plot[velocity]`"
-        ) from e
-    return compute_velocity_on_grid(X_emb=X, V_emb=V, density=density, smooth=smooth,
-                                    n_neighbors=n_neighbors, min_mass=min_mass,
-                                    autoscale=False, adjust_for_stream=adjust_for_stream,
-                                    cutoff_perc=cutoff_perc)
+    return geom.compute_velocity_on_grid(X, V, density=density, smooth=smooth,
+                                         n_neighbors=n_neighbors, min_mass=min_mass,
+                                         adjust_for_stream=adjust_for_stream,
+                                         cutoff_perc=cutoff_perc)
 
 
 def draw_velocity(ax: Axes, X: np.ndarray, V: np.ndarray, *, plot_type: str,
@@ -519,7 +577,7 @@ def draw_velocity(ax: Axes, X: np.ndarray, V: np.ndarray, *, plot_type: str,
     Returns ``(field, mappable)``: the arrow table that was drawn (``x``,
     ``y``, ``u``, ``v``) and, for streamlines coloured by speed, a
     ``ScalarMappable`` for the ``Velocity`` colourbar (else ``None``).
-    ``grid_fn`` replaces the scvelo grid computation (tests use it).
+    ``grid_fn`` replaces the grid computation (tests use it).
     """
     from matplotlib.cm import ScalarMappable
 

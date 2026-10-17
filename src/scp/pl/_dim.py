@@ -94,16 +94,6 @@ def _positions(adata, index: pd.Index) -> np.ndarray:
     return pd.Index(adata.obs_names).get_indexer(index)
 
 
-def _lineage_curves(adata, lineages, emb2: np.ndarray, rows: np.ndarray, *, trim, span):
-    """Fit ``LineagePlot``'s curves on the cells at ``rows`` of ``adata``."""
-    missing = [lin for lin in lineages if lin not in adata.obs.columns]
-    if missing:
-        raise KeyError(f"lineages not in adata.obs: {missing}")
-    pts = {lin: pd.to_numeric(adata.obs[lin], errors="coerce").to_numpy(dtype=float)[rows]
-           for lin in lineages}
-    return layers.fit_lineages(emb2[rows], pts, trim=trim, span=span)
-
-
 def _read_paga_arg(adata, paga, type_: str):
     """``paga=True`` reads ``adata.uns['paga']``; a dict is used as given (SCP's ``srt@misc$paga``)."""
     src = adata.uns["paga"] if paga is True else paga
@@ -121,32 +111,30 @@ def _draw_paga(ax: Axes, adata, frame: pd.DataFrame, *, paga, palette, palcolor,
                node_size: float, edge_threshold: float, edge_size, edge_color: str,
                edge_alpha: float, transition_threshold: float, transition_size,
                transition_color: str, transition_alpha: float, show_transition: bool):
-    """The ``PAGAPlot`` layer over a panel, via :func:`scp.pl.graph_plot`.
+    """The ``PAGAPlot`` layer over a panel: :func:`scp.pl.paga_plot`'s nodes and drawing.
 
-    Nodes sit at each group's per-axis median over the plotted cells (SCP
-    ignores ``uns['paga']['pos']``) and take the cell palette, so a node
-    matches its cells.  ``graph_plot`` draws; its artists are then lifted to
-    the PAGA layer's z-order and recoloured with ``palcolor``, which it cannot
-    take itself.  Returns ``(groups_key, levels, colors)`` for the legend.
+    The node table is ``paga_plot``'s (``_traj._paga_nodes``: each group's
+    per-axis median over the plotted cells; SCP ignores
+    ``uns['paga']['pos']``), and :func:`scp.pl.graph_plot` draws it, so the
+    layer and the standalone plot share one implementation.  Nodes take the
+    cell palette over every level, so a node matches its cells.  Lengths
+    arrive in ggplot mm and are converted once here; the rescale onto them is
+    linear, so converting the range converts every width.  The new artists
+    are then lifted to the PAGA layer's z-order.  Returns ``(groups_key,
+    levels, colors)`` for the legend.
     """
-    from ._traj import graph_plot
+    from ._traj import _paga_nodes, graph_plot
 
     conn, groups_key, trans = _read_paga_arg(adata, paga, type_)
     cat = as_ordered_categorical(adata.obs[groups_key])
     levels = [str(x) for x in cat.cat.categories]
     if conn.shape[0] != len(levels):
         raise ValueError(f"nlevels in {groups_key!r} is not identical with the group in paga")
-    vals = pd.Series(np.asarray(cat).astype(object), index=adata.obs_names).loc[frame.index]
-    rows, present = [], []
-    for lv in levels:
-        m = (vals == lv).to_numpy()
-        if m.any():
-            rows.append((float(np.median(frame["x"].to_numpy()[m])),
-                         float(np.median(frame["y"].to_numpy()[m]))))
-            present.append(lv)
-    idx = [levels.index(lv) for lv in present]
-    node = pd.DataFrame(rows, columns=["x", "y"], index=pd.Index(present))
-    node[groups_key] = pd.Categorical(present, categories=levels)
+    vals = np.asarray(cat).astype(str)[_positions(adata, frame.index)]
+    node, idx = _paga_nodes(vals, frame["x"].to_numpy(dtype=float),
+                            frame["y"].to_numpy(dtype=float), levels, groups_key,
+                            categories=levels)
+    present = [str(x) for x in node.index]
     colors = discrete_palette(levels, palette=palette, palcolor=palcolor)
     E = conn[np.ix_(idx, idx)]
     T = None
@@ -159,49 +147,19 @@ def _draw_paga(ax: Axes, adata, frame: pd.DataFrame, *, paga, palette, palcolor,
 
     before = set(ax.get_children())
     graph_plot(node, E, transition=T, node_group=groups_key, node_palette=palette,
-               node_size=float(node_size), edge_threshold=0.0 if tree else edge_threshold,
+               node_palcolor=palcolor, node_size=float(node_size),
+               edge_threshold=0.0 if tree else edge_threshold,
                use_triangular="both" if tree else "upper", edge_color=edge_color,
                edge_size=(layers.mm_lw(edge_size[0]), layers.mm_lw(edge_size[1])),
                edge_alpha=edge_alpha, transition_threshold=transition_threshold,
+               transition_size=(layers.mm_lw(transition_size[0]),
+                                layers.mm_lw(transition_size[1])),
+               transition_color=transition_color, transition_alpha=transition_alpha,
                ax=ax, xlab=ax.get_xlabel(), ylab=ax.get_ylabel(), title="")
-    ax.set_aspect("auto")  # graph_plot asks for equal/datalim; the panel owns its box
-    new = [a for a in ax.get_children() if a not in before]
-    for a in new:
-        a.set_zorder(layers.Z_PAGA + 0.1 * a.get_zorder())
-    from matplotlib.collections import PathCollection
-    from matplotlib.text import Annotation
-
-    dots = [a for a in new if isinstance(a, PathCollection)]
-    if dots:
-        dots[-1].set_facecolor([colors[lv] for lv in present])
-    arrows = [a for a in new if isinstance(a, Annotation)]
-    if arrows and T is not None:
-        # recompute graph_plot's net flows, in its order, to size each arrow
-        t1, t2 = T.copy(), T.copy()
-        t1[np.tril_indices_from(t1)] = 0
-        t2[np.triu_indices_from(t2)] = 0
-        net = t1.T - t2
-        net[np.abs(net) <= transition_threshold] = np.nan
-        w = np.abs(net[np.isfinite(net)])
-        widths = layers.geom.rescale(w, tuple(transition_size)) if w.size else w
-        for art, wd in zip(arrows, widths, strict=False):
-            if art.arrow_patch is not None:
-                art.arrow_patch.set_color(transition_color)
-                art.arrow_patch.set_alpha(transition_alpha)
-                art.arrow_patch.set_linewidth(layers.mm_lw(float(wd)))
+    for a in ax.get_children():
+        if a not in before:
+            a.set_zorder(layers.Z_PAGA + 0.1 * a.get_zorder())
     return groups_key, present, colors
-
-
-def _velocity_field(adata, reduction: str, velocity: str, dims, rows: np.ndarray):
-    basis = reduction[2:] if reduction.startswith("X_") else reduction
-    for k in (f"{velocity}_{basis}", f"{velocity}_{reduction}"):
-        if k in adata.obsm:
-            V = np.asarray(adata.obsm[k], dtype=float)[:, [dims[0] - 1, dims[1] - 1]]
-            return V[rows]
-    raise KeyError(
-        f"velocity embedding {velocity}_{basis!s} not in adata.obsm; run "
-        f"scvelo.tl.velocity_embedding(adata, basis={basis!r}) first"
-    )
 
 
 def _repel(ax: Axes, xy: np.ndarray, texts: Sequence[str], fontsize: float, force: float,
@@ -441,8 +399,12 @@ def cell_dim_plot(
       the plotted cells.
     * ``velocity`` reads ``adata.obsm[f"{velocity}_{basis}"]`` (scvelo's
       naming, e.g. ``velocity="velocity"`` -> ``velocity_umap``).  Grid and
-      stream modes delegate to scvelo (``pip install scp-plot[velocity]``);
-      the streamlines are matplotlib's ``streamplot``, so ``metR``'s
+      stream modes smooth it with :func:`scp.pl.compute_velocity_on_grid`,
+      the numpy port of SCP's function that :func:`scp.pl.velocity_plot`
+      uses too, so no scvelo is needed and the grid is R's; the lineage and
+      PAGA layers likewise share :func:`scp.pl.lineage_plot`'s fit and
+      :func:`scp.pl.paga_plot`'s nodes and drawing.  The streamlines are
+      matplotlib's ``streamplot``, so ``metR``'s
       ``L``/``min.L``/``res``/``n`` have no counterpart and are not exposed,
       and the line width is constant rather than growing along the line.
     * ``label_repel`` uses a small built-in repulsion pass, not ggrepel.
@@ -520,7 +482,7 @@ def cell_dim_plot(
     # Layers that do not depend on the panel are computed once.
     curves = None
     if lineages:
-        curves = _lineage_curves(adata, list(lineages), emb[:, [xi, yi]], rows_all,
+        curves = layers.lineage_curves(adata, list(lineages), emb[:, [xi, yi]], rows_all,
                                  trim=lineages_trim, span=lineages_span)
     stat_levels: list[str] = []
     stat_colors: dict[str, str] = {}
@@ -659,7 +621,8 @@ def cell_dim_plot(
                                markerfacecolor=pcol[lv], markeredgecolor="black", label=lv)
                         for lv in plev]]
             if velocity:
-                V = _velocity_field(adata, reduction, velocity, dims, _positions(adata, dat.index))
+                V = layers.velocity_embedding(adata, reduction, velocity)[
+                    np.ix_(_positions(adata, dat.index), [xi, yi])]
                 cell_cols = [colors.get(str(v), bg_color) for v in dat[g]]
                 _f, mappable = layers.draw_velocity(
                     panel, dat[["x", "y"]].to_numpy(dtype=float), V,
@@ -930,7 +893,7 @@ def feature_dim_plot(
     curves = None
     if lineages:
         # FeatureDimPlot calls LineagePlot without `cells`: curves use every cell
-        curves = _lineage_curves(adata, list(lineages), emb[:, [xi, yi]],
+        curves = layers.lineage_curves(adata, list(lineages), emb[:, [xi, yi]],
                                  np.arange(adata.n_obs), trim=lineages_trim, span=lineages_span)
 
     blend_path = bool(compare_features) and len(resolved) > 1
@@ -1187,19 +1150,96 @@ def _plotly():
     return go
 
 
+def _embedding_3d(adata, reduction: str | None, dims):
+    reduction = reduction or default_reduction(adata)
+    emb = np.asarray(adata.obsm[reduction], dtype=float)
+    if emb.shape[1] < 3:
+        raise ValueError(f"{reduction!r} has {emb.shape[1]} dimensions; 3 are needed")
+    return reduction, emb, tuple(d - 1 for d in dims)
+
+
+def _scene_3d(emb: np.ndarray, cols, dims, key: str, axis_labs) -> dict:
+    """R's scene: each axis titled and pinned to the data's range, a cube aspect."""
+    labs = (list(axis_labs) if axis_labs is not None and len(axis_labs) == 3
+            else [f"{key}{d}" for d in dims])
+
+    def _axis(c: int, lab: str) -> dict:
+        return dict(title=lab, range=[float(np.nanmin(emb[:, c])), float(np.nanmax(emb[:, c]))])
+
+    return dict(xaxis=_axis(cols[0], labs[0]), yaxis=_axis(cols[1], labs[1]),
+                zaxis=_axis(cols[2], labs[2]), aspectratio=dict(x=1, y=1, z=1))
+
+
+def _highlight_3d(adata, cells_highlight, default: np.ndarray) -> np.ndarray | None:
+    """Row positions of the highlighted cells, in R's order.
+
+    ``True`` means ``default`` (positions, object order); a list is validated
+    as R does -- none found raises, some missing warns -- and keeps its own
+    order, each cell once (R's ``intersect``).
+    """
+    if cells_highlight is None or cells_highlight is False:
+        return None
+    if cells_highlight is True:
+        return default
+    req = _check_highlight(adata, cells_highlight)
+    assert isinstance(req, list)
+    return _positions(adata, pd.Index(list(dict.fromkeys(req))))
+
+
+def _highlight_trace(go, emb, cols, pos: np.ndarray, *, size: float, color: str, symbol: str):
+    return go.Scatter3d(
+        x=emb[pos, cols[0]], y=emb[pos, cols[1]], z=emb[pos, cols[2]], mode="markers",
+        name="highlight", showlegend=True,
+        marker=dict(size=size, color=to_hex(color).upper(), symbol=symbol),
+    )
+
+
+def lineage_curve_3d(emb: np.ndarray, pseudotime: np.ndarray, span: float) -> pd.DataFrame:
+    """``CellDimPlot3D``'s lineage line: the 3-D analogue of ``LineagePlot``'s curve.
+
+    Every cell on the lineage (no trim, unlike the 2-D curve) is ordered by
+    pseudotime and each of the three axes is LOESS-smoothed against it
+    independently (``degree = 2``, ``span``; ``SCP-plot.R:2981-2987``).  Fitted
+    points outside the range of *all* cells on any axis are dropped, then
+    missing and duplicate rows (``SCP-plot.R:2988-2991``).  Returns ``x``,
+    ``y``, ``z`` in pseudotime order.
+    """
+    pt = np.asarray(pseudotime, dtype=float)
+    idx = np.flatnonzero(np.isfinite(pt))
+    idx = idx[np.argsort(pt[idx], kind="stable")]
+    if len(idx) < 3:
+        return pd.DataFrame(columns=["x", "y", "z"])
+    fit = layers.smooth_on_pseudotime(pt[idx], emb[idx], span,
+                                      have_loess=layers.loess_available())
+    df = pd.DataFrame(fit, columns=["x", "y", "z"])
+    for c, k in enumerate("xyz"):
+        lo, hi = np.nanmin(emb[:, c]), np.nanmax(emb[:, c])
+        df = df[(df[k] <= hi) & (df[k] >= lo)]
+    return df.dropna().drop_duplicates().reset_index(drop=True)
+
+
 def cell_dim_plot_3d(
     adata,
     group_by: str,
     *,
     reduction: str | None = None,
     dims: tuple[int, int, int] = (1, 2, 3),
+    axis_labs: Sequence[str] | None = None,
     palette: str = "Paired",
     palcolor: Sequence[str] | dict[str, str] | None = None,
     bg_color: str = NA_COLOR_DEFAULT,
     pt_size: float = 1.5,
+    cells_highlight: Sequence[str] | bool | None = None,
+    cols_highlight: str = "black",
+    shape_highlight: str = "circle-open",
+    sizes_highlight: float = 2.0,
+    lineages: Sequence[str] | None = None,
+    lineages_palette: str = "Dark2",
+    span: float = 0.75,
     show_na: bool = True,
     width: int = 700,
     height: int = 600,
+    force: bool = False,
 ):
     """plotly ``Scatter3d`` version of :func:`cell_dim_plot`.
 
@@ -1214,20 +1254,41 @@ def cell_dim_plot_3d(
     spread over the real levels only.  ``show_na=False`` is a Python-only
     switch that drops them instead.  The title is R's ``"Total (nCells:N)"``
     over every cell, each scene axis is pinned to the data's range and the
-    scene is a cube (``SCP-plot.R:3016-3031``).
+    scene is a cube (``SCP-plot.R:3016-3031``); ``axis_labs`` (three
+    strings) replaces the axis titles.
 
-    Not ported: ``cells.highlight``, ``lineages``, ``axis_labs``, ``save``.
+    * ``cells_highlight`` adds one ``"highlight"`` trace after the levels:
+      markers of ``sizes_highlight`` in ``cols_highlight``, plotly symbol
+      ``shape_highlight`` (an open circle by default, so the cell's own
+      colour shows through).  ``True`` highlights every cell with a group;
+      a list keeps its own order and is validated as in :func:`cell_dim_plot`.
+    * ``lineages`` (``obs`` pseudotime columns) adds one ``mode="lines"``
+      trace per lineage, 6 px wide in ``lineages_palette``: each axis
+      LOESS-smoothed against the pseudotime over every cell on the lineage --
+      no ``trim``, unlike the 2-D curve -- see :func:`lineage_curve_3d`.
+      Without ``skmisc`` a rolling mean stands in, with a warning.
+    * more than 100 levels in ``group_by`` raises unless ``force=True`` (R
+      asks interactively).
+
+    ``save`` is dropped, as everywhere: the returned figure has ``write_html``.
     """
     go = _plotly()
-    reduction = reduction or default_reduction(adata)
+    reduction, emb, cols = _embedding_3d(adata, reduction, dims)
     key = reduction_key(reduction)
-    emb = np.asarray(adata.obsm[reduction])
-    if emb.shape[1] < 3:
-        raise ValueError(f"{reduction!r} has {emb.shape[1]} dimensions; 3 are needed")
-    i, j, k = (d - 1 for d in dims)
+    if group_by not in adata.obs.columns:
+        raise KeyError(f"{group_by!r} is not in adata.obs")
+    lineages = [] if lineages is None else [str(x) for x in lineages]
+    missing = [lin for lin in lineages if lin not in adata.obs.columns]
+    if missing:
+        raise KeyError(f"lineages not in adata.obs: {missing}")
 
     cat = as_ordered_categorical(adata.obs[group_by])
     levels = [str(x) for x in cat.cat.categories]
+    if len(levels) > 100 and not force:
+        raise ValueError(
+            f"`{group_by}` has {len(levels)} levels, which will produce an unreadable legend. "
+            "Pass force=True to proceed anyway."
+        )
     colors = discrete_palette(levels, palette=palette, palcolor=palcolor)
     na = np.asarray(cat.isna())
     values = np.asarray(cat).astype(str)
@@ -1235,28 +1296,46 @@ def cell_dim_plot_3d(
         values[na] = "NA"
         levels = [*levels, "NA"]
         colors["NA"] = bg_color
+    hl = _highlight_3d(adata, cells_highlight, np.flatnonzero(~na))
 
     fig = go.Figure()
+    i, j, k = cols
     for lv in levels:
         m = (values == lv) & (~na if lv != "NA" else na)
         fig.add_trace(go.Scatter3d(
             x=emb[m, i], y=emb[m, j], z=emb[m, k], mode="markers", name=lv,
             marker=dict(size=pt_size, color=colors[lv]),
         ))
-
-    def _axis(c: int, d: int) -> dict:
-        return dict(title=f"{key}{d}", range=[float(np.nanmin(emb[:, c])),
-                                              float(np.nanmax(emb[:, c]))])
+    if hl is not None:
+        fig.add_trace(_highlight_trace(go, emb, cols, hl, size=sizes_highlight,
+                                       color=cols_highlight, symbol=shape_highlight))
+    if lineages:
+        lcol = discrete_palette(lineages, palette=lineages_palette)
+        e3 = emb[:, [i, j, k]]
+        for lin in lineages:
+            pt = pd.to_numeric(adata.obs[lin], errors="coerce").to_numpy(dtype=float)
+            cv = lineage_curve_3d(e3, pt, span)
+            fig.add_trace(go.Scatter3d(
+                x=cv["x"].to_numpy(), y=cv["y"].to_numpy(), z=cv["z"].to_numpy(),
+                mode="lines", name=lin, showlegend=True,
+                line=dict(width=6, color=lcol[lin]),
+            ))
 
     fig.update_layout(
         width=width, height=height, legend_title_text=group_by,
         title=dict(text=f"Total (nCells:{adata.n_obs})", font=dict(size=16, color="black"),
                    y=0.95),
-        scene=dict(xaxis=_axis(i, dims[0]), yaxis=_axis(j, dims[1]), zaxis=_axis(k, dims[2]),
-                   aspectratio=dict(x=1, y=1, z=1)),
+        font=dict(size=12, color="black"), showlegend=True,
+        legend=dict(itemsizing="constant", y=0.5, x=1, xanchor="left"),
+        scene=_scene_3d(emb, cols, dims, key, axis_labs),
         margin=dict(l=0, r=0, t=30, b=0),
     )
     return fig
+
+
+def _masked(v: np.ndarray, keep: np.ndarray) -> list:
+    """``ifelse(keep, v, NA)`` as a plotly-ready list (``None`` is a gap)."""
+    return [float(x) if k else None for x, k in zip(v, keep, strict=True)]
 
 
 def feature_dim_plot_3d(
@@ -1265,6 +1344,8 @@ def feature_dim_plot_3d(
     *,
     reduction: str | None = None,
     dims: tuple[int, int, int] = (1, 2, 3),
+    axis_labs: Sequence[str] | None = None,
+    split_by: str | None = None,
     layer: str | None = None,
     calculate_coexp: bool = False,
     palette: str = "Spectral",
@@ -1272,8 +1353,13 @@ def feature_dim_plot_3d(
     bg_cutoff: float | None = None,
     bg_color: str = NA_COLOR_DEFAULT,
     pt_size: float = 1.5,
+    cells_highlight: Sequence[str] | bool | None = None,
+    cols_highlight: str = "black",
+    shape_highlight: str = "circle-open",
+    sizes_highlight: float = 2.0,
     width: int = 700,
     height: int = 600,
+    force: bool = False,
 ):
     """plotly ``Scatter3d`` version of :func:`feature_dim_plot`.
 
@@ -1294,18 +1380,34 @@ def feature_dim_plot_3d(
 
     ``calculate_coexp=True`` appends a ``CoExp`` trace, the geometric mean of
     the gene features, exactly as in :func:`feature_dim_plot`.  Several
-    features become an ``updatemenus`` dropdown, one trace each.
+    features become an ``updatemenus`` dropdown.  R keeps one ``All_cells``
+    trace and swaps its marker; here each feature is its own trace and the
+    dropdown toggles visibility -- the same values per feature, and each
+    trace keeps its own colourbar.
 
-    Not ported: ``split.by``, ``cells.highlight``, ``axis_labs``, ``save``.
+    As in R: the title is ``"All_cells (nCells:N)"``, each scene axis is
+    pinned to the data's range in a cube, ``axis_labs`` replaces the axis
+    titles, and more than 50 features raise unless ``force=True`` (R asks).
+
+    * ``cells_highlight`` adds a ``"highlight"`` trace after the features
+      (``sizes_highlight``, ``cols_highlight``, plotly symbol
+      ``shape_highlight``); ``True`` highlights every cell.
+    * ``split_by`` adds a second dropdown, ``All.cells`` then one button per
+      level, that keeps only that level's cells in every trace (the others
+      become gaps) and retitles the plot ``"<level> (nCells:n)"``.
+
+    **R bug, fixed.**  With ``split.by`` set, R's ``All.cells`` button reads
+    the coordinate columns ``<key>1All.cells`` ... (``SCP-plot.R:3272-3279``),
+    which only exist when ``split.by`` is left at its default (the all-cell
+    columns are created as ``...All_cells``, ``:3208``), so pressing it
+    empties the plot.  Here it restores every cell.  The split
+    buttons also leave trace names and visibility alone, since renaming every
+    feature trace to the split level would scramble the feature legend.
     """
     go = _plotly()
-    feats = [features] if isinstance(features, str) else list(features)
-    reduction = reduction or default_reduction(adata)
+    feats = [features] if isinstance(features, str) else list(dict.fromkeys(features))
+    reduction, emb, cols = _embedding_3d(adata, reduction, dims)
     key = reduction_key(reduction)
-    emb = np.asarray(adata.obsm[reduction])
-    if emb.shape[1] < 3:
-        raise ValueError(f"{reduction!r} has {emb.shape[1]} dimensions; 3 are needed")
-    i, j, k = (d - 1 for d in dims)
 
     values = fetch_data(adata, feats, layer=layer)
     feats = [f for f in feats if f in values.columns]
@@ -1321,10 +1423,15 @@ def feature_dim_plot_3d(
             values = values.copy()
             values["CoExp"] = _coexp(adata, genes, layer=layer).to_numpy()
             feats = [*feats, "CoExp"]
+    if len(feats) > 50 and not force:
+        raise ValueError(f"{len(feats)} features to plot (more than 50). "
+                         "Pass force=True to proceed anyway.")
     ramp = continuous_palette(palette=palette, palcolor=palcolor, n=100)
     scale = [[n / (len(ramp) - 1), c] for n, c in enumerate(ramp)]
+    hl = _highlight_3d(adata, cells_highlight, np.arange(adata.n_obs))
 
     fig = go.Figure()
+    i, j, k = cols
     for n, f in enumerate(feats):
         v = pd.to_numeric(values[f], errors="coerce").to_numpy(dtype=float)
         if bg_cutoff is not None:
@@ -1335,17 +1442,50 @@ def feature_dim_plot_3d(
             marker=dict(size=pt_size, color=v, colorscale=scale,
                         colorbar=dict(title=f), showscale=True),
         ))
+    if hl is not None:
+        fig.add_trace(_highlight_trace(go, emb, cols, hl, size=sizes_highlight,
+                                       color=cols_highlight, symbol=shape_highlight))
+
+    menus = []
+    if split_by is not None:
+        sp = as_ordered_categorical(adata.obs[split_by])
+        spv = np.asarray(sp).astype(object)
+        buttons: list[dict] = []
+        for lv in ["All.cells", *[str(x) for x in sp.cat.categories]]:
+            if lv == "All.cells":
+                keep = np.ones(adata.n_obs, dtype=bool)
+                if buttons:
+                    continue  # a level named "All.cells" is skipped, as in R
+            else:
+                keep = np.array([str(x) == lv for x in spv]) & np.asarray(sp.notna())
+            xyz = [[_masked(emb[:, c], keep)] * len(feats) for c in cols]
+            if hl is not None:
+                for d, c in enumerate(cols):
+                    xyz[d].append(_masked(emb[hl, c], keep[hl]))
+            buttons.append(dict(
+                label=lv, method="update",
+                args=[{"x": xyz[0], "y": xyz[1], "z": xyz[2]},
+                      {"title": dict(text=f"{lv} (nCells:{int(keep.sum())})",
+                                     font=dict(size=16, color="black"), y=0.95)}],
+            ))
+        menus.append(dict(buttons=buttons, y=0.67, direction="down", showactive=True))
     if len(feats) > 1:
-        fig.update_layout(updatemenus=[dict(
+        tail = [True] if hl is not None else []
+        menus.append(dict(
             buttons=[dict(label=f, method="update",
-                          args=[{"visible": [m == n for m in range(len(feats))]}])
+                          args=[{"visible": [m == n for m in range(len(feats))] + tail}])
                      for n, f in enumerate(feats)],
-            direction="down", showactive=True, x=0, xanchor="left", y=1.1,
-        )])
+            direction="down", showactive=True, y=0.33,
+        ))
     fig.update_layout(
         width=width, height=height,
-        scene=dict(xaxis_title=f"{key}{dims[0]}", yaxis_title=f"{key}{dims[1]}",
-                   zaxis_title=f"{key}{dims[2]}"),
+        title=dict(text=f"All_cells (nCells:{adata.n_obs})", font=dict(size=16, color="black"),
+                   y=0.95),
+        showlegend=True,
+        legend=dict(itemsizing="constant", y=-0.2, x=0.5, xanchor="center"),
+        scene=_scene_3d(emb, cols, dims, key, axis_labs),
         margin=dict(l=0, r=0, t=40, b=0),
     )
+    if menus:
+        fig.update_layout(updatemenus=menus)
     return fig

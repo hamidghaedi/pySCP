@@ -49,12 +49,22 @@ draws are mirrored and do not enclose their points (the port draws the
 enclosing one); `PAGAPlot(cells=)` intersects group names with cell names and
 drops every node.
 
+Grid and stream velocity no longer go through scvelo. The overlay smooths the
+field with `compute_velocity_on_grid`, the numpy port `velocity_plot` uses
+(milestone 12), so nothing in the package imports scvelo and the `velocity`
+extra is gone. Against the trajectory audit's R fixtures the overlay's grid
+matches `VelocityPlot`'s to 5e-8 (positions and arrow ends, the fixture's
+precision), and the stream field it hands to `streamplot` matches R's
+`(2, ns, ns)` field and NA mask to 5e-13 (`tests/test_parity_traj.py`). The
+lineage, PAGA and velocity layers now share their code with `lineage_plot`,
+`paga_plot` and `velocity_plot` (one curve fit, one PAGA node table and
+`graph_plot` drawing, one velocity lookup, grid and stream layer), so a layer
+and its standalone plot cannot drift apart; every fixture above still matches.
+
 Not verified against R, and why: the `hull` mark ports `concaveman`, which is
-not installed in the parity environment; grid and stream velocity delegate to
-scvelo, which is not installed here (tested with a precomputed grid in its two
-return shapes); the stream drawing is matplotlib's `streamplot`, not metR, so
-it is not a numeric match by construction. `stat_plot_type` beyond
-pie/ring/bar raises.
+not installed in the parity environment; the stream drawing is matplotlib's
+`streamplot`, not metR, so it is not a numeric match by construction (its
+input field is). `stat_plot_type` beyond pie/ring/bar raises.
 
 ### 3 — `feature_dim_plot` — M ✅ done
 
@@ -269,7 +279,27 @@ fixed: NA cells are always drawn as a last `NA` trace in `bg_color` (R has no
 the scene axes are pinned to the data range in a cube, the title is
 `Total (nCells:N)`, and `feature_dim_plot_3d` masks nothing by default
 (`bg_cutoff=None`; R has no cutoff), so its colour values match R's to 1e-12.
-Still not ported: `cells.highlight`, `lineages`, `split.by`.
+
+The remaining options are ported and verified the same way (`audit_dim3d.R`
+now also runs `RunSlingshot` as `audit_traj.R` does):
+
+* `cell_dim_plot_3d(cells_highlight=)` — a `highlight` trace after the levels
+  with R's size, colour and `circle-open` symbol; its cells and their order
+  match exactly, for a cell list and for `True` (every cell with a group).
+* `cell_dim_plot_3d(lineages=)` — R's per-axis degree-2 LOESS over every
+  lineage cell (no trim, unlike 2-D), range filter and de-duplication; the
+  three line traces match R's to 1.3e-13 with the same point counts (792,
+  685, 623), Dark2 colours and width.
+* `feature_dim_plot_3d(split_by=, cells_highlight=)` — the split dropdown's
+  labels, titles and per-trace masks match R's buttons; the highlight trace
+  matches; the title `All_cells (nCells:N)` and the pinned cube scene, which
+  the port lacked, now match too. R bug fixed and documented: with
+  `split.by` set, R's `All.cells` button points at coordinate columns that do
+  not exist, so pressing it empties the plot; here it restores every cell.
+* `axis_labs` and `force` (over 100 levels / 50 features) for both.
+
+Still structural, not numeric: R keeps one `All_cells` trace and swaps its
+marker per feature, the port keeps one trace per feature (same values).
 
 ### 9 — `dynamic_heatmap` / `dynamic_plot` — L (raw form done; fitted form deliberately not)
 
@@ -365,14 +395,29 @@ the same curves. Raw velocity arrows match to 5e-8, and `group_by` now colours
 the arrows. Neither function draws cells any more: both are layers that take
 `ax=` and an optional `legend=` (`LegendColumn`). Not matched: R's raw/grid
 arrowheads scale with each arrow, `quiver`'s do not; metR's streamline
-parameters have no `streamplot` counterpart. `cell_dim_plot(velocity=...)`
-still computes its grid through scvelo; switching it to the port is the
-remaining step.
+parameters have no `streamplot` counterpart.
+
+`cell_dim_plot(velocity=...)` now computes its grid through the same port, so
+both are R-exact and scvelo is needed nowhere: the overlay's grid matches R's
+to 5e-8 and its stream field to 5e-13, and one test pins the field that
+`velocity_plot` and the overlay both hand to their shared stream layer. The
+port moved into `pl/_dim_geom.py` with the other numeric cores; it is still
+`scp.pl.compute_velocity_on_grid`.
 
 ### 13 — `projection_plot` — S ✅ done
 
 Two scatters on one axes with shared limits. The R code harvests rendered point
 colors out of `ggplot_build`; unnecessary here — compute the palette directly.
+
+Verified against SCP 0.5.6 (`tests/test_parity_traj.py`): reference and query
+colours and positions match exactly. R bug, deliberately not reproduced and
+now stated in the docstring: `ProjectionPlot` applies the union of the two
+ranges only to its throwaway query plot, so the composite inherits the
+reference's limits and silently drops every query cell outside them (111 of
+362 in the fixture); here every query cell is drawn. The two mypy errors in it
+are fixed with annotations only. Still open: without `ax=` it calls
+`plt.subplots` rather than going through `PanelGrid` (porting rule 1), and R's
+point sizes and 5% axis expansion are not matched.
 
 ### 14 — `enrichment_plot` — L ✅ done
 

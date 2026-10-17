@@ -41,6 +41,7 @@ from ..layout import LegendColumn, PanelGrid
 from ..palettes import discrete_palette
 from ..theme import halo, theme_scp
 from . import _dim_layers as layers
+from ._dim_geom import compute_velocity_on_grid
 
 __all__ = [
     "graph_plot",
@@ -334,6 +335,36 @@ def graph_plot(
     return ax
 
 
+def _paga_nodes(groups: np.ndarray, x: np.ndarray, y: np.ndarray, levels: Sequence[str],
+                groups_key: str, *, categories: Sequence[str] | None = None,
+                ) -> tuple[pd.DataFrame, list[int]]:
+    """``PAGAPlot``'s node table: one row per present level, at its cells' medians.
+
+    SCP deliberately ignores ``uns['paga']['pos']`` and puts each node at the
+    per-group **median** of the chosen embedding (x and y independently),
+    which is what lets the same graph be drawn over UMAP, PCA or diffusion
+    coordinates.  ``groups``, ``x`` and ``y`` are per cell, already restricted
+    to the cells that count.  The table carries ``x``, ``y``, ``GroupSize``
+    and ``groups_key`` (a Categorical over ``categories``, by default the
+    present levels); ``idx`` gives each row's position in ``levels``, i.e. in
+    the PAGA matrices.  Shared by :func:`paga_plot` and
+    ``cell_dim_plot(paga=...)``.
+    """
+    groups = np.asarray(groups).astype(str)
+    rows, sizes, present = [], [], []
+    for lv in levels:
+        m = groups == lv
+        if not m.any():
+            continue
+        rows.append((float(np.median(x[m])), float(np.median(y[m]))))
+        sizes.append(int(m.sum()))
+        present.append(lv)
+    node = pd.DataFrame(rows, columns=["x", "y"], index=pd.Index(present))
+    node["GroupSize"] = sizes
+    node[groups_key] = pd.Categorical(present, categories=list(categories or present))
+    return node, [list(levels).index(lv) for lv in present]
+
+
 def paga_plot(
     adata,
     *,
@@ -394,22 +425,7 @@ def paga_plot(
     keep = np.ones(adata.n_obs, dtype=bool)
     if cells is not None:
         keep = np.isin(np.asarray(adata.obs_names), np.asarray(cells))
-
-    # SCP deliberately ignores uns['paga']['pos'] and puts each node at the
-    # per-group MEDIAN of the chosen embedding, which is what lets the same
-    # graph be drawn over UMAP, PCA or diffusion coordinates.
-    rows, sizes, present = [], [], []
-    for lv in levels:
-        m = keep & (vals == lv)
-        if not m.any():
-            continue
-        rows.append((float(np.median(emb[m, xi])), float(np.median(emb[m, yi]))))
-        sizes.append(int(m.sum()))
-        present.append(lv)
-    idx = [levels.index(lv) for lv in present]
-    node = pd.DataFrame(rows, columns=["x", "y"], index=pd.Index(present))
-    node["GroupSize"] = sizes
-    node[groups_key] = pd.Categorical(present, categories=present)
+    node, idx = _paga_nodes(vals[keep], emb[keep, xi], emb[keep, yi], levels, groups_key)
 
     E = np.asarray(conn.todense() if hasattr(conn, "todense") else conn, dtype=float)
     E = E[np.ix_(idx, idx)]
@@ -464,9 +480,10 @@ def lineage_plot(
     ``trim`` quantiles are ordered by pseudotime and each embedding axis is
     LOESS-smoothed against it **independently** (``degree=2``, ``span``) --
     ``skmisc.loess``, the routine R's ``loess`` wraps; ``statsmodels`` lowess is
-    degree 1 and would not match.  The fit is shared with
-    ``cell_dim_plot(lineages=...)`` (``scp.pl._dim_layers.fit_lineages`` /
-    ``draw_lineages``), so the two draw identical curves.
+    degree 1 and would not match.  The fit and the drawing are shared with
+    ``cell_dim_plot(lineages=...)`` and ``feature_dim_plot(lineages=...)``
+    (``scp.pl._dim_layers.lineage_curves`` / ``draw_lineages``), so all three
+    draw identical curves.
 
     Drawn, bottom to top: optional ``whiskers`` (a segment from each fitted
     point back to its cell), a ``line_bg`` casing ``linewidth +
@@ -484,18 +501,13 @@ def lineage_plot(
     reduction = reduction or default_reduction(adata)
     key = reduction_key(reduction)
     lineages = list(lineages)
-    missing = [lin for lin in lineages if lin not in adata.obs.columns]
-    if missing:
-        raise KeyError(f"lineages not in adata.obs: {missing}")
     emb = np.asarray(adata.obsm[reduction], dtype=float)[:, [dims[0] - 1, dims[1] - 1]]
     rows = np.arange(adata.n_obs)
     if cells is not None:
         rows = np.flatnonzero(np.isin(np.asarray(adata.obs_names), np.asarray(cells)))
-    pts = {lin: pd.to_numeric(adata.obs[lin], errors="coerce").to_numpy(dtype=float)[rows]
-           for lin in lineages}
+    curves = layers.lineage_curves(adata, lineages, emb, rows, trim=trim, span=span)
 
     ax, legend, pg = _panel(ax, legend, legend_position)
-    curves = layers.fit_lineages(emb[rows], pts, trim=trim, span=span)
     handles = layers.draw_lineages(
         ax, curves, lineages, palette=palette, palcolor=palcolor, linewidth=linewidth,
         line_bg=line_bg, line_bg_stroke=line_bg_stroke, arrow=lineages_arrow,
@@ -508,119 +520,6 @@ def lineage_plot(
     _labels(ax, kwargs, own=pg is not None, xlab=f"{key}{dims[0]}", ylab=f"{key}{dims[1]}")
     _finish(pg)
     return ax
-
-
-def _knn_rows(D: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
-    """Per row, the ``k`` smallest entries in R's ``order(x)[1:k]`` order.
-
-    ``order`` is stable, so ties go to the lower index; that is reproduced
-    exactly, including a tie that straddles the ``k``-th place.
-    """
-    m, n = D.shape
-    k = min(k, n)
-    if k == n:
-        idx = np.argsort(D, axis=1, kind="stable")
-        return idx, np.take_along_axis(D, idx, 1)
-    part = np.argpartition(D, k - 1, axis=1)[:, :k]
-    pd_ = np.take_along_axis(D, part, 1)
-    kth = pd_.max(axis=1)
-    order = np.lexsort((part, pd_), axis=1)
-    idx = np.take_along_axis(part, order, 1)
-    dist = np.take_along_axis(pd_, order, 1)
-    # rows where a tie at the k-th distance leaves the pick ambiguous: redo exactly
-    for r in np.flatnonzero((D <= kth[:, None]).sum(axis=1) > k):
-        cand = np.flatnonzero(D[r] <= kth[r])
-        cand = cand[np.argsort(D[r, cand], kind="stable")][:k]
-        idx[r], dist[r] = cand, D[r, cand]
-    return idx, dist
-
-
-def compute_velocity_on_grid(
-    X_emb: np.ndarray,
-    V_emb: np.ndarray,
-    *,
-    density: float = 1.0,
-    smooth: float = 0.5,
-    n_neighbors: int | None = None,
-    min_mass: float = 1.0,
-    scale: float = 1.0,
-    adjust_for_stream: bool = False,
-    cutoff_perc: float = 5.0,
-):
-    """A cell velocity field smoothed onto a regular grid.
-
-    Port of SCP's ``compute_velocity_on_grid`` (``SCP-plot.R:6963-7039``) by
-    Hao Zhang, https://github.com/zhanghao-njmu/SCP, itself a transliteration
-    of scvelo's function of the same name.  It is reimplemented in numpy rather
-    than delegated to scvelo because SCP's version differs from scvelo's in
-    ways that change the picture:
-
-    * no +-1 % range padding: the grid is ``ceil(50 * density)`` points from
-      the minimum to the maximum of each axis;
-    * ``n_neighbors`` defaults to ``ceil(n_obs / 50)`` (scvelo: ``int``);
-    * no autoscaling; ``scale`` multiplies the grid vectors (grid mode only);
-    * ``min_mass`` keeps grid points whose total Gaussian weight exceeds
-      ``min_mass * quantile(p_mass, 0.99) / 100`` (grid mode), or is mapped to
-      ``10 ** (min_mass - 6)`` once (stream mode; scvelo's own stream branch
-      applies that mapping internally, so delegating applied it twice).
-
-    Each grid point takes its ``n_neighbors`` nearest cells (ties to the lower
-    index, as R's ``order``), weights them by a normal density with
-    ``sd = mean(grid step) * smooth``, and averages their velocities, dividing
-    by the total weight floored at 1.
-
-    Returns ``(X_grid, V_grid)``.  Grid mode: ``(n, 2)`` positions and vectors
-    of the points that pass the mass filter.  Stream mode
-    (``adjust_for_stream=True``): ``X_grid`` is ``(2, ns)`` -- the x and y grid
-    lines -- and ``V_grid`` is ``(2, ns, ns)`` indexed ``[component, y, x]``,
-    the layout ``matplotlib.streamplot`` takes; points below the mass floor or
-    the ``cutoff_perc`` percentile of neighbour speed are NaN in the first
-    component only, as in R and scvelo.
-    """
-    X = np.asarray(X_emb, dtype=float)
-    V = np.asarray(V_emb, dtype=float)
-    n_obs, n_dim = X.shape
-    k = int(n_neighbors) if n_neighbors is not None else math.ceil(n_obs / 50)
-    k = max(1, min(k, n_obs))
-
-    n_pts = math.ceil(50 * density)
-    grs = [np.linspace(np.nanmin(X[:, d]), np.nanmax(X[:, d]), n_pts) for d in range(n_dim)]
-    # expand.grid: the first axis varies fastest
-    X_grid = np.column_stack([g.ravel(order="F") for g in np.meshgrid(*grs, indexing="ij")])
-
-    # nearest cells per grid point, in chunks so the distance block stays small
-    m = len(X_grid)
-    neighbors = np.empty((m, k), dtype=np.intp)
-    dists = np.empty((m, k))
-    step = max(1, int(2e7 // max(n_obs * n_dim, 1)))
-    for s in range(0, m, step):
-        diff = X_grid[s:s + step, None, :] - X[None, :, :]
-        D = np.sqrt(np.einsum("gcd,gcd->gc", diff, diff))
-        neighbors[s:s + step], dists[s:s + step] = _knn_rows(D, k)
-
-    sd = float(np.mean([g[1] - g[0] for g in grs])) * smooth
-    weight = np.exp(-0.5 * (dists / sd) ** 2) / (sd * math.sqrt(2 * math.pi))
-    p_mass = weight.sum(axis=1)
-    p_mass_v = np.maximum(p_mass, 1.0)
-    neighbors_emb = V[neighbors]  # (m, k, n_dim)
-    V_grid = (neighbors_emb * weight[:, :, None]).sum(axis=1) / p_mass_v[:, None]
-
-    if adjust_for_stream:
-        X_grid = np.vstack([np.unique(X_grid[:, 0]), np.unique(X_grid[:, 1])])
-        ns = int(math.floor(math.sqrt(len(V_grid))))
-        V_grid = V_grid.T.reshape(2, ns, ns)  # C order: [component, y, x]
-        mass = np.sqrt((V_grid ** 2).sum(axis=0))
-        floor = 10 ** (min_mass - 6)  # default min_mass = 1 means 1e-5
-        floor = min(floor, float(np.nanmax(mass)) * 0.9)
-        cutoff = mass < floor
-        length = np.abs(neighbors_emb).mean(axis=1).sum(axis=1).reshape(ns, ns)
-        cutoff = cutoff | (length < np.quantile(length, cutoff_perc / 100))
-        V_grid = V_grid.copy()
-        V_grid[0][cutoff] = np.nan
-        return X_grid, V_grid
-
-    keep = p_mass > min_mass * np.quantile(p_mass, 0.99) / 100
-    return X_grid[keep], V_grid[keep] * scale
 
 
 def velocity_plot(
@@ -691,20 +590,14 @@ def velocity_plot(
     adds its ``lab_layer`` twice (``SCP-plot.R:6941-6942``), which is harmless.
     """
     basis_key = basis if basis.startswith("X_") else f"X_{basis}"
-    basis_name = basis[2:] if basis.startswith("X_") else basis
-    vkey_emb = f"{vkey}_{basis_name}"
     if basis_key not in adata.obsm:
         raise KeyError(f"{basis_key!r} not in adata.obsm")
-    if vkey_emb not in adata.obsm:
-        raise KeyError(
-            f"{vkey_emb!r} not in adata.obsm; run scvelo.tl.velocity_embedding("
-            f"basis={basis_name!r}) first"
-        )
+    V_all = layers.velocity_embedding(adata, basis_key, vkey)
     if plot_type not in ("raw", "grid", "stream"):
         raise ValueError(f"plot_type must be 'raw', 'grid' or 'stream', not {plot_type!r}")
     xi, yi = dims[0] - 1, dims[1] - 1
     X = np.asarray(adata.obsm[basis_key], dtype=float)[:, [xi, yi]]
-    V = np.asarray(adata.obsm[vkey_emb], dtype=float)[:, [xi, yi]]
+    V = V_all[:, [xi, yi]]
     rows = np.arange(adata.n_obs)
     if cells is not None:
         rows = np.flatnonzero(np.isin(np.asarray(adata.obs_names), np.asarray(cells)))
@@ -739,10 +632,7 @@ def velocity_plot(
         ax.quiver(gx[:, 0], gx[:, 1], gv[:, 0], gv[:, 1], color=arrow_color,
                   angles="xy", scale_units="xy", scale=1.0, width=0.003, zorder=2)
     else:
-        def _grid(X_, V_, **kw):
-            kw.pop("scale", None)
-            return compute_velocity_on_grid(X_, V_, **kw)
-
+        # the same layer, and the same grid, as cell_dim_plot(velocity=...)
         _field, mappable = layers.draw_velocity(
             ax, X, V, plot_type="stream", cell_colors=None, arrow_color=arrow_color,
             arrow_angle=arrow_angle, density=density, smooth=smooth, n_neighbors=k,
@@ -750,7 +640,7 @@ def velocity_plot(
             streamline_width=streamline_width, streamline_alpha=streamline_alpha,
             streamline_color=streamline_color, streamline_palette=streamline_palette,
             streamline_palcolor=streamline_palcolor, streamline_bg_color=streamline_bg_color,
-            streamline_bg_stroke=streamline_bg_stroke, rng=rng, grid_fn=_grid)
+            streamline_bg_stroke=streamline_bg_stroke, rng=rng)
         if mappable is not None and legend_position != "none" and ax.figure is not None:
             cb = ax.figure.colorbar(mappable, ax=[ax], fraction=0.046, pad=0.03)
             cb.outline.set_edgecolor("black")
@@ -1067,11 +957,28 @@ def projection_plot(
     ax: Axes | None = None,
     **kwargs,
 ) -> Axes:
-    """Query cells mapped onto a reference embedding. Milestone 13.
+    """Query cells mapped onto a reference embedding.
 
-    Two scatters on one axes with shared limits; query points get
-    ``edgecolors="black", linewidths=stroke_highlight`` so they read as
-    outlined discs over the reference cloud.
+    Port of ``ProjectionPlot`` (``SCP-plot.R:12511``) by Hao Zhang,
+    https://github.com/zhanghao-njmu/SCP.  Milestone 13.
+
+    The reference cells are drawn first, coloured by ``ref_group`` (Paired,
+    or ``#D9D9D9`` without a group); each query cell is then drawn twice, a
+    black disc ``pt_size + stroke_highlight`` wide and its ``query_group``
+    colour (Set1) on top, so query cells read as outlined discs over the
+    reference cloud -- R's ``p3``.  ``palette`` / ``query_palette`` in
+    ``kwargs`` override the two palettes; ``xlab``, ``ylab`` and ``title``
+    label the axes.
+
+    **R bug, deliberately not reproduced.**  ``ProjectionPlot`` computes the
+    union of the reference and query ranges (``SCP-plot.R:12522-12531``) but
+    applies it only to the throwaway query plot ``p2`` (``:12546``).  The
+    composite ``p3`` is built on ``p1``, the reference ``CellDimPlot``, whose
+    ``scale_x/y_continuous(limits = range(ref))`` (``:1636-1637``) censors
+    every query cell outside the reference range to NA, and ggplot then drops
+    them without a warning (111 of 362 query cells in the parity fixture).
+    Here both axes are set to that union, so every query cell is drawn --
+    what R evidently intends.
     """
     if ax is None:
         _fig, ax = plt.subplots(figsize=(4.2, 4.2))
@@ -1087,7 +994,7 @@ def projection_plot(
         cat = as_ordered_categorical(adata_ref.obs[ref_group])
         levels = [str(x) for x in cat.cat.categories]
         colors = discrete_palette(levels, palette=kwargs.get("palette", "Paired"))
-        cref = [colors[str(v)] for v in np.asarray(cat).astype(str)]
+        cref: list[str] | str = [colors[str(v)] for v in np.asarray(cat).astype(str)]
     else:
         cref = "#D9D9D9"
     ax.scatter(Xr[:, 0], Xr[:, 1], s=pt_size * 6, c=cref, linewidths=0, zorder=1)
@@ -1096,7 +1003,7 @@ def projection_plot(
         qcat = as_ordered_categorical(adata_query.obs[query_group])
         qlev = [str(x) for x in qcat.cat.categories]
         qcolors = discrete_palette(qlev, palette=kwargs.get("query_palette", "Set1"))
-        cq = [qcolors[str(v)] for v in np.asarray(qcat).astype(str)]
+        cq: list[str] | str = [qcolors[str(v)] for v in np.asarray(qcat).astype(str)]
     else:
         cq = "black"
     # halo then fill, so query cells read on top of a dense reference

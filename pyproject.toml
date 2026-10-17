@@ -33,11 +33,10 @@ stats = ["scikit-learn>=1.3", "scikit-misc>=0.3", "statsmodels>=0.14"]
 gam = ["pygam>=0.9"]                      # dynamic_heatmap / dynamic_plot
 graph = ["python-igraph>=0.11", "networkx>=3.0"]   # network / enrichmap layouts
 enrich = ["gseapy>=1.1", "decoupler>=1.5"]         # enrichment backends
-velocity = ["scvelo>=0.3"]
 interactive = ["plotly>=5.18"]
 raster = ["datashader>=0.16"]
 fuzzy = ["scikit-fuzzy>=0.4"]             # split_method="mfuzz"
-all = ["scp-plot[stats,gam,graph,enrich,velocity,interactive,raster,fuzzy]"]
+all = ["scp-plot[stats,gam,graph,enrich,interactive,raster,fuzzy]"]
 dev = [
   "pytest>=8.0",
   "pytest-mpl>=0.17",

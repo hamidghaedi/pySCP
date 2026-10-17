@@ -223,13 +223,13 @@ def test_missing_velocity_embedding_names_scvelo(ov):
 
 
 def _fake_grid(X, V, *, density, smooth, n_neighbors, min_mass, cutoff_perc, adjust_for_stream):
-    """A precomputed grid in scvelo's two return shapes (scvelo is not installed here)."""
+    """A precomputed grid in ``compute_velocity_on_grid``'s two return shapes."""
     xs = np.linspace(X[:, 0].min(), X[:, 0].max(), 20)
     ys = np.linspace(X[:, 1].min(), X[:, 1].max(), 20)
     gx, gy = np.meshgrid(xs, ys)
     u, v = -(gy - gy.mean()), gx - gx.mean()
     if adjust_for_stream:
-        u[:3, :3] = np.nan  # scvelo masks low-mass cells in u only
+        u[:3, :3] = np.nan  # low-mass points are masked in u only, as in R
         return np.stack([xs, ys]), np.stack([u, v])
     return np.column_stack([gx.ravel(), gy.ravel()]), np.column_stack([u.ravel(), v.ravel()])
 
@@ -252,14 +252,21 @@ def test_stream_velocity_gets_a_velocity_colourbar(ov, monkeypatch):
     fig.savefig(__import__("io").BytesIO(), format="png")
 
 
-def test_grid_velocity_without_scvelo_names_the_extra(ov):
-    try:
-        import scvelo  # noqa: F401
-        pytest.skip("scvelo is installed")
-    except ImportError:
-        pass
-    with pytest.raises(ImportError, match=r"scp-plot\[velocity\]"):
-        scp.pl.cell_dim_plot(ov, "leiden", velocity="velocity", velocity_plot_type="grid")
+@pytest.mark.parametrize("plot_type", ["grid", "stream"])
+def test_grid_velocity_needs_no_scvelo(ov, monkeypatch, plot_type):
+    """The overlay's grid is the numpy port of SCP's function: no optional dependency.
+
+    ``sys.modules["scvelo"] = None`` makes any ``import scvelo`` raise, so this
+    holds whether or not scvelo happens to be installed.
+    """
+    monkeypatch.setitem(__import__("sys").modules, "scvelo", None)
+    fig = scp.pl.cell_dim_plot(ov, "leiden", velocity="velocity", velocity_plot_type=plot_type)
+    fig.savefig(__import__("io").BytesIO(), format="png")
+    if plot_type == "grid":
+        arrows = [a for a in fig.axes[0].artists if isinstance(a, layers._ArrowField)][0]
+        gx, gv = scp.pl.compute_velocity_on_grid(ov.obsm["X_umap"], ov.obsm["velocity_umap"])
+        np.testing.assert_allclose(arrows._seg[:, :2], gx, rtol=0, atol=1e-12)
+        np.testing.assert_allclose(arrows._seg[:, 2:] - arrows._seg[:, :2], gv, atol=1e-12)
 
 
 def test_cells_highlight_validation(ov):

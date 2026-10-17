@@ -18,7 +18,11 @@ https://github.com/zhanghao-njmu/SCP):
   draw time (Khachiyan's ellipse, Welzl's circle, ``concaveman``, and the
   ``polyclip`` offset that gives marks their ``expand``/``radius``);
 * :func:`graph_segments` -- ``CellDimPlot``'s graph-edge melt
-  (``SCP-plot.R:1586``), without densifying the adjacency.
+  (``SCP-plot.R:1586``), without densifying the adjacency;
+* :func:`compute_velocity_on_grid` -- SCP's own ``compute_velocity_on_grid``
+  (``SCP-plot.R:6963``), which both ``VelocityPlot`` and ``CellDimPlot``'s
+  velocity layer call, so ``velocity_plot`` and ``cell_dim_plot(velocity=)``
+  share it here.
 """
 
 from __future__ import annotations
@@ -43,6 +47,7 @@ __all__ = [
     "offset_shape",
     "graph_segments",
     "rescale",
+    "compute_velocity_on_grid",
 ]
 
 _DBL_EPS = float(np.finfo(float).eps)
@@ -622,3 +627,119 @@ def graph_segments(graph, order: np.ndarray) -> tuple[np.ndarray, np.ndarray, np
     sub = g[order][:, order].tocoo()
     keep = (sub.data != 0) & np.isfinite(sub.data) & (sub.row >= sub.col)
     return sub.row[keep], sub.col[keep], np.asarray(sub.data[keep], dtype=float)
+
+
+# --------------------------------------------------------------------------- #
+# velocity on a grid
+# --------------------------------------------------------------------------- #
+def _knn_rows(D: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
+    """Per row, the ``k`` smallest entries in R's ``order(x)[1:k]`` order.
+
+    ``order`` is stable, so ties go to the lower index; that is reproduced
+    exactly, including a tie that straddles the ``k``-th place.
+    """
+    m, n = D.shape
+    k = min(k, n)
+    if k == n:
+        idx = np.argsort(D, axis=1, kind="stable")
+        return idx, np.take_along_axis(D, idx, 1)
+    part = np.argpartition(D, k - 1, axis=1)[:, :k]
+    pd_ = np.take_along_axis(D, part, 1)
+    kth = pd_.max(axis=1)
+    order = np.lexsort((part, pd_), axis=1)
+    idx = np.take_along_axis(part, order, 1)
+    dist = np.take_along_axis(pd_, order, 1)
+    # rows where a tie at the k-th distance leaves the pick ambiguous: redo exactly
+    for r in np.flatnonzero((D <= kth[:, None]).sum(axis=1) > k):
+        cand = np.flatnonzero(D[r] <= kth[r])
+        cand = cand[np.argsort(D[r, cand], kind="stable")][:k]
+        idx[r], dist[r] = cand, D[r, cand]
+    return idx, dist
+
+
+def compute_velocity_on_grid(
+    X_emb: np.ndarray,
+    V_emb: np.ndarray,
+    *,
+    density: float = 1.0,
+    smooth: float = 0.5,
+    n_neighbors: int | None = None,
+    min_mass: float = 1.0,
+    scale: float = 1.0,
+    adjust_for_stream: bool = False,
+    cutoff_perc: float = 5.0,
+):
+    """A cell velocity field smoothed onto a regular grid.
+
+    Port of SCP's ``compute_velocity_on_grid`` (``SCP-plot.R:6963-7039``) by
+    Hao Zhang, https://github.com/zhanghao-njmu/SCP, itself a transliteration
+    of scvelo's function of the same name.  It is reimplemented in numpy rather
+    than delegated to scvelo because SCP's version differs from scvelo's in
+    ways that change the picture:
+
+    * no +-1 % range padding: the grid is ``ceil(50 * density)`` points from
+      the minimum to the maximum of each axis;
+    * ``n_neighbors`` defaults to ``ceil(n_obs / 50)`` (scvelo: ``int``);
+    * no autoscaling; ``scale`` multiplies the grid vectors (grid mode only);
+    * ``min_mass`` keeps grid points whose total Gaussian weight exceeds
+      ``min_mass * quantile(p_mass, 0.99) / 100`` (grid mode), or is mapped to
+      ``10 ** (min_mass - 6)`` once (stream mode; scvelo's own stream branch
+      applies that mapping internally, so delegating applied it twice).
+
+    Each grid point takes its ``n_neighbors`` nearest cells (ties to the lower
+    index, as R's ``order``), weights them by a normal density with
+    ``sd = mean(grid step) * smooth``, and averages their velocities, dividing
+    by the total weight floored at 1.
+
+    Returns ``(X_grid, V_grid)``.  Grid mode: ``(n, 2)`` positions and vectors
+    of the points that pass the mass filter.  Stream mode
+    (``adjust_for_stream=True``): ``X_grid`` is ``(2, ns)`` -- the x and y grid
+    lines -- and ``V_grid`` is ``(2, ns, ns)`` indexed ``[component, y, x]``,
+    the layout ``matplotlib.streamplot`` takes; points below the mass floor or
+    the ``cutoff_perc`` percentile of neighbour speed are NaN in the first
+    component only, as in R and scvelo.
+    """
+    X = np.asarray(X_emb, dtype=float)
+    V = np.asarray(V_emb, dtype=float)
+    n_obs, n_dim = X.shape
+    k = int(n_neighbors) if n_neighbors is not None else math.ceil(n_obs / 50)
+    k = max(1, min(k, n_obs))
+
+    n_pts = math.ceil(50 * density)
+    grs = [np.linspace(np.nanmin(X[:, d]), np.nanmax(X[:, d]), n_pts) for d in range(n_dim)]
+    # expand.grid: the first axis varies fastest
+    X_grid = np.column_stack([g.ravel(order="F") for g in np.meshgrid(*grs, indexing="ij")])
+
+    # nearest cells per grid point, in chunks so the distance block stays small
+    m = len(X_grid)
+    neighbors = np.empty((m, k), dtype=np.intp)
+    dists = np.empty((m, k))
+    step = max(1, int(2e7 // max(n_obs * n_dim, 1)))
+    for s in range(0, m, step):
+        diff = X_grid[s:s + step, None, :] - X[None, :, :]
+        D = np.sqrt(np.einsum("gcd,gcd->gc", diff, diff))
+        neighbors[s:s + step], dists[s:s + step] = _knn_rows(D, k)
+
+    sd = float(np.mean([g[1] - g[0] for g in grs])) * smooth
+    weight = np.exp(-0.5 * (dists / sd) ** 2) / (sd * math.sqrt(2 * math.pi))
+    p_mass = weight.sum(axis=1)
+    p_mass_v = np.maximum(p_mass, 1.0)
+    neighbors_emb = V[neighbors]  # (m, k, n_dim)
+    V_grid = (neighbors_emb * weight[:, :, None]).sum(axis=1) / p_mass_v[:, None]
+
+    if adjust_for_stream:
+        X_grid = np.vstack([np.unique(X_grid[:, 0]), np.unique(X_grid[:, 1])])
+        ns = int(math.floor(math.sqrt(len(V_grid))))
+        V_grid = V_grid.T.reshape(2, ns, ns)  # C order: [component, y, x]
+        mass = np.sqrt((V_grid ** 2).sum(axis=0))
+        floor = 10 ** (min_mass - 6)  # default min_mass = 1 means 1e-5
+        floor = min(floor, float(np.nanmax(mass)) * 0.9)
+        cutoff = mass < floor
+        length = np.abs(neighbors_emb).mean(axis=1).sum(axis=1).reshape(ns, ns)
+        cutoff = cutoff | (length < np.quantile(length, cutoff_perc / 100))
+        V_grid = V_grid.copy()
+        V_grid[0][cutoff] = np.nan
+        return X_grid, V_grid
+
+    keep = p_mass > min_mass * np.quantile(p_mass, 0.99) / 100
+    return X_grid[keep], V_grid[keep] * scale

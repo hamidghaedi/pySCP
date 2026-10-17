@@ -49,9 +49,10 @@ fails for the reason it states, and not because of a bug in the test.
   are built from the data and passed through `TERM2GENE`.
 * `RunPAGA` and `RunSCVELO` route through reticulate to scanpy and scvelo. The
   PAGA input is therefore built in R, and the velocity field is synthetic.
-* scvelo and pygam are not installed in the Python env. Velocity `grid` and
-  `stream`, and the fitted curve of `dynamic_plot`, are therefore not
-  executable on the Python side.
+* scvelo and pygam are not installed in the Python env. At audit time that
+  made velocity `grid` and `stream`, and the fitted curve of `dynamic_plot`,
+  not executable on the Python side. Velocity no longer needs scvelo anywhere
+  (see `velocity_plot` below); the fitted curve still needs pygam.
 
 ## Summary
 
@@ -59,15 +60,15 @@ fails for the reason it states, and not because of a bug in the test.
 |---|---|---|---|
 | `lineage_plot` | LOESS curves to 5e-8, all options tried | 4, all fixed: trim strictness, whiskers, extra cell layer, legend/arrow | — |
 | `paga_plot` / `graph_plot` | node medians to 1e-8, colours, edge selection and widths, net-transition logic, `segementsDf` to 1e-9 | 5, all fixed: `global_size`, transition widths, default node size, size mapping, legend | — |
-| `velocity_plot` | raw arrows to 5e-8 (both scales); grid to 5e-8 after the numpy port | 2, both fixed: `group_by`, extra cell layer; the 5 grid/stream findings fixed by porting `compute_velocity_on_grid` | stream drawing (no metR); its grid is checked |
+| `velocity_plot` | raw arrows to 5e-8 (both scales); grid to 5e-8 after the numpy port; `cell_dim_plot(velocity=)` grid to 5e-8 and stream field to 5e-13 through the same port | 2, both fixed: `group_by`, extra cell layer; the 5 grid/stream findings fixed by porting `compute_velocity_on_grid` | stream drawing (no metR); its grid is checked |
 | `dynamic_plot` | point x positions | 3, all fixed: no lib-normalisation, `group_by`, `compare_lineages` | the fitted curve (mgcv; documented) |
 | `dynamic_heatmap` | the package's `matrix_process` reproduces R's matrix to 4e-7 | 3: binning, row order, palette | — |
-| `projection_plot` | reference and query colours/positions, exact | 1 deliberate (R drops out-of-range query cells, an R bug) | — |
+| `projection_plot` | reference and query colours/positions, exact | 1 deliberate (R drops out-of-range query cells, an R bug; now in the docstring) | — |
 | `enrichment_plot` | term selection; bar metric to 1e-12; dot/lollipop fill within 2/255; labels, italics, encodings, axis limits, sizes, ties and constant panels since the parity fix | 13 at audit time; all fixed (4 by the enrichment port, 9 by the parity fix) | network, enrichmap, wordcloud: ported since, verified separately |
 | `gsea_plot` | line: curve and hit ticks, exact; selection, bar order/fill/alpha, zero cross, peak, heat strip (to one 8-bit step) and per-key layout since the parity fix | 4 at audit time; all fixed | comparison and graph types: ported since, verified separately |
 | `gsea_scores` | running score to 1e-12; hits and peak exact | — | — |
-| `cell_dim_plot_3d` | traces, level order, colours, membership, xyz, exact | 3, all fixed: NA handling, NA colour, defaults/layout | highlight, lineages (not ported) |
-| `feature_dim_plot_3d` | colour values to 1e-12 | 1, fixed: `bg_cutoff` default masks 76-80% | split dropdown (not ported) |
+| `cell_dim_plot_3d` | traces, level order, colours, membership, xyz, exact; highlight trace exact; lineage lines to 1.3e-13 | 3, all fixed: NA handling, NA colour, defaults/layout | — |
+| `feature_dim_plot_3d` | colour values to 1e-12; title, ranges, split dropdown, highlight trace | 1, fixed: `bg_cutoff` default masks 76-80% | — (R's `All.cells` split button is broken; fixed, not reproduced) |
 | `cell_cor_heatmap` | similarity to 1.6e-9 (cosine, pearson, spearman; self and panc8 reference), collapsing, limits, labelled cells | 5: `reference=None`, uncollapsed row order, cluster leaf order, label defaults, default features | annotations, `bulk_ref` (not ported) |
 | `feature_cor_plot` | placement, scatter, r to 5e-4, lm fit to 1e-9, r²/p; since fixed: violin shape to 5e-4, per-split r, r²/p without the fit line | 0 open (4 fixed: violin bandwidth, `split_by`, stats tied to `add_smooth`, docstring) | `calculate_coexp` (broken in R) |
 | `feature_cor_heatmap` | — | — | R's `FeatureCorHeatmap` is an empty stub |
@@ -333,6 +334,17 @@ uniform. The overlay layer `cell_dim_plot(velocity=...)` uses does size them
 per arrow, but its artist is not a `Quiver`, which the raw-arrow tests read.
 Stream mode now draws through that overlay layer, fed by the port.
 
+**Overlay switched to the port.** `cell_dim_plot(velocity=...)` used to
+compute its grid and stream field through scvelo. It now calls the same
+`compute_velocity_on_grid` (moved to `pl/_dim_geom.py`, still exported as
+`scp.pl.compute_velocity_on_grid`), so nothing in the package imports scvelo
+and the `velocity` extra is removed. `CellDimPlot` hands its velocity layer to
+`VelocityPlot` with the same defaults, so the overlay is pinned to the same
+fixtures: grid positions and arrow ends to 5e-8 (`velocity_grid_layers.csv`,
+all 1095 arrows), and the stream field fed to `streamplot`, for both the
+overlay and `velocity_plot`, to 5e-13 with R's NA mask
+(`velocity_stream_grid.csv`). The velocity lookup in `obsm` is shared too.
+
 ### dynamic_plot (`DynamicPlot` 12102)
 
 Exact parity of the fitted curve is out of scope by design (mgcv vs pygam,
@@ -437,6 +449,8 @@ makes the normalisation a no-op, as `group_heatmap` does.
    fixture. Python applies the union (`_traj.py:648-649`). That is right by
    R's evident intent, and a test pins it. *Suggestion:* say so in the
    docstring, and pad by ggplot's 5% so that edge points are not cut in half.
+   *Since:* the docstring states the bug and what the port does instead; the
+   5% padding is still open.
 2. **Data-contract note, not a bug in `projection_plot`.** AnnData drops
    unused categories when an object is subset, and Seurat keeps the factor
    levels. A query built as `adata[mask].copy()` therefore indexes Set1 from
@@ -722,9 +736,11 @@ has.
 ## 3-D and correlation families
 
 Fixtures: `tools/parity/audit_dim3d.R` → `tests/fixtures/parity/audit/dim3d/`
-(228 KB), `tools/parity/audit_cor.R` → `tests/fixtures/parity/audit/cor/`
-(~990 KB). Tests: `tests/test_parity_dim3d.py` (5 pass, 6 xfail at audit
-time; all 11 pass since the 3-D fixes),
+(228 KB at audit time, about 470 KB with the highlight, lineage and split
+fixtures added since), `tools/parity/audit_cor.R` →
+`tests/fixtures/parity/audit/cor/` (~990 KB). Tests:
+`tests/test_parity_dim3d.py` (5 pass, 6 xfail at audit time; all 11 pass
+since the 3-D fixes, and 23 with the options ported since),
 `tests/test_parity_cor.py` (17 pass, 10 xfail).
 
 Inputs: both sides read `pancreas_sub` after `NormalizeData` (its stored
@@ -775,7 +791,9 @@ pure renames.
 | scene axis ranges | fixed; matches to 1e-6 (pinned, cube aspect) |
 | title | fixed; matches exactly |
 | axis titles | `PC_1` vs R `pca_1`. This is the known key divergence (the notebook's `UMAP_`/`umap_`), not re-flagged |
-| `cells.highlight`, `lineages` | not checkable: not ported (no parameters) |
+| `cells.highlight` (a cell list, and `TRUE`) | ported since; trace names, marker size/colour/symbol, cells and their order match exactly |
+| `lineages` | ported since; three line traces match to 1.3e-13 (same point counts, colours, width) |
+| `axis_labs`, `force` | ported since (structural tests) |
 
 **NA handling** (`src/scp/pl/_dim.py:605`, `:622-633`). R's
 `CellDimPlot3D` has no `show_na` switch. It always turns NA into an `"NA"`
@@ -799,6 +817,14 @@ SCP-plot.R:3027-3030 does.
 is kept as a Python-only way to drop NA cells; the palette spans the real
 levels and `NA` takes `bg_color`.
 
+**Ported since the audit: `cells.highlight` and `lineages`.** Checked against
+`cell3d_highlight.json`, `cell3d_highlight_true.json` and
+`cell3d_lineages.json` (`audit_dim3d.R`, with slingshot run as in
+`audit_traj.R`). Unlike `LineagePlot`, `CellDimPlot3D` does not trim: it
+smooths every cell on the lineage (`SCP-plot.R:2981-2991`), drops fitted
+points outside the range of all cells, then NA and duplicate rows. The port
+shares `LineagePlot`'s per-axis LOESS (`_dim_layers.smooth_on_pseudotime`).
+
 ### feature_dim_plot_3d
 
 | Option | Status |
@@ -807,7 +833,10 @@ levels and `NA` takes `bg_color`.
 | `bg_cutoff` default | fixed; matches to 1e-12 (default `None`: nothing masked, the range starts at 0 / -0.356 as in R). At audit time Python NaN-masked 76-80% of the cells, including every negative S_score |
 | colour scale | Spectral vs R's plotly.js default. **Documented deliberate divergence** (docstring), so it is asserted as Python's documented behaviour |
 | multiple features | Python: one trace per feature plus a visibility dropdown. R: one trace plus a marker-swap dropdown. Same values per feature, so this is structural only |
-| `split.by` dropdown, `cells.highlight`, `calculate_coexp` | not checkable: not ported |
+| `split.by` dropdown | ported since; button labels, titles and every trace's per-level mask match R's buttons (`feature3d_split.json`) |
+| `cells.highlight` | ported since; the highlight trace matches |
+| title, scene ranges | added since; match (`All_cells (nCells:N)`, ranges pinned in a cube) |
+| `calculate_coexp` | ported (shared `scp.fetch.calculate_coexp`); not compared here |
 
 **Masking** (`src/scp/pl/_dim.py:653`, `:688-689`). `FeatureDimPlot3D`
 has no `bg_cutoff` and no quantile clipping (dim_plots brief §3.2;
@@ -818,6 +847,16 @@ Fix: default `bg_cutoff=None` (or remove the parameter).
 
 **Fixed since the audit**: the default is `None` and the parameter stays as a
 Python-only opt-in; `pt_size` also moved to R's 1.5.
+
+**R bug found while porting `split.by`, fixed rather than reproduced.** The
+split dropdown's first button, `All.cells`, reads the coordinate columns
+`<key><dim>All.cells` (`SCP-plot.R:3272-3279`). Those exist only when
+`split.by` is left at its default, because the all-cell columns are created as
+`...All_cells`; with `split.by` set, R's button carries empty coordinates
+(the fixture shows `[[], []]`) and pressing it empties the plot. The port's
+button restores every cell, and a test pins both sides. The split buttons
+also do not rename or re-show traces, since the port keeps one trace per
+feature.
 
 ### cell_cor_heatmap
 
