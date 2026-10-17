@@ -146,6 +146,22 @@ column order and x-axis order. `show_na=True` promotes missing values to a
 real `"NA"` level appended last, so the palette gives it a color; otherwise
 NaN falls through to `bg_color`.
 
+Subsetting is where the two diverge without warning. `adata[mask].copy()`
+drops categories that no surviving cell carries; a subset Seurat object keeps
+every factor level. The palette is indexed by level position, so a subset
+AnnData colours its first *present* level with the palette's first color, while
+R keeps the original slot. The parity audit hit this in `projection_plot`: a
+query of five cell types coloured Beta `#E41A1C` (Set1's first) where R used
+`#FF7F00` (level 5), and once the full categories were restored every color
+matched. To reproduce R's colors on a subset, restore the parent's categories
+first:
+
+```python
+q = adata[mask].copy()
+q.obs["CellType"] = q.obs["CellType"].cat.set_categories(
+    adata.obs["CellType"].cat.categories)
+```
+
 scanpy already persists `adata.uns[f"{key}_colors"]`, a list aligned to
 `obs[key].cat.categories`. Read it first when present — it is the AnnData-native
 equivalent of a named `palcolor` — and write it back, so scanpy and this
