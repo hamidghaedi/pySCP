@@ -9,8 +9,8 @@ body raises · **n/a** = nothing to port.
 |---|---|---|---|---|
 | `CellDimPlot` | 1328 | `scp.pl.cell_dim_plot` | done (all overlays; `stat_plot_type` limited to pie/ring/bar) | 2 |
 | `FeatureDimPlot` | 2042 | `scp.pl.feature_dim_plot` | done (standard + blend, all overlays, `calculate_coexp`) | 3 |
-| `CellDimPlot3D` | 2843 | `scp.pl.cell_dim_plot_3d` | done | 8 |
-| `FeatureDimPlot3D` | 3066 | `scp.pl.feature_dim_plot_3d` | done (incl. `calculate_coexp`) | 8 |
+| `CellDimPlot3D` | 2843 | `scp.pl.cell_dim_plot_3d` | done (traces, NA trace, ranges, title verified vs R; `cells.highlight`/`lineages` not ported) | 8 |
+| `FeatureDimPlot3D` | 3066 | `scp.pl.feature_dim_plot_3d` | done (incl. `calculate_coexp`; values verified vs R; Spectral scale deliberate) | 8 |
 | `FeatureStatPlot` | 3524 | `scp.pl.feature_stat_plot` | done (all but `flip`; `stack`, `plot_by='feature'`, significance layer and `calculate_coexp` verified vs R) | 4 |
 | `ExpressionStatPlot` | 3723 | `scp.pl.expression_stat_plot` | done (the DataFrame engine; `flip` stub) | 4 |
 | `CellStatPlot` | 4463 | `scp.pl.cell_stat_plot` | done (11/11 types + `individual`; sankey/chord/venn verified vs R) | 5 |
@@ -18,18 +18,18 @@ body raises · **n/a** = nothing to port.
 | `FeatureCorPlot` | 5232 | `scp.pl.feature_cor_plot` | done (incl. `calculate_coexp`) | 6 |
 | `CellDensityPlot` | 5679 | `scp.pl.cell_density_plot` | done | 6 |
 | `VolcanoPlot` | 7088 | `scp.pl.volcano_plot` | done | 6 |
-| `LineagePlot` | 5918 | `scp.pl.lineage_plot` | done | 12 |
-| `PAGAPlot` | 6121 | `scp.pl.paga_plot` | done | 11 |
-| `GraphPlot` | 6287 | `scp.pl.graph_plot` | done | 11 |
+| `LineagePlot` | 5918 | `scp.pl.lineage_plot` | done (curves, trim, whiskers, legend verified vs R) | 12 |
+| `PAGAPlot` | 6121 | `scp.pl.paga_plot` | done (verified vs R; `cells=` R bug not reproduced) | 11 |
+| `GraphPlot` | 6287 | `scp.pl.graph_plot` | done (verified vs R; curved lines, highlights, `node_alpha` not ported) | 11 |
 | `segementsDf` | 6666 | `scp.pl.shorten_segments` | done | 11 |
-| `VelocityPlot` | 6745 | `scp.pl.velocity_plot` | done | 12 |
-| `compute_velocity_on_grid` | 6963 | delegate to **scvelo** | done (delegates) | 12 |
+| `VelocityPlot` | 6745 | `scp.pl.velocity_plot` | done (raw and grid verified vs R; stream not checkable, metR) | 12 |
+| `compute_velocity_on_grid` | 6963 | `scp.pl.compute_velocity_on_grid` | done — numpy port of SCP's (not scvelo's); grid and stream verified vs R | 12 |
 | `GroupHeatmap` | 7911 | `scp.pl.group_heatmap` | done (matrix verified vs R; enrichment tracks stub) | 7 |
 | `FeatureHeatmap` | 9114 | `scp.pl.feature_heatmap` | done | 7 |
 | `FeatureCorHeatmap` | 9980 | `scp.pl.feature_cor_heatmap` | done — clean-room; **the R version is an empty stub** | 10 |
 | `CellCorHeatmap` | 10113 | `scp.pl.cell_cor_heatmap` | done | 10 |
 | `DynamicHeatmap` | 11020 | `scp.pl.dynamic_heatmap` | done (binned; `use_fitted` deliberately raises) | 9 |
-| `DynamicPlot` | 12102 | `scp.pl.dynamic_plot` | done | 9 |
+| `DynamicPlot` | 12102 | `scp.pl.dynamic_plot` | done (points, lib-normalisation, panels verified vs R; the mgcv fit is not) | 9 |
 | `GroupTreePlot` | 12472 | — | **n/a — the R function is empty**; use `sc.tl.dendrogram` | — |
 | `ProjectionPlot` | 12511 | `scp.pl.projection_plot` | done | 13 |
 | `EnrichmentPlot` | 12727 | `scp.pl.enrichment_plot` | done (all 7 types; network/enrichmap graphs, partitions and word tables verified vs R; GO wordcloud keywords substituted) | 14 |
@@ -77,6 +77,12 @@ body raises · **n/a** = nothing to port.
 | `cell_dim_plot` | added the settings of every overlay: `hex`, `hex_linewidth`, `hex_count`, `hex_bins`, `hex_binwidth`; `label_point_size`, `label_point_color`, `label_segment_color`; `alpha_highlight`; `density_color`, `density_filled_palette`, `density_filled_palcolor`; `mark_expand`, `mark_alpha`, `mark_linetype`; `edge_size`, `edge_alpha`, `edge_color`; the eleven `lineages_*`, eleven `paga_*` and nine `velocity_*` parameters; `streamline_width`, `streamline_alpha`, `streamline_color`, `streamline_palette`, `streamline_palcolor`, `streamline_bg_color`, `streamline_bg_stroke`; `stat_type`, `stat_plot_type`, `stat_plot_position`, `stat_plot_size`, `stat_plot_palette`, `stat_palcolor`, `stat_plot_alpha`, `stat_plot_label`, `stat_plot_label_size` | The scaffold declared the overlay switches but not their settings. All are `CellDimPlot` parameters with R's defaults, keyword-only, so no existing call changes. Lengths stay ggplot millimetres; `mark_expand` is a number of mm rather than a `unit`, and `lineages_arrow` is the head length in inches (or `None`) rather than a grid `arrow`. `velocity_n_neighbors=None` means R's `ceiling(n_cells / 50)`. metR's `streamline_L`, `streamline_minL`, `streamline_res` and `streamline_n` are not added, because matplotlib's `streamplot` has nothing they could control. `velocity` names the scvelo key: `velocity="velocity"` reads `obsm["velocity_umap"]`. |
 | `feature_dim_plot` | added `hex`, `hex_linewidth`, `hex_color`, `hex_bins`, `hex_binwidth`; `label_repulsion`, `label_point_size`, `label_point_color`, `label_segment_color`; `alpha_highlight`; `density_color`, `density_filled_palette`, `density_filled_palcolor`; `edge_size`, `edge_alpha`, `edge_color`; the eleven `lineages_*` parameters | The same omission; all are `FeatureDimPlot` parameters with R's defaults and units. |
 | `feature_dim_plot_3d` | added `calculate_coexp` | A `FeatureDimPlot3D` parameter the scaffold left out. It appends a `CoExp` trace through the shared `scp.fetch.calculate_coexp`. |
+| `feature_dim_plot_3d` | `bg_cutoff` default `0.0` → `None`; `pt_size` `2.0` → `1.5` | `FeatureDimPlot3D` has no cutoff and passes every value to plotly; the copied 2-D default NaN-masked 76-80% of a sparse gene and every negative signed score. `bg_cutoff` stays as a Python-only opt-in. 1.5 is R's `pt.size`. |
+| `cell_dim_plot_3d` | `show_na` default `False` → `True`; `pt_size` `2.0` → `1.5` | `CellDimPlot3D` has no `show_na` switch: it always draws NA cells as an `NA` trace in `bg_color`. `show_na=False` remains as a Python-only way to drop them. |
+| `graph_plot` | added `node_palcolor`, `transition_size=(0.2, 1)`, `transition_color`, `transition_alpha`, `legend_position`, `legend` | `GraphPlot` parameters the scaffold left out; without `transition_size` the net flows could not be rescaled as R does. `legend=` takes a `LegendColumn` to register the node legend in when drawing into a borrowed `ax`. |
+| `lineage_plot` | added `cells`, `palcolor`, `lineages_arrow=0.1`, `whiskers_linewidth`, `whiskers_alpha`, `legend_position`, `legend`; `linewidth` is now ggplot mm | `LineagePlot` parameters; `whiskers` was accepted but could not be drawn without them. `lineages_arrow` is the head length in inches (or `None`), as in `cell_dim_plot`. The function no longer draws a grey layer of every cell: it is a layer, as `LineagePlot` is. |
+| `velocity_plot` | added `cells`, `group_palette`, `group_palcolor`, `arrow_angle`, the seven `streamline_*` settings, `legend_position`, `legend`, `seed` | `VelocityPlot` parameters. `group_by` colours the arrows, so it needs its palette; stream mode now goes through the overlay layer `cell_dim_plot` uses, which takes the streamline settings. No cell layer is drawn any more. |
+| `dynamic_plot` | added `cells`, `lib_normalize`, `libsize`, `line_size`, `line_palette`, `line_palcolor`, `pt_size`, `point_palette`, `point_palcolor`, `legend_position`, `seed`; `palette=` (via `**kwargs`) stays as an alias of `line_palette` | `DynamicPlot` parameters. `lib_normalize` (default: `layer == "counts"`) and `libsize` are what R's default `slot = "counts"` path needs; the palettes are R's two separate ones. |
 
 ## Argument renaming rules
 

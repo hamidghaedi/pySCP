@@ -57,17 +57,17 @@ fails for the reason it states, and not because of a bug in the test.
 
 | Function | Agrees with R | Differs (count, strict xfail) | Not checkable |
 |---|---|---|---|
-| `lineage_plot` | LOESS curves to 5e-8, all options tried | 4: trim strictness, whiskers, extra cell layer, legend/arrow | — |
-| `paga_plot` / `graph_plot` | node medians to 1e-8, colours, edge selection and widths, net-transition logic, `segementsDf` to 1e-9 | 5: `global_size`, transition widths, default node size, size mapping, legend | — |
-| `velocity_plot` | raw arrows to 5e-8 (both scales) | 2: `group_by`, extra cell layer; code review finds 5 more in grid/stream | grid (no scvelo), stream (no scvelo, no metR) |
-| `dynamic_plot` | point x positions | 3: no lib-normalisation, `group_by`, `compare_lineages` | the fitted curve (mgcv; documented) |
+| `lineage_plot` | LOESS curves to 5e-8, all options tried | 4, all fixed: trim strictness, whiskers, extra cell layer, legend/arrow | — |
+| `paga_plot` / `graph_plot` | node medians to 1e-8, colours, edge selection and widths, net-transition logic, `segementsDf` to 1e-9 | 5, all fixed: `global_size`, transition widths, default node size, size mapping, legend | — |
+| `velocity_plot` | raw arrows to 5e-8 (both scales); grid to 5e-8 after the numpy port | 2, both fixed: `group_by`, extra cell layer; the 5 grid/stream findings fixed by porting `compute_velocity_on_grid` | stream drawing (no metR); its grid is checked |
+| `dynamic_plot` | point x positions | 3, all fixed: no lib-normalisation, `group_by`, `compare_lineages` | the fitted curve (mgcv; documented) |
 | `dynamic_heatmap` | the package's `matrix_process` reproduces R's matrix to 4e-7 | 3: binning, row order, palette | — |
 | `projection_plot` | reference and query colours/positions, exact | 1 deliberate (R drops out-of-range query cells, an R bug) | — |
 | `enrichment_plot` | term selection; bar metric to 1e-12; dot/lollipop fill within 2/255 | 13 at audit time, 9 open after the enrichment port (encodings, labels, ties, constant panels) | network, enrichmap, wordcloud: ported since, verified separately |
 | `gsea_plot` | line: curve and hit ticks, exact | 4: term selection, bar, missing line decorations, layout/input | comparison and graph types: ported since, verified separately |
 | `gsea_scores` | running score to 1e-12; hits and peak exact | — | — |
-| `cell_dim_plot_3d` | traces, level order, colours, membership, xyz, exact | 3: NA handling, NA colour, defaults/layout | highlight, lineages (not ported) |
-| `feature_dim_plot_3d` | colour values to 1e-12 | 1: `bg_cutoff` default masks 76-80% | split dropdown (not ported) |
+| `cell_dim_plot_3d` | traces, level order, colours, membership, xyz, exact | 3, all fixed: NA handling, NA colour, defaults/layout | highlight, lineages (not ported) |
+| `feature_dim_plot_3d` | colour values to 1e-12 | 1, fixed: `bg_cutoff` default masks 76-80% | split dropdown (not ported) |
 | `cell_cor_heatmap` | similarity to 1.6e-9 (cosine, pearson, spearman; self and panc8 reference), collapsing, limits, labelled cells | 5: `reference=None`, uncollapsed row order, cluster leaf order, label defaults, default features | annotations, `bulk_ref` (not ported) |
 | `feature_cor_plot` | placement, scatter, r to 5e-4, lm fit to 1e-9, r²/p | 4: violin bandwidth, `split_by`, stats tied to `add_smooth`, docstring | `calculate_coexp` (broken in R) |
 | `feature_cor_heatmap` | — | — | R's `FeatureCorHeatmap` is an empty stub |
@@ -96,8 +96,10 @@ tests assert those as intended behaviour rather than xfailing them.
   R orders and is needed by every heatmap that clusters.
 * an R `bw.nrd0` bandwidth for every violin (`_stat.py:270`, `:844`).
 * `LegendColumn` registration in `graph_plot`, `lineage_plot` and
-  `velocity_plot`. None of them has a legend.
+  `velocity_plot`. None of them has a legend. *Done:* all three register
+  through `legend=` (or their own `PanelGrid` without `ax=`).
 * library-size normalisation in `dynamic_plot` and `dynamic_heatmap`.
+  *Done in `dynamic_plot`*; `dynamic_heatmap` is still open.
 * a data-contract note: AnnData drops unused categories when an object is
   subset and Seurat does not, which shifts palette indices (see
   `projection_plot` below).
@@ -105,8 +107,14 @@ tests assert those as intended behaviour rather than xfailing them.
 ## Trajectory family
 
 Fixtures: `tools/parity/audit_traj.R` → `tests/fixtures/parity/audit/traj/`
-(about 1 MB); tests: `tests/test_parity_traj.py` (28 pass, 21 strict xfail, 1
-skipped because scvelo is not installed).
+(about 1 MB), plus `tools/parity/velocity_grid.R` for two extra
+`compute_velocity_on_grid` cases; tests: `tests/test_parity_traj.py`.
+
+*At audit time:* 28 pass, 21 strict xfail, 1 skipped because scvelo was not
+installed. *Since the trajectory fixes:* 49 pass and 3 strict xfail; the three
+left are `dynamic_heatmap`'s, which lives with the heatmap engine. The
+fixture's `r_adata` folds the counts of the genes it does not ship into one
+`_rest` column, so `colSums(counts)` is R's library size.
 
 **How the R side was built.** `pancreas_sub` with `RunSlingshot(group.by =
 "SubCellType", reduction = "UMAP")`, exactly as SCP's examples call it, giving
@@ -145,11 +153,11 @@ in the open:
 |---|---|
 | degree-2 LOESS curve, all three lineages (default `span`, `trim`) | **matches to 5e-8** (fixture precision); same point count, same Dark2 colours |
 | `span = 0.3, trim = (0.05, 0.95)` | **matches to 5e-8** |
-| trim on tied pseudotime | **differs**: 799 cells fitted, R fits 760 |
-| `whiskers = TRUE` | **differs**: accepted but never drawn |
-| layer content | **differs**: Python adds a grey scatter of every cell |
-| legend, arrowhead | **differs**: neither exists |
-| casing width, aspect, axis key | differs, cosmetic (not tested) |
+| trim on tied pseudotime | fixed; matches (760 cells, strict `>`/`<`) |
+| `whiskers = TRUE` | fixed; matches (one segment per fitted cell) |
+| layer content | fixed; matches (curves only) |
+| legend, arrowhead | fixed; matches (`Lineages` legend labels, arrowhead per path) |
+| casing width, aspect, axis key | casing and aspect fixed (`linewidth + line_bg_stroke` mm, square panel); axis key is the known `UMAP_`/`umap_` divergence |
 
 1. **Trim is inclusive.** `_traj.py:337` keeps `pt >= lo` and `pt <= hi`. R
    keeps `>` and `<` (`SCP-plot.R:5959`). The two agree on continuous
@@ -185,6 +193,13 @@ in the open:
    than the regenerated `UMAP_`, which is the known divergence noted in the
    notebook.
 
+**Fixed since the audit** (items 1-4, and the casing of 5): `lineage_plot` now
+draws through `cell_dim_plot`'s own lineage layer (`_dim_layers.fit_lineages`
+and `draw_lineages`), so the two produce the same curves, with R's strict
+trim, whiskers, arrowheads (`lineages_arrow=0.1` inches) and a `Lineages`
+legend registered through `LegendColumn`. It draws no cells, takes `ax=` and
+`legend=`, and allocates a square themed panel through `PanelGrid` otherwise.
+
 ### paga_plot / graph_plot (`PAGAPlot` 6121, `GraphPlot` 6287, `segementsDf` 6666)
 
 | Option / aspect | Status |
@@ -197,11 +212,11 @@ in the open:
 | net transitions: pair kept, direction, offset direction | **matches** (midpoints and unit vectors to 1e-6) |
 | node label text (`1..n`) | **matches** |
 | `segementsDf` ↔ `shorten_segments` | **matches to 1e-9** |
-| `edge_shorten`, `transition_shorten` (default 0.05), `transition_offset` | **differs** by up to 0.1 data units |
-| transition arrow widths | **differs**: constant |
-| default node size | **differs**: sized by group size |
-| `node_size = "GroupSize"` relative sizes | **differs** |
-| legend (including `"1: Ductal"` under `label = TRUE`) | **differs**: none |
+| `edge_shorten`, `transition_shorten` (default 0.05), `transition_offset` | fixed; matches to 1e-8 (R's signed `global_size`) |
+| transition arrow widths | fixed; matches to 1e-6 (rescaled onto `transition_size`) |
+| default node size | fixed; matches (constant 4, outline 4.8) |
+| `node_size = "GroupSize"` relative sizes | fixed; matches to 1e-6 (`area_pal(1, 6)` on both layers) |
+| legend (including `"1: Ductal"` under `label = TRUE`) | fixed; labels match exactly |
 
 1. **`global_size`.** `_traj.py:124` computes
    `hypot(max|x|, max|y|)`. R computes
@@ -251,15 +266,24 @@ in the open:
    cells before taking the medians (`_traj.py:250-262`), which is the evident
    intent. Worth one sentence in the docstring.
 
+**Fixed since the audit** (items 1-5; item 6 is now in the docstring).
+`global_size` follows R's signed definition rather than a documented
+deviation: it is what every SCP figure is drawn with, and it is not a known
+bug. Edge widths stay in the units the edge test pins (the mm value as
+matplotlib points); transition widths use the same units, so their ratios match
+R's. Node sizes are ggplot mm drawn as `(mm * 72.27 / 25.4) ** 2` pt^2, which
+moves `cell_dim_plot(paga=...)` nodes from 128 to 129.5 pt^2, a change too small
+to see.
+
 ### velocity_plot (`VelocityPlot` 6745, `compute_velocity_on_grid` 6963)
 
 | Option / aspect | Status |
 |---|---|
 | raw arrows: start and end, `scale = 1` and `2` | **match to 5e-8** |
-| raw `group_by` | **differs**: R colours the arrows; Python colours a cell scatter |
-| raw layer content | **differs**: Python always draws the cells |
-| `grid` | not checkable in Python: scvelo is not installed. R's grid is pinned, and the test is xfail and skips without scvelo |
-| `stream` | not checkable on either side: metR is not installable here, and scvelo is not installed |
+| raw `group_by` | fixed; arrow colours match exactly, with a legend |
+| raw layer content | fixed; matches (arrows only) |
+| `grid` | fixed; matches R's pinned grid to 5e-8 (positions and ends), and to 3e-11 with `density`, `smooth`, `n_neighbors`, `min_mass` and `scale` all moved (`velocity_grid_opts.csv`) |
+| `stream` | the grid is checked: `(2, ns)` lines, `(2, ns, ns)` field and NA mask match R to 5e-13 (`velocity_stream_grid.csv`). The drawing is not checkable (metR is not installable here) |
 
 1. **`group_by`.** `_traj.py:456-463` colours a scatter of the cells, and the
    arrows stay `arrow_color`. R maps `color = group_by` on the **segments**,
@@ -293,8 +317,20 @@ in the open:
    instead of delegating. That removes the scvelo dependency, all four
    divergences above, and the shape bug at once. The pinned
    `velocity_grid_layers.csv` is then the test.
+
+   **Fixed since the audit**: ported as proposed. The ±1% padding note is gone
+   with it, since the port follows SCP rather than scvelo. Neighbour ties go to
+   the lower index, as R's stable `order`.
 4. **R bug.** `VelocityPlot` adds `lab_layer` twice (`6941-6942`). It is
    harmless, and it is already on the known-bug list in `docs/08_agent_handoff.md`.
+
+**Fixed since the audit**: items 1 and 3, and from item 2 the `density`
+subsample and `cells=` (numpy's generator, so a different random subset than
+R's). Still open from item 2: R's arrowheads scale with each arrow
+(`length / global_size` npc); `quiver` heads scale with the shaft, so they are
+uniform. The overlay layer `cell_dim_plot(velocity=...)` uses does size them
+per arrow, but its artist is not a `Quiver`, which the raw-arrow tests read.
+Stream mode now draws through that overlay layer, fed by the port.
 
 ### dynamic_plot (`DynamicPlot` 12102)
 
@@ -305,9 +341,9 @@ rolling mean. Only the raw points and the layout are compared.
 | Option / aspect | Status |
 |---|---|
 | point x = lineage pseudotime (single lineage) | **matches to 1e-6** |
-| point y | **differs**: log1p of raw counts, while R log1p's the lib-normalised counts |
-| point colour by `group_by` | **differs**: always grey |
-| `compare_lineages = TRUE` (the R default) | **differs**: 4 panels vs R's 2 |
+| point y | fixed; matches to 1e-6 (`log1p(counts / libsize * median(libsize))`) |
+| point colour by `group_by` | fixed; matches (Paired over `group_by`) |
+| `compare_lineages = TRUE` (the R default) | fixed; matches (2 panels, lineages overlaid, points at `x_assign`) |
 | fitted line and ribbon | not checkable (mgcv); a documented divergence |
 
 1. **No library-size normalisation.** `_traj.py:546-554` takes the counts and
@@ -335,6 +371,11 @@ rolling mean. Only the raw points and the layout are compared.
    `compare_lineages` is set (and by lineage when `compare_features` is set),
    draw every lineage's line and ribbon into that panel, and compute
    `x_assign` as the row mean over `lineages` for the points. Real bug.
+
+**Fixed since the audit** (items 1-3), as proposed. One deliberate divergence
+is documented in the docstring: when the non-integer guard fires, R sets
+`libsize` to 1 but still multiplies by the median column sum; here the guard
+makes the normalisation a no-op, as `group_heatmap` does.
 
 ### dynamic_heatmap, binned form (`DynamicHeatmap(use_fitted = FALSE)` 11020)
 
@@ -642,7 +683,8 @@ has.
 
 Fixtures: `tools/parity/audit_dim3d.R` → `tests/fixtures/parity/audit/dim3d/`
 (228 KB), `tools/parity/audit_cor.R` → `tests/fixtures/parity/audit/cor/`
-(~990 KB). Tests: `tests/test_parity_dim3d.py` (5 pass, 6 xfail),
+(~990 KB). Tests: `tests/test_parity_dim3d.py` (5 pass, 6 xfail at audit
+time; all 11 pass since the 3-D fixes),
 `tests/test_parity_cor.py` (17 pass, 10 xfail).
 
 Inputs: both sides read `pancreas_sub` after `NormalizeData` (its stored
@@ -687,11 +729,11 @@ pure renames.
 | traces: one per level, level order, names | **matches** exactly |
 | trace colours (Paired, verbatim slice) | **matches** exactly (hex-identical) |
 | trace membership and cell order; x/y/z | **matches** exactly (atol 0) |
-| NA cells, default | **differs**: Python drops them; R always draws an `NA` trace |
-| NA cells, `show_na=True` | membership matches; **colour differs** (`#FF7F00` vs R `#CCCCCC`) |
-| `pt_size` default | **differs**: 2.0 vs R 1.5 |
-| scene axis ranges | **differs**: Python uses autorange; R pins each axis to the data min/max |
-| title | **differs**: none vs R `Total (nCells:1000)` |
+| NA cells, default | fixed; matches (an `NA` trace, last) |
+| NA cells, `show_na=True` | fixed; membership and colour (`#CCCCCC`) match |
+| `pt_size` default | fixed; matches (1.5) |
+| scene axis ranges | fixed; matches to 1e-6 (pinned, cube aspect) |
+| title | fixed; matches exactly |
 | axis titles | `PC_1` vs R `pca_1`. This is the known key divergence (the notebook's `UMAP_`/`umap_`), not re-flagged |
 | `cells.highlight`, `lineages` | not checkable: not ported (no parameters) |
 
@@ -713,12 +755,16 @@ Fix: set `pt_size=1.5`. Add `title=f"Total (nCells:{n})"`. Pass
 `range=[min, max]` per axis along with `aspectratio=dict(x=1, y=1, z=1)`, as
 SCP-plot.R:3027-3030 does.
 
+**Fixed since the audit**, as proposed. `show_na` now defaults to `True` and
+is kept as a Python-only way to drop NA cells; the palette spans the real
+levels and `NA` takes `bg_color`.
+
 ### feature_dim_plot_3d
 
 | Option | Status |
 |---|---|
 | per-feature colour values | **match** exactly where Python keeps them (rtol 1e-12; object order) |
-| `bg_cutoff` default | **differs**: Python NaN-masks values <= 0 (76 % of Ins1, 77 % of Gcg, 80 % of S_score, including every negative S_score); R masks nothing, and the colour range starts at the min positive value instead of 0 / -0.356 |
+| `bg_cutoff` default | fixed; matches to 1e-12 (default `None`: nothing masked, the range starts at 0 / -0.356 as in R). At audit time Python NaN-masked 76-80% of the cells, including every negative S_score |
 | colour scale | Spectral vs R's plotly.js default. **Documented deliberate divergence** (docstring), so it is asserted as Python's documented behaviour |
 | multiple features | Python: one trace per feature plus a visibility dropdown. R: one trace plus a marker-swap dropdown. Same values per feature, so this is structural only |
 | `split.by` dropdown, `cells.highlight`, `calculate_coexp` | not checkable: not ported |
@@ -729,6 +775,9 @@ SCP-plot.R:3239-3242 pass the raw values as `marker.color`). The port copied the
 `bg_cutoff=0.0`, which hides most of a sparse gene and every negative signed
 score. The docstring documents only the palette change. This is a real bug.
 Fix: default `bg_cutoff=None` (or remove the parameter).
+
+**Fixed since the audit**: the default is `None` and the parameter stays as a
+Python-only opt-in; `pt_size` also moved to R's 1.5.
 
 ### cell_cor_heatmap
 

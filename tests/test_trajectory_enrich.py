@@ -83,3 +83,91 @@ def test_velocity_plot_names_its_extra(adata):
     ad = adata.copy()
     with pytest.raises(KeyError, match="velocity_embedding"):
         scp.pl.velocity_plot(ad, basis="umap")
+
+
+# --------------------------------------------------------------------------- #
+# the trajectory layers: drawn into a borrowed axes, legends collected there
+# --------------------------------------------------------------------------- #
+def _with_pseudotime(adata):
+    ad = adata.copy()
+    x = ad.obsm["X_umap"][:, 0]
+    ad.obs["pt"] = (x - x.min()) / (x.max() - x.min()) * 10
+    ad.obs.loc[ad.obs["leiden"] == "D", "pt"] = np.nan
+    v = ad.obsm["X_umap"]
+    ad.obsm["velocity_umap"] = 0.05 * np.column_stack([-(v[:, 1] - v[:, 1].mean()),
+                                                      v[:, 0] - v[:, 0].mean()])
+    return ad
+
+
+def test_trajectory_layers_draw_into_a_borrowed_panel(adata):
+    import warnings
+
+    from matplotlib.collections import PathCollection
+
+    from scp.layout import LegendColumn
+
+    ad = _with_pseudotime(adata)
+    fig = scp.pl.cell_dim_plot(ad, "leiden")
+    ax = fig.axes[0]
+    n_cells = len([c for c in ax.collections if isinstance(c, PathCollection)])
+    xlabel = ax.get_xlabel()
+    leg = LegendColumn()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # skmisc may be missing
+        scp.pl.lineage_plot(ad, ["pt"], reduction="X_umap", ax=ax, legend=leg)
+    scp.pl.velocity_plot(ad, basis="umap", group_by="leiden", ax=ax, legend=leg)
+    # neither layer adds a cell scatter, and the host panel keeps its labels
+    assert len([c for c in ax.collections if isinstance(c, PathCollection)]) == n_cells
+    assert ax.get_xlabel() == xlabel
+    assert [t for t, _h in leg.entries] == ["Lineages", "leiden"]
+    assert [h.get_label() for h in leg.entries[1][1]] == list(ad.obs["leiden"].cat.categories)
+
+
+def test_velocity_stream_runs_without_scvelo(adata):
+    ad = _with_pseudotime(adata)
+    ax = scp.pl.velocity_plot(ad, basis="umap", plot_type="stream", density=0.5)
+    cbars = [a for a in ax.figure.axes if a.get_label() == "<colorbar>"]
+    assert len(cbars) == 1 and cbars[0].get_ylabel() == "Velocity"
+    ax.figure.savefig(__import__("io").BytesIO(), format="png")
+
+
+def test_compute_velocity_on_grid_shapes(adata):
+    ad = _with_pseudotime(adata)
+    X, V = ad.obsm["X_umap"], ad.obsm["velocity_umap"]
+    gx, gv = scp.pl.compute_velocity_on_grid(X, V, density=0.4)
+    assert gx.shape == gv.shape and gx.shape[1] == 2 and len(gx) <= 20 * 20
+    sx, sv = scp.pl.compute_velocity_on_grid(X, V, density=0.4, adjust_for_stream=True)
+    assert sx.shape == (2, 20) and sv.shape == (2, 20, 20)
+    assert np.isnan(sv[0]).any() and not np.isnan(sv[1]).any()
+
+
+def test_dynamic_plot_panel_layouts(adata):
+    import warnings
+
+    ad = _with_pseudotime(adata)
+    ad.obs["pt2"] = ad.obs["pt"][::-1].to_numpy()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # pygam may be missing
+        f1 = scp.pl.dynamic_plot(ad, ["pt", "pt2"], ["g0", "g1"], group_by="leiden")
+        f2 = scp.pl.dynamic_plot(ad, ["pt", "pt2"], ["g0", "g1"], compare_lineages=False)
+        f3 = scp.pl.dynamic_plot(ad, ["pt", "pt2"], ["g0", "g1"], compare_lineages=False,
+                                 compare_features=True)
+        f4 = scp.pl.dynamic_plot(ad, ["pt", "pt2"], ["g0", "g1"], compare_features=True)
+    # R's panel grid: one per feature, per (lineage, feature), per lineage, one
+    assert [a.get_title() for a in f1.axes] == ["g0", "g1"]
+    assert len(f2.axes) == 4
+    assert len(f3.axes) == 2 and not any(a.get_title() for a in f3.axes)
+    assert len(f4.axes) == 1
+    # lines are coloured by feature there, so only the feature legend is drawn
+    assert [lg.get_title().get_text() for lg in f4.legends] == ["Features:"]
+    assert f1.axes[0].get_ylabel() == "log1p(normalized counts)"
+    titles = [lg.get_title().get_text() for lg in f1.legends]
+    assert titles == ["leiden:", "Lineages:"]
+
+
+def test_trajectory_examples_exist():
+    from pathlib import Path
+
+    fx = Path(__file__).parent / "fixtures"
+    for name in ("lineage_plot", "paga_plot", "velocity_plot_stream", "dynamic_plot"):
+        assert (fx / f"example_{name}.png").exists()

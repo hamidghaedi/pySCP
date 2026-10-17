@@ -1196,8 +1196,8 @@ def cell_dim_plot_3d(
     palette: str = "Paired",
     palcolor: Sequence[str] | dict[str, str] | None = None,
     bg_color: str = NA_COLOR_DEFAULT,
-    pt_size: float = 2.0,
-    show_na: bool = False,
+    pt_size: float = 1.5,
+    show_na: bool = True,
     width: int = 700,
     height: int = 600,
 ):
@@ -1207,6 +1207,16 @@ def cell_dim_plot_3d(
     https://github.com/zhanghao-njmu/SCP.  One trace per level, so plotly's
     own legend does the grouping and levels can be toggled.  Level order is
     the column's declared order, as everywhere else.
+
+    As in R, cells with a missing ``group_by`` are always drawn, as a last
+    ``"NA"`` trace coloured ``bg_color`` (``palette_scp(..., NA_color =
+    bg_color, NA_keep = TRUE)``, ``SCP-plot.R:2919-2926``); the palette is
+    spread over the real levels only.  ``show_na=False`` is a Python-only
+    switch that drops them instead.  The title is R's ``"Total (nCells:N)"``
+    over every cell, each scene axis is pinned to the data's range and the
+    scene is a cube (``SCP-plot.R:3016-3031``).
+
+    Not ported: ``cells.highlight``, ``lineages``, ``axis_labs``, ``save``.
     """
     go = _plotly()
     reduction = reduction or default_reduction(adata)
@@ -1216,22 +1226,34 @@ def cell_dim_plot_3d(
         raise ValueError(f"{reduction!r} has {emb.shape[1]} dimensions; 3 are needed")
     i, j, k = (d - 1 for d in dims)
 
-    cat = as_ordered_categorical(adata.obs[group_by], show_na=show_na)
+    cat = as_ordered_categorical(adata.obs[group_by])
     levels = [str(x) for x in cat.cat.categories]
     colors = discrete_palette(levels, palette=palette, palcolor=palcolor)
+    na = np.asarray(cat.isna())
     values = np.asarray(cat).astype(str)
+    if show_na and na.any():
+        values[na] = "NA"
+        levels = [*levels, "NA"]
+        colors["NA"] = bg_color
 
     fig = go.Figure()
     for lv in levels:
-        m = values == lv
+        m = (values == lv) & (~na if lv != "NA" else na)
         fig.add_trace(go.Scatter3d(
             x=emb[m, i], y=emb[m, j], z=emb[m, k], mode="markers", name=lv,
-            marker=dict(size=pt_size, color=colors.get(lv, bg_color)),
+            marker=dict(size=pt_size, color=colors[lv]),
         ))
+
+    def _axis(c: int, d: int) -> dict:
+        return dict(title=f"{key}{d}", range=[float(np.nanmin(emb[:, c])),
+                                              float(np.nanmax(emb[:, c]))])
+
     fig.update_layout(
         width=width, height=height, legend_title_text=group_by,
-        scene=dict(xaxis_title=f"{key}{dims[0]}", yaxis_title=f"{key}{dims[1]}",
-                   zaxis_title=f"{key}{dims[2]}"),
+        title=dict(text=f"Total (nCells:{adata.n_obs})", font=dict(size=16, color="black"),
+                   y=0.95),
+        scene=dict(xaxis=_axis(i, dims[0]), yaxis=_axis(j, dims[1]), zaxis=_axis(k, dims[2]),
+                   aspectratio=dict(x=1, y=1, z=1)),
         margin=dict(l=0, r=0, t=30, b=0),
     )
     return fig
@@ -1247,9 +1269,9 @@ def feature_dim_plot_3d(
     calculate_coexp: bool = False,
     palette: str = "Spectral",
     palcolor: Sequence[str] | None = None,
-    bg_cutoff: float | None = 0.0,
+    bg_cutoff: float | None = None,
     bg_color: str = NA_COLOR_DEFAULT,
-    pt_size: float = 2.0,
+    pt_size: float = 1.5,
     width: int = 700,
     height: int = 600,
 ):
@@ -1264,9 +1286,17 @@ def feature_dim_plot_3d(
     defect rather than a decision, so this uses the same ramp as
     :func:`feature_dim_plot` and the two agree.
 
+    **No masking by default.**  ``FeatureDimPlot3D`` has no ``bg_cutoff``: it
+    passes every value to ``marker.color`` (``SCP-plot.R:3239-3242``), so a
+    sparse gene keeps its zeros and a signed score its negatives.
+    ``bg_cutoff`` (default ``None``) is a Python-only opt-in that NaN-masks
+    values ``<= bg_cutoff``, the 2-D behaviour.
+
     ``calculate_coexp=True`` appends a ``CoExp`` trace, the geometric mean of
     the gene features, exactly as in :func:`feature_dim_plot`.  Several
     features become an ``updatemenus`` dropdown, one trace each.
+
+    Not ported: ``split.by``, ``cells.highlight``, ``axis_labs``, ``save``.
     """
     go = _plotly()
     feats = [features] if isinstance(features, str) else list(features)

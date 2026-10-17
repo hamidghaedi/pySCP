@@ -203,6 +203,16 @@ that `FeatureDimPlot3D` does **not** use `palette_scp` at all in R — it falls
 back to plotly's default scale, so 3D feature plots don't match the 2D
 Spectral coloring. Fix that rather than porting it.
 
+Verified against SCP 0.5.6 (`tools/parity/audit_dim3d.R` →
+`tests/test_parity_dim3d.py`, no xfails left): traces, level order, colours,
+membership and coordinates match exactly. The audit's six mismatches are
+fixed: NA cells are always drawn as a last `NA` trace in `bg_color` (R has no
+`show_na` switch; the Python one now defaults to `True`), `pt_size` is R's 1.5,
+the scene axes are pinned to the data range in a cube, the title is
+`Total (nCells:N)`, and `feature_dim_plot_3d` masks nothing by default
+(`bg_cutoff=None`; R has no cutoff), so its colour values match R's to 1e-12.
+Still not ported: `cells.highlight`, `lineages`, `split.by`.
+
 ### 9 — `dynamic_heatmap` / `dynamic_plot` — L (binned form done; fitted form deliberately not)
 
 Brief: `porting_briefs/heatmaps.md` §8, `trajectory_enrichment.md` §5.
@@ -245,17 +255,44 @@ precisely: the **net** transition reduction (only the dominant direction is
 drawn) and the node positions as the per-group *median* of the embedding
 rather than `uns['paga']['pos']`.
 
+Verified against SCP 0.5.6 (`tools/parity/audit_traj.R` →
+`tests/test_parity_traj.py`): node medians, colours, edge selection and
+widths, the net-transition logic and `segementsDf` all match, and the audit's
+five mismatches are fixed. `global_size` is R's signed
+`sqrt(max(x)^2 + max(y)^2)`, so shortened and offset segments match to 1e-8;
+net flows rescale onto the new `transition_size`; `paga_plot` passes its own
+`node_size` (R's constant 4) instead of forcing `GroupSize`; sizes follow
+ggplot (`scale_size_identity`, or `area_pal(1, 6)` trained on `node_size` and
+`node_size * 1.2` for a column); and the node legend is registered, with
+`"1: Ductal"` labels under `label=True`.
+
 ### 12 — `lineage_plot`, `velocity_plot` — M ✅ done
 
 Brief: `porting_briefs/trajectory_enrichment.md` §1, §4.
 
-Delegate `compute_velocity_on_grid` to scvelo rather than reimplementing it —
-the R version is a transliteration of scvelo's, with one deliberate divergence
-(no ±1% grid padding). `ax.quiver` and `ax.streamplot` do the drawing.
-
 For LOESS with `degree=2`, use `skmisc.loess` (the same underlying
 C/Fortran routine R wraps); `statsmodels.lowess` is degree-1 and will not
 match.
+
+`compute_velocity_on_grid` was first delegated to scvelo. The audit showed
+SCP's version is not scvelo's — no ±1% padding, `ceiling(n/50)` neighbours, no
+autoscale, `scale` applied, the stream `min_mass` mapping applied once — and
+the delegation also broke stream mode's reshape. It is now a numpy port of
+R's 60 lines (`SCP-plot.R:6963-7039`), so `velocity_plot` needs no scvelo, and
+it matches R's grid to 5e-8 (VelocityPlot's default, the fixture's precision),
+3e-11 with every option moved, and stream mode's `(2, ns, ns)` field and NA
+mask to 5e-13 (`tools/parity/velocity_grid.R`).
+
+Verified against SCP 0.5.6 (`tests/test_parity_traj.py`): `lineage_plot`'s
+curves match to 5e-8, with R's strict trim, `whiskers`, the end arrowhead and
+a `Lineages` legend; it shares `cell_dim_plot`'s lineage layer, so the two draw
+the same curves. Raw velocity arrows match to 5e-8, and `group_by` now colours
+the arrows. Neither function draws cells any more: both are layers that take
+`ax=` and an optional `legend=` (`LegendColumn`). Not matched: R's raw/grid
+arrowheads scale with each arrow, `quiver`'s do not; metR's streamline
+parameters have no `streamplot` counterpart. `cell_dim_plot(velocity=...)`
+still computes its grid through scvelo; switching it to the port is the
+remaining step.
 
 ### 13 — `projection_plot` — S ✅ done
 

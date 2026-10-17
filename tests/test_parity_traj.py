@@ -65,7 +65,11 @@ def r_adata(inputs, levels):
         obs[lin] = inputs[lin].to_numpy(dtype=float)
     obs["LineageInt"] = np.floor(obs["Lineage1"])
     X = inputs[[f"gene_{g}" for g in genes]].to_numpy(dtype=float)
-    ad = anndata.AnnData(X=X, obs=obs, var=pd.DataFrame(index=pd.Index(genes)))
+    # only seven genes' counts are shipped: fold the rest of each library into
+    # one column, so colSums(counts) is R's library size, as on the R object
+    rest = inputs["libsize"].to_numpy(dtype=float) - X.sum(axis=1)
+    X = np.c_[X, rest]
+    ad = anndata.AnnData(X=X, obs=obs, var=pd.DataFrame(index=pd.Index([*genes, "_rest"])))
     ad.layers["counts"] = X.copy()
     ad.obsm["X_umap"] = inputs[["UMAP_1", "UMAP_2"]].to_numpy(dtype=float)
     ad.obsm["X_pca"] = inputs[["PC_1", "PC_2"]].to_numpy(dtype=float)
@@ -128,8 +132,6 @@ def test_lineage_span_and_trim_match_r(r_adata):
 
 
 @skmisc
-@pytest.mark.xfail(strict=True, reason="trim keeps cells equal to the quantile (>=, <=); "
-                   "R drops them (strict >, <)")
 def test_lineage_trim_is_strict_on_tied_pseudotime(r_adata):
     r = _csv("lineage_int_layers.csv")
     ax = scp.pl.lineage_plot(r_adata, ["LineageInt"], reduction="X_umap")
@@ -137,7 +139,6 @@ def test_lineage_trim_is_strict_on_tied_pseudotime(r_adata):
 
 
 @skmisc
-@pytest.mark.xfail(strict=True, reason="`whiskers` is accepted but never drawn")
 def test_lineage_whiskers_are_drawn(r_adata):
     r = _csv("lineage_whiskers_layers.csv")
     ax = scp.pl.lineage_plot(r_adata, ["Lineage1"], reduction="X_umap", whiskers=True)
@@ -146,15 +147,12 @@ def test_lineage_whiskers_are_drawn(r_adata):
 
 
 @skmisc
-@pytest.mark.xfail(strict=True, reason="lineage_plot scatters every cell in grey; "
-                   "LineagePlot draws only the curves")
 def test_lineage_draws_only_curves(r_adata):
     ax = scp.pl.lineage_plot(r_adata, ["Lineage1"], reduction="X_umap")
     assert not [c for c in ax.collections if isinstance(c, PathCollection)]
 
 
 @skmisc
-@pytest.mark.xfail(strict=True, reason="no Lineages legend and no arrowhead at the curve end")
 def test_lineage_legend_and_arrow(r_adata, levels):
     ax = scp.pl.lineage_plot(r_adata, levels["lineages"], reduction="X_umap")
     labels = [t.get_text() for lg in ax.figure.legends for t in lg.get_texts()]
@@ -269,18 +267,16 @@ def test_paga_net_transition_pairs_and_direction_match_r(r_adata, case):
         assert _match_rows(unit(R), unit(t)).max() < 1e-6
 
 
-@pytest.mark.xfail(strict=True, reason="global_size uses max|x|, max|y|; R uses the signed "
-                   "max(x), max(y), so every shorten/offset length differs")
 @pytest.mark.parametrize("case", ["shorten", "transition", "transition_offset"])
 def test_paga_shortened_segments_match_r(r_adata, case):
     edges, trans, *_ = _r_parts(f"paga_{case}")
     e, _w, t, *_ = _py_parts(_paga(r_adata, case))
     assert _match_rows(edges[["x", "y", "xend", "yend"]].to_numpy(), e).max() < ATOL
-    assert _match_rows(trans[["x", "y", "xend", "yend"]].to_numpy(), t).max() < ATOL
+    # "shorten" draws no transitions on either side: shapes (0, 4) must agree
+    d = _match_rows(trans[["x", "y", "xend", "yend"]].to_numpy(), t)
+    assert d.size == 0 or d.max() < ATOL
 
 
-@pytest.mark.xfail(strict=True, reason="transition arrows are drawn at a constant width; "
-                   "R rescales net flow onto transition_size=(0.2, 1)")
 def test_paga_transition_widths_follow_net_flow(r_adata):
     _e, trans, *_ = _r_parts("paga_transition")
     *_, arrows, _p = _py_parts(_paga(r_adata, "transition"))
@@ -289,8 +285,6 @@ def test_paga_transition_widths_follow_net_flow(r_adata):
                                atol=1e-6)
 
 
-@pytest.mark.xfail(strict=True, reason="paga_plot hard-codes node_size='GroupSize' and ignores "
-                   "its node_size argument; R's default is a constant 4")
 def test_paga_default_node_size_is_constant(r_adata):
     _e, _t, black, nodes = _r_parts("paga_default")
     assert set(nodes["size"]) == {4.0} and set(black["size"]) == {4.8}
@@ -298,8 +292,6 @@ def test_paga_default_node_size_is_constant(r_adata):
     assert len(set(np.round(pts[-1].get_sizes(), 9))) == 1
 
 
-@pytest.mark.xfail(strict=True, reason="GroupSize maps to area/max*200; R maps it through "
-                   "scale_size (area_pal, range 1..6) trained on node_size and node_size*1.2")
 def test_paga_groupsize_relative_diameters_match_r(r_adata):
     _e, _t, black, nodes = _r_parts("paga_groupsize")
     *_, pts = _py_parts(_paga(r_adata, "groupsize"))
@@ -311,8 +303,6 @@ def test_paga_groupsize_relative_diameters_match_r(r_adata):
 
 
 @pytest.mark.parametrize("case", ["default", "label"])
-@pytest.mark.xfail(strict=True, reason="graph_plot registers no node legend; R shows one "
-                   "('1: Ductal' ... when label=True)")
 def test_paga_legend_labels_match_r(r_adata, case):
     r_labels = (FIX / f"paga_{case}_legend.txt").read_text().splitlines()
     ax = _paga(r_adata, case)
@@ -347,8 +337,6 @@ def test_graph_shortening_matches_r_given_rs_global_size(graph_input):
     assert _match_rows(R, seg).max() < 1e-8
 
 
-@pytest.mark.xfail(strict=True, reason="global_size = hypot(max|x|, max|y|); R: "
-                   "sqrt(max(x)^2 + max(y)^2) on signed coordinates")
 def test_graph_edge_shorten_matches_r(graph_input):
     node, E, _T = graph_input
     R = _csv("graph_edges_layers.csv")
@@ -383,29 +371,60 @@ def test_velocity_raw_arrow_endpoints_match_r(r_adata, name, scale):
     np.testing.assert_allclose(end, R[["xend", "yend"]].to_numpy(), atol=ATOL)
 
 
-@pytest.mark.xfail(strict=True, reason="group_by colours a cell scatter; R colours the arrows "
-                   "and draws no cells")
 def test_velocity_group_by_colours_the_arrows(r_adata):
     R = _csv("velocity_raw_group_layers.csv")
     q = _quiver(scp.pl.velocity_plot(r_adata, basis="umap", group_by="SubCellType"))
     assert _hexes(q.get_facecolors()) == _r_hex(R.colour)
 
 
-@pytest.mark.xfail(strict=True, reason="velocity_plot always scatters the cells underneath; "
-                   "VelocityPlot draws arrows only")
 def test_velocity_raw_draws_only_arrows(r_adata):
     ax = scp.pl.velocity_plot(r_adata, basis="umap")
     assert not [c for c in ax.collections if isinstance(c, PathCollection)]
 
 
-@pytest.mark.xfail(strict=True, reason="grid delegates to scvelo: +-1% padding, autoscale, "
-                   "int(n/50) neighbours and no `scale`; R's port has none of these")
 def test_velocity_grid_matches_r(r_adata):
-    pytest.importorskip("scvelo")
+    """VelocityPlot's default grid: R's compute_velocity_on_grid, ported to numpy."""
     R = _csv("velocity_grid_layers.csv")
     q = _quiver(scp.pl.velocity_plot(r_adata, basis="umap", plot_type="grid"))
     X = q.get_offsets()
     np.testing.assert_allclose(X, R[["x", "y"]].to_numpy(), atol=ATOL)
+    end = X + np.c_[q.U, q.V] / q.scale
+    np.testing.assert_allclose(end, R[["xend", "yend"]].to_numpy(), atol=ATOL)
+
+
+@pytest.fixture(scope="module")
+def velocity_xv(inputs):
+    X = inputs[["UMAP_1", "UMAP_2"]].to_numpy(dtype=float)
+    V = _csv("velocity_input.csv")[["V1", "V2"]].to_numpy(dtype=float)
+    return X, V
+
+
+def test_velocity_grid_options_match_r(velocity_xv):
+    """density, smooth, n_neighbors, min_mass and scale all moved off their defaults."""
+    X, V = velocity_xv
+    R = _csv("velocity_grid_opts.csv")
+    gx, gv = scp.pl.compute_velocity_on_grid(X, V, density=0.5, smooth=1.0, n_neighbors=15,
+                                             min_mass=3.0, scale=2.0)
+    np.testing.assert_allclose(gx, R[["x", "y"]].to_numpy(), atol=ATOL)
+    np.testing.assert_allclose(gv, R[["u", "v"]].to_numpy(), rtol=1e-8, atol=1e-12)
+
+
+def test_velocity_stream_grid_matches_r(velocity_xv):
+    """Stream mode: the (2, ns) grid lines, the [component, y, x] field and R's NA mask."""
+    X, V = velocity_xv
+    R = _csv("velocity_stream_grid.csv")
+    gx, gv = scp.pl.compute_velocity_on_grid(X, V, density=0.6, adjust_for_stream=True)
+    ns = int(R.i.max())
+    assert gx.shape == (2, ns) and gv.shape == (2, ns, ns)
+    i, j = R.i.to_numpy() - 1, R.j.to_numpy() - 1
+    np.testing.assert_allclose(gx[0, i], R.x, atol=ATOL)
+    np.testing.assert_allclose(gx[1, j], R.y, atol=ATOL)
+    u, v = gv[0, j, i], gv[1, j, i]
+    np.testing.assert_array_equal(np.isnan(u), R.u.isna().to_numpy())
+    assert R.u.isna().any() and not np.isnan(v).any()
+    ok = R.u.notna().to_numpy()
+    np.testing.assert_allclose(u[ok], R.u[ok], rtol=1e-8, atol=1e-12)
+    np.testing.assert_allclose(v, R.v, rtol=1e-8, atol=1e-12)
 
 
 # --------------------------------------------------------------------------- #
@@ -429,8 +448,6 @@ def test_dynamic_points_sit_at_lineage_pseudotime(r_adata):
     np.testing.assert_allclose(np.sort(pts[:, 0]), np.sort(r.x.to_numpy()), atol=ATOL)
 
 
-@pytest.mark.xfail(strict=True, reason="no library-size normalisation before log1p; R divides "
-                   "counts by libsize and multiplies by median(libsize) (lib_normalize=TRUE)")
 def test_dynamic_points_are_lib_normalised(r_adata):
     r = _csv("dynamic_Lineage1_Nnat_layers.csv")
     pts = _dynamic_first_panel(r_adata).collections[0].get_offsets()
@@ -450,16 +467,12 @@ def test_dynamic_r_points_are_lib_normalised_log1p(inputs):
     np.testing.assert_allclose(exp[o_e], r[["x", "y"]].to_numpy()[o_r], atol=ATOL)
 
 
-@pytest.mark.xfail(strict=True, reason="group_by is accepted but points stay grey; R colours "
-                   "them with point_palette='Paired'")
 def test_dynamic_points_coloured_by_group(r_adata):
     r = _csv("dynamic_Lineage1_Nnat_layers.csv")
     pts = _dynamic_first_panel(r_adata).collections[0]
     assert set(_hexes(pts.get_facecolors())) == set(_r_hex(r.colour))
 
 
-@pytest.mark.xfail(strict=True, reason="compare_lineages is ignored: one panel per lineage x "
-                   "feature instead of one per feature with the lineages overlaid")
 def test_dynamic_compare_lineages_panels(r_adata):
     r_panels = (FIX / "dynamic_compare_panels.txt").read_text().split()
     with warnings.catch_warnings():
@@ -467,6 +480,26 @@ def test_dynamic_compare_lineages_panels(r_adata):
         fig = scp.pl.dynamic_plot(r_adata, ["Lineage1", "Lineage2"], ["Nnat", "Irx1"],
                                   group_by="SubCellType")
     assert len([a for a in fig.axes if a.get_title()]) == len(r_panels)
+
+
+def test_dynamic_compare_panel_layers_match_r(r_adata):
+    """The overlaid panel: one point per cell of the union at x_assign, R's
+    point colours, and one line per lineage in line_palette."""
+    r = _csv("dynamic_compare_first_summary.csv").set_index("layer")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        fig = scp.pl.dynamic_plot(r_adata, ["Lineage1", "Lineage2"], ["Nnat", "Irx1"],
+                                  group_by="SubCellType")
+    ax = [a for a in fig.axes if a.get_title() == "Nnat"][0]
+    pts = [c for c in ax.collections if isinstance(c, PathCollection)][0]
+    assert len(pts.get_offsets()) == r.loc[1, "n"]
+    assert set(_hexes(pts.get_facecolors())) == set(r.loc[1, "colours"].split(";"))
+    lines = [ln for ln in ax.get_lines() if len(ln.get_xdata()) > 1]
+    assert [to_hex(ln.get_color()).upper() for ln in lines] == r.loc[4, "colours"].split(";")
+    t = r_adata.obs[["Lineage1", "Lineage2"]].to_numpy(dtype=float)
+    on = np.isfinite(t).any(axis=1)
+    x_assign = np.nanmean(t[on], axis=1)
+    np.testing.assert_allclose(np.sort(pts.get_offsets()[:, 0]), np.sort(x_assign), atol=ATOL)
 
 
 # --------------------------------------------------------------------------- #

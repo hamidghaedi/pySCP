@@ -77,16 +77,12 @@ def test_cell3d_trace_membership_and_coordinates(pancreas3d):
         np.testing.assert_allclose(np.c_[pt.x, pt.y, pt.z], xyz, rtol=0, atol=0)
 
 
-@pytest.mark.xfail(strict=True, reason="NA cells are dropped unless show_na=True; R always draws "
-                   "them as an 'NA' trace (CellDimPlot3D has no show_na switch)")
 def test_cell3d_na_cells_drawn_by_default(pancreas3d):
     r = _json("cell3d_na.json")
     fig = scp.pl.cell_dim_plot_3d(pancreas3d, "CellTypeNA", reduction="X_pca")
     assert [t.name for t in fig.data] == [t["name"] for t in r["traces"]]
 
 
-@pytest.mark.xfail(strict=True, reason="show_na=True colours the NA level from the palette "
-                   "(#FF7F00) instead of bg_color, as R's palette_scp(NA_color=bg_color) does")
 def test_cell3d_na_trace_uses_bg_color(pancreas3d):
     r = _json("cell3d_na.json")
     fig = scp.pl.cell_dim_plot_3d(pancreas3d, "CellTypeNA", reduction="X_pca", show_na=True)
@@ -104,15 +100,12 @@ def test_cell3d_na_trace_membership_when_shown(pancreas3d):
         np.testing.assert_array_equal(pt.x, emb[[pos[c] for c in rt["cells"]], 0])
 
 
-@pytest.mark.xfail(strict=True, reason="pt_size defaults to 2.0; R's pt.size default is 1.5")
 def test_cell3d_default_marker_size(pancreas3d):
     r = _json("cell3d.json")
     fig = scp.pl.cell_dim_plot_3d(pancreas3d, "CellType", reduction="X_pca")
     assert fig.data[0].marker.size == r["traces"][0]["marker_size"]
 
 
-@pytest.mark.xfail(strict=True, reason="scene axis ranges are left to plotly autorange; R pins "
-                   "each to the observed min/max")
 def test_cell3d_scene_ranges(pancreas3d):
     r = _json("cell3d.json")
     fig = scp.pl.cell_dim_plot_3d(pancreas3d, "CellType", reduction="X_pca")
@@ -122,7 +115,6 @@ def test_cell3d_scene_ranges(pancreas3d):
         np.testing.assert_allclose(ax.range, r[key]["range"], rtol=1e-6)
 
 
-@pytest.mark.xfail(strict=True, reason="no figure title; R titles it 'Total (nCells:N)'")
 def test_cell3d_title(pancreas3d):
     r = _json("cell3d.json")
     fig = scp.pl.cell_dim_plot_3d(pancreas3d, "CellType", reduction="X_pca")
@@ -145,8 +137,6 @@ def test_feature3d_values_match_r_where_drawn(pancreas3d):
         np.testing.assert_allclose(pc[keep], rc[keep], rtol=1e-12)
 
 
-@pytest.mark.xfail(strict=True, reason="bg_cutoff=0 NaN-masks every value <= 0 (76-80% of cells, "
-                   "all negative S_score); FeatureDimPlot3D has no bg_cutoff and masks nothing")
 def test_feature3d_no_masking_by_default(pancreas3d):
     r = _json("feature3d.json")
     fig = scp.pl.feature_dim_plot_3d(pancreas3d, r["button_labels"], reduction="X_pca")
