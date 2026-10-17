@@ -489,7 +489,7 @@ def test_gsea_bar_fill_and_alpha(gsea_lists):
 
 
 def test_gsea_bar_panels_per_key_on_one_grid(gsea_lists):
-    """Every key gets a panel of one figure, laid out by PanelGrid (constrained
+    """Every key gets a panel of one figure, laid out by PanelGrid (measured
     layout), with the description text inside the panel and no y tick labels."""
     exp = _csv("gsea_bar_both.csv")
     gt = _csv("gsea_input.csv")

@@ -27,7 +27,6 @@ import warnings
 from collections.abc import Sequence
 from typing import Literal
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
@@ -642,7 +641,10 @@ def velocity_plot(
             streamline_palcolor=streamline_palcolor, streamline_bg_color=streamline_bg_color,
             streamline_bg_stroke=streamline_bg_stroke, rng=rng)
         if mappable is not None and legend_position != "none" and ax.figure is not None:
-            cb = ax.figure.colorbar(mappable, ax=[ax], fraction=0.046, pad=0.03)
+            # a borrowed ax belongs to the caller's figure; only our own grid
+            # can place the bar outside the panel
+            cb = (pg.colorbar(mappable, ax=ax) if pg is not None
+                  else ax.figure.colorbar(mappable, ax=[ax], fraction=0.046, pad=0.03))
             cb.outline.set_edgecolor("black")
             cb.set_label("Velocity")
 
@@ -968,7 +970,9 @@ def projection_plot(
     colour (Set1) on top, so query cells read as outlined discs over the
     reference cloud -- R's ``p3``.  ``palette`` / ``query_palette`` in
     ``kwargs`` override the two palettes; ``xlab``, ``ylab`` and ``title``
-    label the axes.
+    label the axes.  Without ``ax``, one square themed panel
+    (``panel_size`` in ``kwargs``, 3.5 in by default) is allocated through
+    :class:`~scp.layout.PanelGrid`, like every other figure here.
 
     **R bug, deliberately not reproduced.**  ``ProjectionPlot`` computes the
     union of the reference and query ranges (``SCP-plot.R:12522-12531``) but
@@ -980,9 +984,8 @@ def projection_plot(
     Here both axes are set to that union, so every query cell is drawn --
     what R evidently intends.
     """
-    if ax is None:
-        _fig, ax = plt.subplots(figsize=(4.2, 4.2))
-    Xr = np.asarray(adata_ref.obsm[ref_reduction], dtype=float)
+    ax, _legend, pg = _panel(ax, None, "none", panel_size=kwargs.get("panel_size", (3.5, 3.5)))
+    Xr =np.asarray(adata_ref.obsm[ref_reduction], dtype=float)
     Xq = np.asarray(adata_query.obsm[query_reduction], dtype=float)
 
     # Shared limits over BOTH objects, or the projection reads as a shift that
@@ -1017,4 +1020,5 @@ def projection_plot(
     ax.set_ylabel(kwargs.get("ylab", "Dim 2"))
     if kwargs.get("title"):
         ax.set_title(kwargs["title"])
+    _finish(pg)
     return ax

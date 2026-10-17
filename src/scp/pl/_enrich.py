@@ -331,7 +331,7 @@ def _draw_comparison_panels(
     if extra_legend is not None:
         pg.legend.add(*extra_legend)
     sm = ScalarMappable(cmap=cmap, norm=norm)
-    cb = pg.fig.colorbar(sm, ax=list(pg.axes.values()), fraction=0.03, pad=0.02, shrink=0.6)
+    cb = pg.colorbar(sm)
     cb.set_label(fill_label, fontsize=th.size("legend.title"))
     cb.outline.set_edgecolor("black")
     return pg.finish()
@@ -516,11 +516,9 @@ def enrichment_plot(
                                       palcolor=palcolor)
     frames = [enrichment_panel_frame(g, plot_type=plot_type, metric=metric,
                                      character_width=character_width) for _, _, g in panels]
-    # panel_size is the panel; the term labels (and a colourbar) come on top
-    label_in = draw.text_width_in([lv for _, lev in frames for lv in lev], fs)
-    pg = PanelGrid(len(panels), panel_size=(psize[0] + label_in + (0.0 if plot_type == "bar"
-                                                                    else 0.9), psize[1]),
-                   nrow=nrow, ncol=ncol, keys=keys, theme=th,
+    # panel_size is the panel; PanelGrid measures the term labels (and the
+    # colourbar) and grows the figure around them
+    pg = PanelGrid(len(panels), panel_size=psize, nrow=nrow, ncol=ncol, keys=keys, theme=th,
                    legend=LegendColumn(position="right"))
     multi = len(panels) > 1
     for (key, _dg, _g), (frame, levels) in zip(panels, frames, strict=True):
@@ -539,8 +537,7 @@ def enrichment_plot(
         draw.draw_enrichment_points(ax, frame, levels, plot_type=plot_type, fill=fill,
                                     sizes=sizes, fontsize=fs)
         # every panel is its own ggplot in R, so each has its own scales
-        cb = pg.fig.colorbar(ScalarMappable(cmap=cmap, norm=norm), ax=[ax], fraction=0.046,
-                             pad=0.03, shrink=0.7)
+        cb = pg.colorbar(ScalarMappable(cmap=cmap, norm=norm), ax=ax)
         cb.set_label(f"-log10({metric})", fontsize=th.size("legend.title"))
         cb.outline.set_edgecolor("black")
         pg.legend.add(f"{size_col} ({key})" if multi else size_col,
@@ -611,8 +608,8 @@ def _draw_graph_family(
                     sub, metric=metric, word_type=word_type, gene_col=gene_col,
                     top_word=top_word, words_excluded=words_excluded, background=bg, rng=rng))
             tables.append(pd.concat(parts, ignore_index=True) if parts else pd.DataFrame())
-        # colourbars first: they take space from the axes, and the words must be
-        # packed into the panel as it will finally be
+        # PanelGrid panels are their final size from the start (colourbars sit
+        # outside them), so the words are packed into the panel as drawn
         for (key, _dg, _df), tab in zip(panels, tables, strict=True):
             ax = pg.axes[key]
             ax.set_title(str(key), fontsize=th.size("strip.text"))
@@ -621,7 +618,7 @@ def _draw_graph_family(
             sc = tab["score"].to_numpy(dtype=float)
             sm = ScalarMappable(cmap=LinearSegmentedColormap.from_list("wc", ramp, N=256),
                                 norm=Normalize(float(sc.min()), float(sc.max())))
-            cb = pg.fig.colorbar(sm, ax=ax, fraction=0.05, pad=0.03, shrink=0.7)
+            cb = pg.colorbar(sm, ax=ax)
             cb.set_label("Score", fontsize=th.size("legend.title"))
             cb.outline.set_edgecolor("black")
             cnt = tab["count"].to_numpy(dtype=float)
@@ -631,9 +628,6 @@ def _draw_graph_family(
                 Line2D([], [], marker="$G$", linestyle="none", color="black",
                        markersize=float(s) * draw.PT, label=str(b))
                 for b, s in zip(br, sizes, strict=True)])
-        pg.fig.set_layout_engine("constrained")
-        pg.fig.canvas.draw()
-        pg.fig.set_layout_engine("none")
         for (key, _dg, _df), tab in zip(panels, tables, strict=True):
             draw.draw_wordcloud(pg.axes[key], tab, ramp, word_size=word_size)
         return

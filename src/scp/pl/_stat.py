@@ -721,10 +721,8 @@ def feature_cor_plot(
         mine = grid_axes[-n * n:]
         if split_by is not None:
             _matrix_title(mine[:n], s)
-        # R binds the correlation legend to each matrix; a colorbar spanning
-        # axes of several sub-grids would defeat the layout engine
-        cb = fig.colorbar(ScalarMappable(norm=cor_norm, cmap=cor_cmap), ax=mine,
-                          fraction=0.04, pad=0.03, shrink=0.6)
+        # R binds the correlation legend to each matrix: beside its own panel
+        cb = pg.colorbar(ScalarMappable(norm=cor_norm, cmap=cor_cmap), ax=mine)
         cb.set_label("Correlation", fontsize=th.size("legend.title"))
         cb.set_ticks(np.linspace(*cor_range, 3).tolist())  # n.breaks = 3: -1, 0, 1 by default
         cb.ax.set_ylim(*cor_range)
@@ -1096,6 +1094,6 @@ def volcano_plot(
             ax.set_title(g, fontsize=th.size("plot.title"))
 
     sm = ScalarMappable(norm=norm, cmap=cmap)
-    cb = pg.fig.colorbar(sm, ax=list(pg.axes.values()), fraction=0.02, pad=0.02)
+    cb = pg.colorbar(sm)
     cb.set_label(color_name, fontsize=th.size("legend.title"))
     return pg.finish()

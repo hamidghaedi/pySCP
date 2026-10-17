@@ -66,14 +66,53 @@ The thing with a known size must be the **panel**, and the figure grows to fit
 its decorations. This is what `panel_fix()` buys R users, and it is why SCP
 figures compose cleanly into manuscripts.
 
-```python
-fig_w = ncol * panel_w + (ncol + 1) * margin + legend_w
-fig_h = nrow * panel_h + (nrow + 1) * margin
+Setting `figsize` and letting the panel float — the default matplotlib habit,
+and what the constrained layout engine does — gives you panels of different
+sizes whenever the legend or tick labels change length, and leaves aspect-fixed
+panels floating in cells wider than they are. `PanelGrid` does not use it.
+Instead `PanelGrid.finish()` runs a deterministic two-pass layout:
+
+1. **Allocate.** Every panel is created at exactly `panel_size` inches on a
+   provisional canvas (one `GridSpec` whose rows and columns alternate panel
+   tracks and gap tracks). When the theme fixes `aspect_ratio` and
+   `panel_size` disagrees with it, the panel is the largest box of that ratio
+   inside `panel_size` — `panel_fix` likewise derives the missing dimension
+   from the aspect. Drawing functions draw into these axes; a cell may be
+   subdivided with `pg.axes[key].get_subplotspec().subgridspec(...)` (the
+   `feature_cor_plot` matrix, the upset bar/matrix pair, the stacked GSEA
+   block), and the sub-axes stay inside the exact panel box.
+2. **Measure.** After a draw, each cell's reach past its panel box — tick
+   labels, axis titles, panel titles, strips written in axes coordinates,
+   inset axes, and colourbars attached to that panel — is read from the axes'
+   tight bounding boxes, in inches. Inch extents do not depend on where the
+   panel sits, so one measurement is enough.
+3. **Place.** Each column gap is the widest right-hand reach in the column on
+   its left plus the widest left-hand reach in the column on its right plus a
+   pad (`wspace`, 11 pt by default — ggplot's spacing); rows likewise. A pad
+   of exactly `0` makes the panels abut (the stacked violins). Figure-level
+   `suptitle` / `supxlabel` / `supylabel` get their own measured margin. The
+   legend column is measured and placed, and the figure size is set to the sum
+   of all of it plus a 0.1 in outer margin.
+
+```text
+| margin | legend? | supylabel? | L0 | panel | gap0 | panel | ... | R_last | legend? | margin |
+gap_c = R[c] + wspace + L[c+1]        R[c] = max over the rows of column c
 ```
 
-Setting `figsize` and letting the panel float — the default matplotlib habit —
-gives you panels of different sizes whenever the legend or tick labels change
-length. Do not do it.
+So the figure size is an *output*, nothing is drawn outside it, and saving
+with or without `bbox_inches="tight"` gives the same picture (the outer margin
+equals matplotlib's default `pad_inches`). After `finish()` the figure carries
+a marker layout engine that does nothing at draw time but makes
+`fig.subplots_adjust()` refuse to move the panels.
+
+Colourbars on a `PanelGrid` figure go through `pg.colorbar(mappable, ax=...)`,
+never `fig.colorbar`, which steals width from the panel. A bar whose `ax` lies
+in one panel is that panel's own guide (each panel is its own ggplot in SCP)
+and sits beside it on the legend side; with no `ax`, or axes spread over
+several panels, it is a figure-level guide in the legend column. Either way it
+is ggplot's default colourbar: one legend key (10 pt) thick and five long.
+
+Borrowed axes (`ax=`) are untouched: the caller owns that figure's size.
 
 For heatmaps the same principle applies with more terms; see
 `HeatmapSpec.figsize()` and [`porting_briefs/heatmaps.md`](porting_briefs/heatmaps.md) §7.
@@ -96,6 +135,24 @@ legend.add("Lineages", [...])
 
 Do **not** call `ax.legend()` inside a drawing function. A per-axes legend
 cannot be shared across panels and will be duplicated N times in a grid.
+
+Under `PanelGrid` the column lives **inside** the figure and is sized from what
+it actually draws, for every `legend_position`:
+
+* `right` / `left` — one `fig.legend` per registered entry, then any
+  figure-level colourbars, stacked top to bottom with 11 pt between them, the
+  stack centred vertically on the panels. When the stack is taller than the
+  panel block it wraps into further columns rather than running off the
+  figure; a single legend taller than the panels makes the figure taller.
+* `top` / `bottom` — legends laid out horizontally (one row of keys each,
+  fewer columns when that is wider than the panels), side by side, wrapping
+  into further rows; the block is centred horizontally.
+* `none` — no legends; a colourbar a function still asks for goes on the
+  right.
+
+Legend titles carry R's trailing colon (`"leiden:"`), and `fig.legends` keeps
+registration order. `LegendColumn.draw(fig)` remains for caller-owned figures:
+it stacks the legends down the inside right edge without resizing anything.
 
 ## Return values
 

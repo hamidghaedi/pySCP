@@ -638,7 +638,7 @@ def cell_dim_plot(
                     streamline_bg_color=streamline_bg_color,
                     streamline_bg_stroke=streamline_bg_stroke, rng=rng)
                 if mappable is not None and legend_position != "none":
-                    cb = pg.fig.colorbar(mappable, ax=[panel], fraction=0.046, pad=0.03)
+                    cb = pg.colorbar(mappable, ax=panel)
                     cb.outline.set_edgecolor("black")
                     cb.set_label("Velocity", fontsize=th.size("legend.title"))
 
@@ -1024,7 +1024,7 @@ def feature_dim_plot(
                     stops = [adjcolors(hues[feat], 0.1), hues[feat]]
                     sm = ScalarMappable(norm=Normalize(lo, hi),
                                         cmap=LinearSegmentedColormap.from_list(f"c{feat}", stops))
-                    cb = pg.fig.colorbar(sm, ax=list(pg.axes.values()), fraction=0.02, pad=0.02)
+                    cb = pg.colorbar(sm)
                     cb.outline.set_edgecolor("black")
                     cb.set_label(feat, fontsize=th.size("legend.title"))
                 if label:
@@ -1097,9 +1097,9 @@ def feature_dim_plot(
                 if cbar_key not in seen_cbar and legend_position != "none":
                     seen_cbar.add(cbar_key)
                     sm = ScalarMappable(norm=Normalize(lo, hi), cmap=cmap)
-                    # ax MUST be a list. Handing constrained layout a bare Axes
-                    # here zeroes a height ratio and savefig dies dividing by it.
-                    cb = pg.fig.colorbar(sm, ax=[ax_p], fraction=0.046, pad=0.03)
+                    # one scale for every panel is a figure-level guide; any
+                    # other scope is drawn beside the panel that introduces it
+                    cb = pg.colorbar(sm) if keep_scale == "all" else pg.colorbar(sm, ax=ax_p)
                     cb.outline.set_edgecolor("black")
                 if label:
                     xy = _label_xy(d, "__value__")

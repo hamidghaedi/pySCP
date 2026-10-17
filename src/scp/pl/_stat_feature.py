@@ -32,7 +32,6 @@ from matplotlib.axes import Axes
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.figure import Figure
-from matplotlib.layout_engine import ConstrainedLayoutEngine
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 from matplotlib.ticker import FixedLocator, MaxNLocator
@@ -933,8 +932,7 @@ def _finish_legend(pg: PanelGrid, legend: _Legend, o: dict) -> None:
     if legend.colorbar is not None:
         title, ramp, lims = legend.colorbar
         cmap = LinearSegmentedColormap.from_list("median", ramp, N=256)
-        cb = pg.fig.colorbar(ScalarMappable(norm=Normalize(*lims), cmap=cmap),
-                             ax=list(pg.axes.values()), fraction=0.03, pad=0.02)
+        cb = pg.colorbar(ScalarMappable(norm=Normalize(*lims), cmap=cmap))
         cb.set_label(f"{title}:", fontsize=pg.theme.size("legend.title"))
         cb.outline.set_edgecolor("black")
 
@@ -1018,11 +1016,7 @@ def _layout_stack(panels: list[_Panel], legend: _Legend, o: dict) -> Figure:
     if len(cols) == 1:
         pg.fig.supylabel(o["ylab"] or "Expression level", fontsize=th.size("axis.title"))
     _finish_legend(pg, legend, o)
-    fig = pg.finish()
-    engine = fig.get_layout_engine()
-    if isinstance(engine, ConstrainedLayoutEngine):
-        engine.set(h_pad=0.0, hspace=0.0)
-    return fig
+    return pg.finish()
 
 
 def _layout_stack_flip(panels: list[_Panel], legend: _Legend, o: dict) -> Figure:
@@ -1074,11 +1068,7 @@ def _layout_stack_flip(panels: list[_Panel], legend: _Legend, o: dict) -> Figure
         pg.fig.suptitle(f"{o['subtitle']}\n{t}" if o["subtitle"] else t,
                         fontsize=th.size("plot.title"))
     _finish_legend(pg, legend, o)
-    fig = pg.finish()
-    engine = fig.get_layout_engine()
-    if isinstance(engine, ConstrainedLayoutEngine):
-        engine.set(w_pad=0.0, wspace=0.0)
-    return fig
+    return pg.finish()
 
 
 # --------------------------------------------------------------------------- #

@@ -415,9 +415,9 @@ now stated in the docstring: `ProjectionPlot` applies the union of the two
 ranges only to its throwaway query plot, so the composite inherits the
 reference's limits and silently drops every query cell outside them (111 of
 362 in the fixture); here every query cell is drawn. The two mypy errors in it
-are fixed with annotations only. Still open: without `ax=` it calls
-`plt.subplots` rather than going through `PanelGrid` (porting rule 1), and R's
-point sizes and 5% axis expansion are not matched.
+are fixed with annotations only. Without `ax=` it now allocates its square
+themed panel through `PanelGrid` like every other figure (porting rule 1).
+Still open: R's point sizes and 5% axis expansion are not matched.
 
 ### 14 — `enrichment_plot` — L ✅ done
 

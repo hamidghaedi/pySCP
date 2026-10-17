@@ -50,7 +50,7 @@ body raises · **n/a** = nothing to port.
 | `blendcolors`, `Blend2Color`, `BlendRGBList`, `RGBA2RGB` | `scp.colors.*` | done |
 | `matrix_process`, `zscore_matrix`, `fc_matrix`, `log2fc_matrix`, `log1p_matrix` | `scp.matrix_process` | done |
 | `heatmap_rendersize` / `heatmap_fixsize` | `HeatmapSpec.figsize()` + `heatmap.render` | done |
-| `panel_fix` / `panel_fix_overall` | `scp.layout.PanelGrid` + `panel_size_for` | done |
+| `panel_fix` / `panel_fix_overall` | `scp.layout.PanelGrid` (measured two-pass layout; `panel_size_for` is only a first estimate) | done |
 | `cluster_within_group2` (plus ComplexHeatmap's `cluster_within_group` and `make_cluster` ordering) | `scp.heatmap.cluster` | done |
 | `standardise` / `mestimate` (Mfuzz) | `scp.heatmap.cluster` | done |
 | `heatmap_enrichment` | `enrichment=` table or `enrichment_fn=`; `scp.heatmap.enrichment` (word boxes, `ora`) | done |
