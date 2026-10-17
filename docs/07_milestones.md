@@ -84,29 +84,37 @@ per-feature two-stop ramps from `adjcolors(hue, 0.1)` → `hue`, per-cell
 `blendcolors`, draw order by descending RGB sum, and **one colorbar per
 feature** tiled `min(ceil(sqrt(N)), 3)` per row.
 
-### 4 — `feature_stat_plot` — L (partly done)
+### 4 — `feature_stat_plot` / `expression_stat_plot` — L ✅ done (except `flip`)
 
 Brief: `porting_briefs/stat_plots.md` §1.
 
-Landed: all five `plot_type`s, `bg_by` striping (including the default
-alternating grey85 that fires with no `bg_by` at all), declared level order,
-`sort`, `split_by` dodging, `same_y_lims`, and the `add_point`/`add_box`/
-`add_stat`/`add_line` overlays. Verified against R in
-`notebooks/01_parity_foundation.ipynb`.
+`expression_stat_plot` (`pl/_stat_feature.py`) is the DataFrame engine and
+`feature_stat_plot` the AnnData wrapper over it, as in R. All five
+`plot_type`s, `bg_by` striping, `sort`, `split_by` dodging, `same_y_lims`, the
+overlays including `add_trend`, `individual`, `plot_by="feature"`, `stack=True`
+(one shared-x GridSpec column per `group_by`, two y ticks per row, one y label,
+one legend), `fill_by="expression"`, `calculate_coexp` (through
+`scp.fetch.calculate_coexp`), and the significance layer: `comparisons=True`,
+bracketed `comparisons`, `ref_group`, `multiplegroup_comparisons`, both
+`sig_label`s. The tests and their text live in `pl/_stat_sig.py`; ggpubr and
+ggsignif are reproduced at the level of the base-R calls they make.
 
-Still stub: `stack`, `plot_by="feature"`, `individual`, `add_trend`,
-`calculate_coexp` and the whole significance-bracket layer.
+Verified against R: `tools/parity/feature_stat_tests.R` pins `wilcox.test`
+(exact and normal branches, ties, n at 49/50), Welch `t.test`,
+`kruskal.test`, `anova`, `format.pval`, `symnum` and `sprintf("%.2g")`;
+`tools/parity/feature_stat_layers.R` dumps SCP 0.5.6's built layers on
+`pancreas_sub` (panel names and order, final y ranges, bracket coordinates and
+labels, `stat_compare_means` positions/p-values/labels, trend points, dot
+counts, stacked-row breaks, `CoExp`). Both fixtures sit in
+`tests/fixtures/parity/feature_stat/` and agree to 1e-9.
 
-The five `plot_type`s are straightforward; the work is in the surrounding
-grammar. Order: violin → box → bar → dot → col, then `bg_by` striping
-(`axvspan` at `zorder=0`, with the nesting validation), then the overlays
-(`add_point` jitterdodge, `add_box`, `add_trend`, `add_stat`, `add_line`), then
-`stack=True` (a real shared-x GridSpec, not composited panels), then the
-statistics layer.
+Geometry now follows ggplot2: `position_dodge(0.9)` counted per x, the
+discrete axis's 0.6 padding, `coord_cartesian`'s 5 % expansion, `bw.nrd0`
+violins, `cut()`-label bin centres for `dot`, jitter of `0.4/(ndodge+2)`, and
+the bar plot's lower limit taken from its error bars. Fill colours are keyed by
+level name, so `sort` no longer recolours the groups.
 
-For significance brackets there is no `ggpubr`; `statannotations` is the
-closest, or hand-roll — a bracket is two `hlines` and a `text`, and the
-`step.increase=0.1` stacking rule is in the brief.
+Still stub: `flip` (`coord_flip`), which raises `NotImplementedError`.
 
 ### 5 — `cell_stat_plot` / `stat_plot` — L ✅ done
 

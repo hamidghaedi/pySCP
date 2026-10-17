@@ -3,10 +3,17 @@
 Spec: docs/porting_briefs/stat_plots.md section 1.
 """
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
 import scp
+
+
+@pytest.fixture(autouse=True)
+def _close_figures():
+    yield
+    plt.close("all")
 
 
 def test_one_panel_per_feature(adata):
@@ -67,7 +74,162 @@ def test_split_by_dodges_within_group(adata):
 
 
 def test_unimplemented_features_raise_with_a_pointer(adata):
-    for kw in ({"stack": True}, {"plot_by": "feature"}, {"comparisons": True},
-               {"add_trend": True}, {"individual": True}):
-        with pytest.raises(NotImplementedError, match="stat_plots.md"):
-            scp.pl.feature_stat_plot(adata, "g0", group_by="leiden", **kw)
+    with pytest.raises(NotImplementedError, match="stat_plots.md"):
+        scp.pl.feature_stat_plot(adata, "g0", group_by="leiden", flip=True)
+
+
+# --------------------------------------------------------------------------- #
+# stack, plot_by="feature", individual, trend, coexp, significance
+# --------------------------------------------------------------------------- #
+def _panels(fig):
+    return [ax for ax in fig.axes if ax.get_visible() and ax.get_label() != "<colorbar>"]
+
+
+def test_stack_is_one_shared_x_column_with_two_ticks_per_row(adata):
+    feats = ["g0", "g1", "g2", "g3"]
+    fig = scp.pl.feature_stat_plot(adata, feats, group_by="leiden", stack=True)
+    axes = _panels(fig)
+    assert len(axes) == len(feats)
+    top = axes[0]
+    for ax in axes:
+        assert len(ax.get_yticks()) == 2
+        assert ax.get_xlim() == top.get_xlim()
+        assert ax.get_ylabel() == ""
+    # x tick labels only on the last row; strips carry the feature names
+    for ax in axes[:-1]:
+        assert not ax.xaxis.get_tick_params()["labelbottom"]
+    assert [ax.texts[-1].get_text() for ax in axes] == feats
+    assert fig._supylabel is not None
+    assert fig._supylabel.get_text() == "Expression level"
+    assert len(fig.legends) == 1
+
+
+def test_stack_rows_have_their_own_y_limits(adata):
+    ad = adata.copy()
+    ad.X[:, 1] *= 10
+    fig = scp.pl.feature_stat_plot(ad, ["g0", "g1"], group_by="leiden", stack=True)
+    a0, a1 = _panels(fig)
+    assert a1.get_ylim()[1] > 5 * a0.get_ylim()[1]
+
+
+def test_plot_by_feature_puts_features_on_x_one_panel_per_group(adata):
+    feats = ["g0", "g1", "g2"]
+    fig = scp.pl.feature_stat_plot(adata, feats, group_by="leiden", plot_by="feature")
+    axes = _panels(fig)
+    assert len(axes) == adata.obs["leiden"].nunique()
+    for ax in axes:
+        assert [t.get_text() for t in ax.get_xticklabels()] == feats
+    # R loops over unique(): panels follow first appearance in the cells
+    appearance = list(dict.fromkeys(adata.obs["leiden"].astype(str)))
+    assert [ax.get_title() for ax in axes] == appearance
+
+
+def test_plot_by_feature_rejects_several_group_columns(adata):
+    with pytest.raises(ValueError, match="length of 1"):
+        scp.pl.feature_stat_plot(adata, ["g0", "g1"], group_by=["leiden", "batch"],
+                                 plot_by="feature")
+
+
+def test_individual_gives_one_panel_per_level_and_split(adata):
+    fig = scp.pl.feature_stat_plot(adata, "g0", group_by="leiden", split_by="batch",
+                                   individual=True)
+    keys = list(fig._scp_stat_record)
+    assert len(_panels(fig)) == len(keys) == 4 * 2
+    # R's order: the group level varies fastest
+    assert keys[0].endswith(":A:b1") and keys[1].endswith(":B:b1")
+
+
+def test_add_trend_passes_through_the_group_medians(adata):
+    fig = scp.pl.feature_stat_plot(adata, "g0", group_by="leiden", add_trend=True)
+    rec = next(iter(fig._scp_stat_record.values()))
+    meds = [float(np.median(np.asarray(adata[adata.obs["leiden"] == lv, "g0"].X).ravel()))
+            for lv in adata.obs["leiden"].cat.categories]
+    assert [y for _x, y in rec["trend"]] == pytest.approx(meds)
+    assert any(len(line.get_xdata()) == 4 for line in fig.axes[0].lines)
+
+
+def test_sort_reorders_x_but_keeps_each_groups_colour(adata):
+    """R keys fill colours by level name, so sorting moves bars, not colours."""
+    def colours(fig):
+        ax = fig.axes[0]
+        labels = [t.get_text() for t in ax.get_xticklabels()]
+        bars = [p for p in ax.patches if type(p).__name__ == "Rectangle"
+                and 0 < p.get_width() < 1]
+        bars = sorted(bars, key=lambda b: b.get_x())
+        return dict(zip(labels, [tuple(b.get_facecolor()) for b in bars], strict=True))
+
+    plain = scp.pl.feature_stat_plot(adata, "g0", group_by="leiden", plot_type="bar")
+    srt = scp.pl.feature_stat_plot(adata, "g0", group_by="leiden", plot_type="bar",
+                                   sort="increasing")
+    assert colours(plain) == colours(srt)
+
+
+def test_same_y_lims_accepts_a_quantile_string(adata):
+    """R errors here (it reads `values`, the pool is `valus`); the port does not."""
+    fig = scp.pl.feature_stat_plot(adata, ["g0", "g1"], group_by="leiden",
+                                   same_y_lims=True, y_max="q90")
+    a0, a1 = _panels(fig)
+    assert a0.get_ylim() == a1.get_ylim()
+    pool = np.asarray(adata[:, ["g0", "g1"]].X).ravel()
+    assert a0.get_ylim()[1] < pool.max()
+
+
+def test_comparisons_true_needs_split_by(adata):
+    with pytest.raises(ValueError, match="split.by"):
+        scp.pl.feature_stat_plot(adata, "g0", group_by="leiden", comparisons=True)
+
+
+def test_comparison_brackets_step_up_and_raise_the_ceiling(adata):
+    comps = [("A", "B"), ("A", "C"), ("A", "D")]
+    fig = scp.pl.feature_stat_plot(adata, "g0", group_by="leiden", comparisons=comps)
+    rec = next(iter(fig._scp_stat_record.values()))
+    tops = [b[2] for b in rec["brackets"]]
+    steps = np.diff(tops)
+    assert len(tops) == 3 and np.all(steps > 0)
+    assert list(steps) == pytest.approx([steps[0]] * 2)
+    assert rec["ylim"][1] > max(tops)
+    assert all(b[4] in {"****", "***", "**", "*", "ns"} for b in rec["brackets"])
+
+
+def test_ref_group_compares_every_other_level_against_it(adata):
+    fig = scp.pl.feature_stat_plot(adata, "g0", group_by="leiden", ref_group="B",
+                                   sig_label="p.format")
+    rec = next(iter(fig._scp_stat_record.values()))
+    assert [row[0] for row in rec["sig"]] == [("B", "A"), ("B", "C"), ("B", "D")]
+
+
+def test_split_comparisons_label_each_group(adata):
+    fig = scp.pl.feature_stat_plot(adata, "g0", group_by="leiden", split_by="batch",
+                                   comparisons=True, sig_label="p.format")
+    rec = next(iter(fig._scp_stat_record.values()))
+    assert len(rec["texts"]) == 4
+    assert all(t[2].startswith("p = ") for t in rec["texts"])
+
+
+def test_col_drops_overlays_and_comparisons_with_a_warning(adata):
+    with pytest.warns(UserWarning, match="Cannot add other layers"):
+        scp.pl.feature_stat_plot(adata, "g0", group_by="leiden", plot_type="col",
+                                 add_point=True)
+    with pytest.warns(UserWarning, match="Cannot add comparison"):
+        scp.pl.feature_stat_plot(adata, "g0", group_by="leiden", plot_type="col",
+                                 multiplegroup_comparisons=True)
+
+
+def test_calculate_coexp_adds_a_coexp_panel(adata):
+    with pytest.warns(UserWarning, match="not used when calculating co-expression"):
+        fig = scp.pl.feature_stat_plot(adata, ["g0", "g1", "score"], group_by="leiden",
+                                       calculate_coexp=True)
+    assert [k.split(":")[0] for k in fig._scp_stat_record] == ["g0", "g1", "score", "CoExp"]
+
+
+def test_feature_cor_plot_calculate_coexp_appends_coexp(adata):
+    fig = scp.pl.feature_cor_plot(adata, ["g0", "g1"], calculate_coexp=True)
+    assert len([ax for ax in fig.axes if ax.get_label() != "<colorbar>"]) == 9
+
+
+def test_expression_stat_plot_is_the_dataframe_engine():
+    import pandas as pd
+
+    df = pd.DataFrame({"v": np.arange(40.0), "grp": list("ab") * 20})
+    fig = scp.pl.expression_stat_plot(df, "v", group_by="grp", plot_type="box")
+    assert [t.get_text() for t in fig.axes[0].get_xticklabels()] == ["a", "b"]

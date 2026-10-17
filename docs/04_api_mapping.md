@@ -11,11 +11,11 @@ body raises · **n/a** = nothing to port.
 | `FeatureDimPlot` | 2042 | `scp.pl.feature_dim_plot` | done (standard + blend, all overlays, `calculate_coexp`) | 3 |
 | `CellDimPlot3D` | 2843 | `scp.pl.cell_dim_plot_3d` | done | 8 |
 | `FeatureDimPlot3D` | 3066 | `scp.pl.feature_dim_plot_3d` | done (incl. `calculate_coexp`) | 8 |
-| `FeatureStatPlot` | 3524 | `scp.pl.feature_stat_plot` | done (5 plot_types + bg_by/overlays; `stack`/`plot_by='feature'`/stats stub) | 4 |
-| `ExpressionStatPlot` | 3723 | `scp.pl.expression_stat_plot` | stub | 4 |
+| `FeatureStatPlot` | 3524 | `scp.pl.feature_stat_plot` | done (all but `flip`; `stack`, `plot_by='feature'`, significance layer and `calculate_coexp` verified vs R) | 4 |
+| `ExpressionStatPlot` | 3723 | `scp.pl.expression_stat_plot` | done (the DataFrame engine; `flip` stub) | 4 |
 | `CellStatPlot` | 4463 | `scp.pl.cell_stat_plot` | done (11/11 types + `individual`; sankey/chord/venn verified vs R) | 5 |
 | `StatPlot` | 4564 | `scp.pl.stat_plot` | done (11/11 types + `individual`; sankey/chord/venn verified vs R) | 5 |
-| `FeatureCorPlot` | 5232 | `scp.pl.feature_cor_plot` | done | 6 |
+| `FeatureCorPlot` | 5232 | `scp.pl.feature_cor_plot` | done (incl. `calculate_coexp`) | 6 |
 | `CellDensityPlot` | 5679 | `scp.pl.cell_density_plot` | done | 6 |
 | `VolcanoPlot` | 7088 | `scp.pl.volcano_plot` | done | 6 |
 | `LineagePlot` | 5918 | `scp.pl.lineage_plot` | done | 12 |
@@ -69,6 +69,8 @@ body raises · **n/a** = nothing to port.
 | Function | Change | Why |
 |---|---|---|
 | `feature_stat_plot` | added `title`, `subtitle`, `xlab`, `ylab="Expression level"` | The scaffold signature omitted them; they are parameters of the R original and `ylab`'s default is visible on every panel. |
+| `expression_stat_plot` | the stub's `(data, *args, **kwargs)` became `feature_stat_plot`'s signature with `adata`→`data` and without `layer`, `use_raw`, `calculate_coexp` | It is the DataFrame engine, so the matrix-selection arguments belong to the wrapper; `CoExp` needs the gene matrix, which a frame does not carry. |
+| `feature_cor_plot` | added `calculate_coexp=False` | A parameter of `FeatureCorPlot` the scaffold omitted. In R it always errors (undefined `status`); here it goes through `scp.fetch.calculate_coexp`. |
 | `cell_density_plot` | added `y_min`, `y_max`, `y_nbreaks`, `keep_empty`, `aspect_ratio`, `legend_position`, `nrow`, `ncol`, `byrow` | Same omission; all nine are parameters of `CellDensityPlot` and the layout ones are needed for multi-feature figures. |
 | `enrichment_plot` | added `compare_only_sig`, `network_labelsize`, `network_adjscale`, `network_adjiter`, `enrichmap_layout`, `enrichmap_label`, `enrichmap_labelsize`, `enrichmap_show_keyword`, `enrichmap_expand`, `keyword_background`; `panel_size` now defaults to `None` (per-type size) | The first eight are `EnrichmentPlot` parameters the scaffold left out. `enrichmap_nlabel` keeps its corrected spelling (R: `enrlichmap_nlabel`). `keyword_background` is new: a `{GO ID: term name}` map that lets the GO wordcloud run simplifyEnrichment's keyword test, whose term-document matrix only ships with the R package. |
 | `gsea_plot` | added `group_use`, `id_use`, `pvalue_cutoff`, `compare_only_sig`, `character_width`, `palcolor`, the whole `network_*` / `enrichmap_*` / wordcloud block of `enrichment_plot`, `keyword_background`, `nrow`, `ncol`; `top_term` now defaults to `None` (6, or 100 for `enrichmap`, as R's `ifelse`); `panel_size` defaults to `None` | All are `GSEAPlot` parameters needed by the types it shares with `EnrichmentPlot`. Also accepts SCP's own `{"enrichment": df, "results": {key: df}}` shape. |
