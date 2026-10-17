@@ -35,7 +35,8 @@ import scp
 anndata = pytest.importorskip("anndata")
 
 FIX = Path(__file__).parent / "fixtures" / "parity" / "audit" / "cor"
-FEATURES = json.loads((FIX / "features.json").read_text())["features"]
+META_FEATS = json.loads((FIX / "features.json").read_text())
+FEATURES = META_FEATS["features"]
 META = json.loads((FIX / "cellcor_meta.json").read_text())
 
 
@@ -98,13 +99,21 @@ def test_cellcor_self_matrix(query, case, metric):
     np.testing.assert_allclose([lg.vmin, lg.vmax], META[case]["limits"], atol=1e-7)
 
 
-@pytest.mark.xfail(strict=True, reason="reference=None does not inherit query_group / "
-                   "query_collapsing into the reference as R does (SCP-plot.R:10150-10156); "
-                   "ref_group stays None and fetching it raises KeyError")
 def test_cellcor_reference_none_inherits_query_grouping(query):
+    """srt_ref = NULL: the query is its own reference, grouping and collapsing
+    inherited (SCP-plot.R:10150-10156) -- which is how every self_* case was run."""
     R = _r("self_cosine")
     res = _heatmap(query, query_group="SubCellType")
-    np.testing.assert_allclose(res.matrices["similarity"].to_numpy(), R.to_numpy(), atol=1e-7)
+    P = res.matrices["similarity"]
+    assert list(P.index) == list(R.index) and list(P.columns) == list(R.columns)
+    np.testing.assert_allclose(P.to_numpy(), R.to_numpy(), rtol=0, atol=1e-7)
+
+
+def test_cellcor_reference_none_uncollapsed_inherits_too(query):
+    res = _heatmap(query, query_group="SubCellType", query_collapsing=False)
+    P = res.matrices["similarity"]
+    assert P.shape == (query.n_obs, query.n_obs)
+    assert list(P.index) == list(P.columns)
 
 
 @pytest.mark.parametrize("case, metric", [("panc8_cosine", "cosine"),
@@ -131,9 +140,9 @@ def test_cellcor_uncollapsed_values(query, panc8):
                                rtol=0, atol=1e-7)
 
 
-@pytest.mark.xfail(strict=True, reason="uncollapsed query rows stay in object order; R orders "
-                   "them by query_group level (SCP-plot.R:10218-10241), so the group blocks touch")
 def test_cellcor_uncollapsed_row_order(query, panc8):
+    """Rows grouped by query_group level, object order within a level
+    (SCP-plot.R:10218-10241), so each group's cells touch."""
     R = _r("panc8_cells")
     res = _heatmap(query, panc8, query_group="SubCellType", query_collapsing=False,
                    ref_group="celltype")
@@ -155,14 +164,74 @@ def test_cellcor_labelled_cells(query, case, kw):
     np.testing.assert_allclose(py, r, atol=0.005)
 
 
-@pytest.mark.xfail(strict=True, reason="nlabel defaults to 3 (and label_cutoff to -inf); R's "
-                   "defaults are nlabel=0, label_cutoff=0, so R draws no labels")
 def test_cellcor_default_draws_no_labels(query):
+    """R's defaults are nlabel = 0, label_cutoff = 0: no labels."""
     res = scp.pl.cell_cor_heatmap(query, query, query_group="SubCellType",
                                   ref_group="SubCellType", features=FEATURES)
     py = _labels(res)
     plt.close(res.fig)
     assert py == [float(x) for x in META["self_cosine"]["labels"]] == []
+
+
+def test_cellcor_label_cutoff_defaults_to_zero(query):
+    """A negative similarity is never labelled unless label_cutoff is lowered."""
+    q = query.copy()
+    q.X = -q.X  # pearson of negated vs original centroids is negative throughout
+    res = scp.pl.cell_cor_heatmap(q, query, query_group="SubCellType", ref_group="SubCellType",
+                                  features=FEATURES, distance_metric="pearson", nlabel=1)
+    assert _labels(res) == []
+    plt.close(res.fig)
+    res = scp.pl.cell_cor_heatmap(q, query, query_group="SubCellType", ref_group="SubCellType",
+                                  features=FEATURES, distance_metric="pearson", nlabel=1,
+                                  label_cutoff=None)
+    assert len(_labels(res)) >= 8
+    plt.close(res.fig)
+
+
+# default feature selection: intersect(VariableFeatures(query), VariableFeatures(ref))
+@pytest.fixture(scope="module")
+def centroids():
+    """One pseudo-cell per SubCellType level holding R's collapsed centroid, for
+    every stored HVF plus 500 genes that are not HVFs (audit_cor.R)."""
+    C = pd.read_csv(FIX / "cellcor_default_centroids.csv", index_col=0)
+    hvf = set(json.loads((FIX / "cellcor_default_hvf.json").read_text())["hvf"])
+    ad = anndata.AnnData(
+        X=C.to_numpy(),
+        obs=pd.DataFrame({"SubCellType": pd.Categorical(list(C.index), categories=list(C.index))},
+                         index=[f"g{i}" for i in range(len(C))]),
+        var=pd.DataFrame({"highly_variable": [g in hvf for g in C.columns]},
+                         index=list(C.columns)))
+    return ad, hvf
+
+
+def test_cellcor_default_features_are_the_stored_hvfs(centroids):
+    """features=None picks every stored HVF and nothing else; the matrix is R's
+    CellCorHeatmap(srt_query, query_group = "SubCellType") on the full data."""
+    ad, hvf = centroids
+    assert META_FEATS["default_n_features"] == len(hvf) == int(ad.var["highly_variable"].sum())
+    R = pd.read_csv(FIX / "cellcor_self_default_features.csv", index_col=0)
+    res = scp.pl.cell_cor_heatmap(ad, query_group="SubCellType")
+    plt.close(res.fig)
+    P = res.matrices["similarity"]
+    assert list(P.index) == list(R.index) and list(P.columns) == list(R.columns)
+    np.testing.assert_allclose(P.to_numpy(), R.to_numpy(), rtol=0, atol=1e-7)
+    # the 500 non-HVF genes change the answer, so the selection is what is tested
+    every = scp.pl.cell_cor_heatmap(ad, query_group="SubCellType",
+                                    features=list(ad.var_names))
+    plt.close(every.fig)
+    assert np.abs(every.matrices["similarity"].to_numpy() - R.to_numpy()).max() > 1e-4
+
+
+def test_cellcor_default_features_intersect_query_and_reference(query, panc8):
+    q, r = query.copy(), panc8.copy()
+    q.var["highly_variable"] = [f in set(FEATURES[:35]) for f in q.var_names]
+    r.var["highly_variable"] = [f in set(FEATURES[10:]) for f in r.var_names]
+    got = scp.pl.cell_cor_heatmap(q, r, query_group="SubCellType", ref_group="celltype")
+    want = scp.pl.cell_cor_heatmap(q, r, query_group="SubCellType", ref_group="celltype",
+                                   features=FEATURES[10:35])
+    for res in (got, want):
+        plt.close(res.fig)
+    pd.testing.assert_frame_equal(got.matrices["similarity"], want.matrices["similarity"])
 
 
 CLUSTER_CASES = [("self_cosine", "cosine", False), ("self_spearman", "spearman", False),

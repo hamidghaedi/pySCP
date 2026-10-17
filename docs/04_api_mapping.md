@@ -24,11 +24,11 @@ body raises · **n/a** = nothing to port.
 | `segementsDf` | 6666 | `scp.pl.shorten_segments` | done | 11 |
 | `VelocityPlot` | 6745 | `scp.pl.velocity_plot` | done (raw and grid verified vs R; the stream field verified, its drawing not checkable, metR) | 12 |
 | `compute_velocity_on_grid` | 6963 | `scp.pl.compute_velocity_on_grid` | done — numpy port of SCP's (not scvelo's), shared by `velocity_plot` and `cell_dim_plot(velocity=)`; grid and stream verified vs R through both | 12 |
-| `GroupHeatmap` | 7911 | `scp.pl.group_heatmap` | done — matrices, `split_by`, `grouping_var`, splits and row/column orders verified vs R; enrichment tracks from a table / `enrichment_fn`; `cell_annotation` drawn as per-group lanes, not pies/violins | 7 |
-| `FeatureHeatmap` | 9114 | `scp.pl.feature_heatmap` | done — matrix and splits verified vs R (the sampling RNG differs) | 7 |
+| `GroupHeatmap` | 7911 | `scp.pl.group_heatmap` | done — matrices, `split_by`, `grouping_var`, splits and row/column orders verified vs R; enrichment tracks from a table / `enrichment_fn`; `cell_annotation` pies and violins and `add_violin` verified vs the `CellStatPlot` / `FeatureStatPlot` data R draws; `flip` verified (order and swap) | 7 |
+| `FeatureHeatmap` | 9114 | `scp.pl.feature_heatmap` | done — matrix and splits verified vs R (the sampling RNG differs); `flip` verified | 7 |
 | `FeatureCorHeatmap` | 9980 | `scp.pl.feature_cor_heatmap` | done — clean-room; **the R version is an empty stub** | 10 |
-| `CellCorHeatmap` | 10113 | `scp.pl.cell_cor_heatmap` | done — all 19 `distance_metric`s verified vs proxyC | 10 |
-| `DynamicHeatmap` | 11020 | `scp.pl.dynamic_heatmap` | done — per-cell columns, joint z-score and peaktime splits verified vs R given R's `DynamicFeatures`; `use_fitted` deliberately raises; `separate_annotation` stub | 9 |
+| `CellCorHeatmap` | 10113 | `scp.pl.cell_cor_heatmap` | done — all 19 `distance_metric`s verified vs proxyC; `reference=None`, uncollapsed row order, label defaults and default (HVF) features verified vs R; query/reference cell annotations, `bulk_ref`, reductions and `features_type="DE"` not ported | 10 |
+| `DynamicHeatmap` | 11020 | `scp.pl.dynamic_heatmap` | done — per-cell columns, joint z-score, row order and peaktime splits verified vs R given R's `DynamicFeatures`; `separate_annotation` ridges verified, curves drawn from R's fits; `flip` verified; `use_fitted` deliberately raises | 9 |
 | `DynamicPlot` | 12102 | `scp.pl.dynamic_plot` | done (points, lib-normalisation, panels verified vs R; the mgcv fit is not) | 9 |
 | `GroupTreePlot` | 12472 | — | **n/a — the R function is empty**; use `sc.tl.dendrogram` | — |
 | `ProjectionPlot` | 12511 | `scp.pl.projection_plot` | done (colours and positions verified vs R; R's dropping of out-of-range query cells not reproduced) | 13 |
@@ -43,7 +43,7 @@ body raises · **n/a** = nothing to port.
 |---|---|---|
 | `theme_scp` | `scp.theme_scp` + `scp.apply_theme` | done |
 | `theme_blank` | `scp.theme_blank` + `scp.theme.add_coord_arrows` | done |
-| `palette_scp` | `scp.palette_scp` / `discrete_palette` / `continuous_palette` | done |
+| `palette_scp` | `scp.palette_scp` / `discrete_palette` / `continuous_palette` | done — R-exact (`colorRampPalette` truncation, `cut()` bins, verbatim-slice rule), pinned in `tests/fixtures/parity/palettes/` |
 | `show_palettes` | `scp.list_palettes` | done |
 | `palette_list` (data) | `scp.palettes.PALETTES` (229) | done |
 | `adjcolors` | `scp.adjcolors` | done |
@@ -89,8 +89,11 @@ body raises · **n/a** = nothing to port.
 | `velocity_plot` | added `cells`, `group_palette`, `group_palcolor`, `arrow_angle`, the seven `streamline_*` settings, `legend_position`, `legend`, `seed` | `VelocityPlot` parameters. `group_by` colours the arrows, so it needs its palette; stream mode now goes through the overlay layer `cell_dim_plot` uses, which takes the streamline settings. No cell layer is drawn any more. |
 | `dynamic_plot` | added `cells`, `lib_normalize`, `libsize`, `line_size`, `line_palette`, `line_palcolor`, `pt_size`, `point_palette`, `point_palcolor`, `legend_position`, `seed`; `palette=` (via `**kwargs`) stays as an alias of `line_palette` | `DynamicPlot` parameters. `lib_normalize` (default: `layer == "counts"`) and `libsize` are what R's default `slot = "counts"` path needs; the palettes are R's two separate ones. |
 | `group_heatmap` | added `libsize`, `fuzzification`, `enrichment`, `db`, `padjust_cutoff`, `pvalue_cutoff`, `show_termid`, `top_word`, `words_excluded`, `terms_width` / `keys_width` / `features_width`, `terms_fontsize` / `keys_fontsize` / `features_fontsize`, `group_palette`, `cell_split_palette`, `feature_split_palette`; `split_method` narrowed to `kmeans` / `hclust` / `mfuzz` | All are `GroupHeatmap` parameters the splitting and enrichment paths need. `enrichment` stands in for R's database download: the table is an input, `enrichment_fn` the alternative. The `*-peaktime` methods only exist in `DynamicHeatmap`. |
+| `group_heatmap` | added `add_violin=False`, `fill_by="feature"`, `fill_palette="Dark2"`, `fill_palcolor=None` | `GroupHeatmap`'s `add_violin`, `fill.by`, `fill_palette`, `fill_palcolor`, with R's defaults: the violins in the body cells needed their fill settings. |
 | `feature_heatmap` | `**kwargs` replaced by the explicit `FeatureHeatmap` parameters (`split_by`, `cells`, `cell_order`, `libsize`, and the split / cluster / annotation / enrichment set shared with `group_heatmap`) | `**kwargs` silently swallowed misspelt options. `show_row_names` keeps its `True` default. |
 | `dynamic_heatmap` | `**kwargs` replaced by explicit parameters; added `dynamic_features`, `min_expcells`, `r_sq`, `dev_expl`, `padjust`, `feature_split`, `feature_split_by`, `fuzzification`, `cluster_*`, the annotation and enrichment sets; `split_method` default `"kmeans-peaktime"` -> `"mfuzz"`; `palette` default `"viridis"` | Both defaults are R's. `dynamic_features` carries `RunDynamicFeatures`' table (peak and valley times), since this package does not refit mgcv. `cell_bins` keeps R's meaning — the bins for `cell_density` thinning — rather than binning the columns. |
+| `dynamic_heatmap` | added `separate_annotation_palette="Paired"`, `separate_annotation_palcolor=None`; `dynamic_features` values may also be a mapping in SCP's `srt@tools` layout (`"DynamicFeatures"`, `"fitted_matrix"`, `"upr_matrix"`, `"lwr_matrix"`) | R's parameters for the now-ported `separate_annotation`. Its feature curves are `DynamicPlot`'s fitted values, which mgcv produces and this package does not refit, so they travel with the table as R stores them. |
+| `cell_cor_heatmap` | `nlabel` default `3` → `0`; `label_cutoff` default `None` → `0.0` | R's defaults (`SCP-plot.R:10128`): nothing is labelled unless asked, and a label needs a similarity of at least 0. `label_cutoff=None` still means no cutoff. |
 
 ## Argument renaming rules
 

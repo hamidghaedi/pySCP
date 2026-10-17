@@ -11,7 +11,6 @@ Reference: ``SCP/R/SCP-plot.R`` lines 168--297.
 from __future__ import annotations
 
 import json
-import warnings
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
@@ -94,11 +93,22 @@ def get_palette(name: str) -> Palette:
 # --------------------------------------------------------------------------- #
 # color ramp
 # --------------------------------------------------------------------------- #
+def _channels(c: str) -> tuple[int, int, int]:
+    """``col2rgb(c)``: the 8-bit channels, alpha dropped (``alpha = FALSE``)."""
+    s = str(c)
+    if not s.startswith("#"):
+        from matplotlib.colors import to_hex
+
+        s = to_hex(s)
+    s = s.lstrip("#")
+    if len(s) == 3:
+        s = "".join(ch * 2 for ch in s)
+    return int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16)
+
+
 def _hex_to_rgb(c: str) -> tuple[float, float, float]:
-    c = c.lstrip("#")
-    if len(c) == 8:  # #RRGGBBAA -> drop alpha, SCP palettes are opaque
-        c = c[:6]
-    return tuple(int(c[i : i + 2], 16) / 255.0 for i in (0, 2, 4))  # type: ignore[return-value]
+    r, g, b = _channels(c)
+    return r / 255.0, g / 255.0, b / 255.0
 
 
 def _rgb_to_hex(rgb: Sequence[float]) -> str:
@@ -107,24 +117,69 @@ def _rgb_to_hex(rgb: Sequence[float]) -> str:
 
 
 def color_ramp(colors: Sequence[str], n: int) -> list[str]:
-    """Port of ``grDevices::colorRampPalette``.
+    """``grDevices::colorRampPalette(colors)(n)``, to the bit.
 
-    Linear interpolation in sRGB across the control points, evaluated at ``n``
-    equally spaced positions inclusive of both ends.  R's default
-    ``colorRampPalette(space = "rgb")`` does exactly this, so values match to
-    within one 8-bit quantisation step.
+    R's recipe, operation for operation, so every channel agrees exactly:
+
+    * ``colorRamp`` takes ``col2rgb(colors) / 255`` and builds one
+      ``approxfun`` per channel over ``seq.int(0, 1, length.out = k)``;
+    * the ramp is evaluated at ``seq.int(0, 1, length.out = n)`` with
+      ``approx1``'s arithmetic (an exact hit on a stop returns the stop), then
+      clamped to [0, 1] and multiplied by 255;
+    * ``rgb(..., maxColorValue = 255)`` coerces to integer, i.e. it
+      **truncates**.  Rounding instead lands one 8-bit step above R on most
+      interior positions (87 of Spectral's 100), which is what this port did
+      until the palette goldens in ``tests/fixtures/parity/palettes`` pinned it.
+
+    A single colour is repeated (``colorRamp`` duplicates it), and alpha is
+    dropped, as ``colorRampPalette``'s default ``alpha = FALSE`` does.
     """
     if n <= 0:
         return []
-    stops = np.asarray([_hex_to_rgb(c) for c in colors], dtype=float)
+    stops = np.asarray([_channels(c) for c in colors], dtype=float) / 255.0
     if len(stops) == 1:
-        return [_rgb_to_hex(stops[0])] * n
-    if n == 1:
-        return [_rgb_to_hex(stops[0])]
+        stops = np.vstack([stops, stops])
     xp = np.linspace(0.0, 1.0, len(stops))
     x = np.linspace(0.0, 1.0, n)
-    out = np.stack([np.interp(x, xp, stops[:, k]) for k in range(3)], axis=1)
-    return [_rgb_to_hex(row) for row in out]
+    # approx1(): bisection to x[i] <= v <= x[i + 1], then y[i] + dy * (dv / dx)
+    i = np.clip(np.searchsorted(xp, x, side="right") - 1, 0, len(xp) - 2)
+    j = i + 1
+    with np.errstate(invalid="ignore"):
+        frac = (x - xp[i]) / (xp[j] - xp[i])
+    chan = stops[i] + (stops[j] - stops[i]) * frac[:, None]
+    chan = np.where((x == xp[j])[:, None], stops[j], chan)
+    chan = np.where((x == xp[i])[:, None], stops[i], chan)
+    ints = np.trunc(np.clip(chan, 0.0, 1.0) * 255.0).astype(int)
+    return ["#{:02X}{:02X}{:02X}".format(*row) for row in ints]
+
+
+def _take_or_ramp(colors: Sequence[str], n: int) -> list[str]:
+    """``ifelse(n <= pal_n, palcolor[1:n], colorRampPalette(palcolor)(n))``.
+
+    The rule both of ``palette_scp``'s branches apply to a palette not
+    declared continuous, and the continuous branch to every palette: up to its
+    length a palette is used **verbatim**, from the start.  So
+    ``palette_scp(palette = "viridis", n = 100)`` is viridis' own 100 colours
+    (alpha suffix included), not a re-interpolation of them.
+    """
+    return list(colors[:n]) if n <= len(colors) else color_ramp(colors, n)
+
+
+def _r_cut_codes(vals: np.ndarray, n: int) -> np.ndarray:
+    """``cut(x, seq(min, max, length.out = n + 1), include.lowest = TRUE)``.
+
+    The 0-based bin of every finite value, ``-1`` for NA: ``.bincode`` with
+    right-closed bins ``(b[k-1], b[k]]``, the first closed on both sides.  The
+    breaks are ``seq``'s, which ``np.linspace`` reproduces bit for bit.
+    """
+    out = np.full(vals.shape, -1, dtype=int)
+    finite = np.isfinite(vals)
+    if not finite.any():
+        return out
+    breaks = np.linspace(np.min(vals[finite]), np.max(vals[finite]), n + 1)
+    code = np.searchsorted(breaks, vals[finite], side="left")
+    out[finite] = np.clip(code, 1, n) - 1
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -156,7 +211,8 @@ def discrete_palette(
     The rule that matters: if ``len(levels) <= len(palette)`` the *first*
     ``len(levels)`` palette colors are taken **verbatim** (no interpolation);
     otherwise the palette is ramped to exactly ``len(levels)`` colors.  Getting
-    this wrong changes every categorical figure.
+    this wrong changes every categorical figure.  A palette declared
+    ``"continuous"`` is always ramped, as R checks ``attr(palcolor, "type")``.
 
     A *named* ``palcolor`` is honoured directly for the levels it covers, which
     is how ``adata.uns['<key>_colors']`` should be threaded through.
@@ -171,10 +227,8 @@ def discrete_palette(
         if declared == "continuous":
             # R: attr(palcolor,"type") == "continuous" -> always interpolate
             picked = color_ramp(colors, n)
-        elif n <= len(colors):
-            picked = list(colors[:n])
         else:
-            picked = color_ramp(colors, n)
+            picked = _take_or_ramp(colors, n)
         out = dict(zip(levels, picked, strict=True))
 
     if include_na:
@@ -192,15 +246,18 @@ def continuous_palette(
     n: int = 100,
     reverse: bool = False,
 ) -> list[str]:
-    """``n`` colors spanning the palette — SCP's continuous branch, cleaned up.
+    """``palette_scp(palette = palette, n = n)``: SCP's continuous branch.
 
-    SCP's R implementation cuts the literal vector ``1:100`` rather than the
-    data when ``matched = FALSE``, which is a bug that happens to be harmless
-    because the result is only ever used as an evenly spaced ramp.  We return
-    the ramp directly.
+    ``n`` colours for an evenly spaced scale.  As in R, a palette with at
+    least ``n`` colours is used verbatim from the start (the 100-colour
+    viridis family at ``n = 100`` is itself; a 5-colour request takes its
+    first five), and a shorter one is ramped with :func:`color_ramp`.
+
+    SCP cuts the literal vector ``1:100`` rather than any data here, which
+    only ever yields ``n`` levels, so the result is returned directly.
     """
     colors, _declared, _named = _resolve_colors(palette, palcolor)
-    ramp = color_ramp(colors, n)
+    ramp = _take_or_ramp(colors, n)
     return ramp[::-1] if reverse else ramp
 
 
@@ -216,17 +273,32 @@ def palette_scp(
     na_keep: bool = False,
     na_color: str = NA_COLOR_DEFAULT,
 ):
-    """Faithful entry point mirroring ``palette_scp()``.
+    """Faithful entry point mirroring ``palette_scp()`` (SCP-plot.R:168).
 
     Prefer :func:`discrete_palette` / :func:`continuous_palette` in new code —
     they have narrower, clearer contracts.  This function exists so that ported
-    R call sites can be transcribed one-to-one during the initial port and
-    diffed against R output.
+    R call sites can be transcribed one-to-one and diffed against R output;
+    ``tests/fixtures/parity/palettes`` pins it against SCP 0.5.6.
+
+    ``matched=True`` returns one colour per element of ``x``.  For continuous
+    ``x`` that is R's ``cut(x, seq(min, max, length.out = n + 1),
+    include.lowest = TRUE)``: ``n`` equal-width right-closed bins, bin ``k``
+    taking the ``k``-th colour of the ``n``-colour scale.  NA elements come
+    back as ``None`` — what R's ``NA_keep = FALSE`` filter leaves there — or
+    ``na_color`` with ``na_keep=True``.
+
+    Two deliberate divergences, both R bugs that only show at the edges:
+
+    * a constant ``x`` makes R return a *single* colour (the palette's first)
+      whatever the length of ``x``; here it is repeated per element;
+    * ``reverse=TRUE`` with ``matched=TRUE`` reverses R's per-element vector,
+      so colours no longer line up with their elements; here the *scale* is
+      reversed, as for an unmatched palette.
 
     Returns
     -------
     ``dict[str, str]`` for the discrete branch, ``list[str]`` for the
-    continuous branch, or ``np.ndarray[str]`` of per-element colors when
+    continuous branch, or ``np.ndarray[object]`` of per-element colours when
     ``matched=True``.
     """
     if x is None:
@@ -238,6 +310,7 @@ def palette_scp(
         type = "continuous" if pd.api.types.is_numeric_dtype(s) else "discrete"
 
     has_na = bool(s.isna().any())
+    na_out = na_color if na_keep else None
 
     if type == "discrete":
         from .fetch import as_ordered_categorical  # local import, avoids a cycle
@@ -252,25 +325,27 @@ def palette_scp(
             include_na=has_na and na_keep,
         )
         if matched:
-            return np.asarray([mapping.get(str(v), na_color) for v in s], dtype=object)
-        if has_na and not na_keep:
-            mapping.pop("NA", None)
+            return np.asarray([na_out if pd.isna(v) else mapping.get(str(v), na_out)
+                               for v in s], dtype=object)
         return mapping
 
     # continuous
     vals = pd.to_numeric(s, errors="coerce").to_numpy(dtype=float)
-    ramp = continuous_palette(palette, palcolor, n=n, reverse=reverse)  # type: ignore[arg-type]
-    if not matched:
-        return ramp
     finite = np.isfinite(vals)
-    out = np.full(vals.shape, na_color, dtype=object)
-    if finite.any():
-        lo, hi = float(np.nanmin(vals[finite])), float(np.nanmax(vals[finite]))
-        if hi == lo:
-            out[finite] = ramp[0]
-        else:
-            idx = np.clip(((vals[finite] - lo) / (hi - lo) * (n - 1)).round().astype(int), 0, n - 1)
-            out[finite] = np.asarray(ramp, dtype=object)[idx]
-    if has_na and not na_keep:
-        warnings.warn("NA values present; they are colored with `na_color`.", stacklevel=2)
+    colors, _declared, _named = _resolve_colors(palette, palcolor)  # type: ignore[arg-type]
+    constant = finite.any() and np.unique(vals[finite]).size == 1
+    if not finite.any() or constant:
+        # R: a one-level factor, so a one-colour scale -- the palette's first
+        ramp = list(colors[:1])
+    else:
+        ramp = continuous_palette(palette, palcolor, n=n)  # type: ignore[arg-type]
+    if reverse:
+        ramp = ramp[::-1]
+    if not matched:
+        return ramp + [na_color] if (has_na and na_keep) else ramp
+    out = np.full(vals.shape, na_out, dtype=object)
+    if constant:
+        out[finite] = ramp[0]
+    elif finite.any():
+        out[finite] = np.asarray(ramp, dtype=object)[_r_cut_codes(vals, n)[finite]]
     return out

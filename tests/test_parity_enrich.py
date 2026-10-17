@@ -557,7 +557,7 @@ def test_gsea_line_shades_the_half_planes(gsea_lists):
 
 def test_gsea_heat_strip_matches_R(gsea_lists):
     """The single-set ranking-metric strip, from R's quantile/cut/colorRampPalette:
-    the same rectangles, colours within one 8-bit step."""
+    the same rectangles and the same colours, exactly (colorRampPalette truncates)."""
     r = _csv("gsea_heat_strip.csv")
     lists, _ = gsea_lists
     for key, rr in r.groupby("key", sort=False):
@@ -565,7 +565,7 @@ def test_gsea_heat_strip_matches_R(gsea_lists):
         assert [(a, b) for a, b, _ in got] == list(zip(rr["xmin"], rr["xmax"], strict=True))
         worst = max(int(np.abs(_rgb(c) - _rgb(w)).max())
                     for (_, _, c), w in zip(got, rr["col"], strict=True))
-        assert worst <= 1
+        assert worst == 0
 
 
 def test_gsea_line_draws_the_heat_strip(gsea_lists):

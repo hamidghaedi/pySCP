@@ -161,7 +161,8 @@ def test_feature_split_by_must_be_lineages(lin):
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("metric", SIMIL_METHODS + DIST_METHODS + ("hamman",))
 def test_cell_cor_heatmap_accepts_every_scp_metric(adata, metric):
-    r = scp.pl.cell_cor_heatmap(adata, query_group="leiden", ref_group="batch",
+    # an explicit reference: with reference=None R makes ref_group = query_group
+    r = scp.pl.cell_cor_heatmap(adata, adata, query_group="leiden", ref_group="batch",
                                 features=_genes(adata, 10), distance_metric=metric)
     m = r.matrices["similarity"]
     assert m.shape == (4, 2)

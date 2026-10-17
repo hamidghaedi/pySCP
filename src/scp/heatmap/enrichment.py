@@ -40,7 +40,7 @@ import numpy as np
 import pandas as pd
 
 from ..colors import blendcolors
-from ..palettes import PALETTES
+from ..palettes import palette_scp
 
 __all__ = [
     "WORDS_EXCLUDED",
@@ -55,7 +55,6 @@ __all__ = [
     "feature_boxes",
     "enrichment_boxes",
     "capitalize",
-    "matched_colors",
 ]
 
 #: ``SCP::words_excluded`` -- the stop-word list ``anno_keys`` filters out.
@@ -254,57 +253,15 @@ def capitalize(x: Iterable[str]) -> list[str]:
     return out
 
 
-def matched_colors(values: np.ndarray, palette: str = "Spectral", n: int = 100) -> list[str]:
-    """``palette_scp(x, type = "continuous", matched = TRUE)``, bin for bin.
+def _spectral(values: np.ndarray) -> list[str]:
+    """``palette_scp(x, type = "continuous", palette = "Spectral", matched = TRUE)``.
 
-    R cuts ``x`` into ``n`` equal-width, right-closed bins over its range
-    (``cut(..., include.lowest = TRUE)``) and indexes a ``colorRampPalette``
-    of ``n`` colors by bin; a constant ``x`` takes the palette's first color.
+    The shared, R-exact resolver: ``x`` cut into 100 equal-width bins over its
+    range, each taking its colour of ``colorRampPalette(Spectral)(100)``.
     """
-    x = np.asarray(values, dtype=float)
-    pal = list(PALETTES[palette].colors)
-    finite = x[np.isfinite(x)]
-    if finite.size == 0:
-        return ["grey80"] * len(x)
-    if np.unique(finite).size == 1:
-        return [pal[0]] * len(x)
-    breaks = np.linspace(finite.min(), finite.max(), n + 1)
-    idx = np.clip(np.searchsorted(breaks, x, side="left"), 1, n) - 1
-    ramp = pal[:n] if n <= len(pal) else _r_color_ramp(pal, n)
-    return [ramp[i] for i in idx]
-
-
-def _r_color_ramp(colors: Sequence[str], n: int) -> list[str]:
-    """``colorRampPalette(colors)(n)`` to the bit.
-
-    :func:`scp.palettes.color_ramp` *rounds* each channel, which lands one
-    8-bit step above R on most ramp positions -- invisible in a heatmap body,
-    but it shows when the word colors are compared to R's.  ``colorRamp``
-    interpolates channels in [0, 1] and scales by 255, and
-    ``rgb(..., maxColorValue = 255)`` then coerces to integer, i.e. truncates.
-    """
-    stops = np.array([[int(c.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4)] for c in colors],
-                     dtype=float) / 255.0
-    xp = np.linspace(0.0, 1.0, len(stops))
-    x = np.linspace(0.0, 1.0, n)
-    chan = np.empty((n, 3))
-    for row, v in enumerate(x):
-        # R's approx1(), operation for operation, so exact integers survive
-        i, j = 0, len(xp) - 1
-        while i < j - 1:
-            ij = (i + j) // 2
-            if v < xp[ij]:
-                j = ij
-            else:
-                i = ij
-        if v == xp[j]:
-            chan[row] = stops[j]
-        elif v == xp[i]:
-            chan[row] = stops[i]
-        else:
-            chan[row] = stops[i] + (stops[j] - stops[i]) * ((v - xp[i]) / (xp[j] - xp[i]))
-    ints = np.trunc(np.clip(chan, 0.0, 1.0) * 255.0).astype(int)
-    return ["#{:02X}{:02X}{:02X}".format(*row) for row in ints]
+    cols = palette_scp(np.asarray(values, dtype=float), type="continuous", palette="Spectral",
+                       matched=True, na_keep=True)
+    return [str(c) for c in cols]
 
 
 def _darken(cols: list[str]) -> list[str]:
@@ -350,7 +307,7 @@ def _top(words: pd.DataFrame, top: int, fontsize: tuple[float, float],
         return words
     order = np.argsort(-words["score"].to_numpy(dtype=float), kind="stable")[:top]
     out = words.iloc[order].reset_index(drop=True)
-    out["col"] = _darken(matched_colors(out["score"].to_numpy()))
+    out["col"] = _darken(_spectral(out["score"].to_numpy()))
     out["fontsize"] = _rescale(out["count"].to_numpy(), fontsize)
     # R draws a random 0/90 angle with probability 60/40; ComplexHeatmap's
     # textbox ignores it, so it is kept only as data
@@ -369,7 +326,7 @@ def term_boxes(
     else:
         terms = capitalize(head["Description"])
     out = pd.DataFrame({"keyword": terms})
-    out["col"] = _darken(matched_colors(-np.log10(head[metric].to_numpy(dtype=float))))
+    out["col"] = _darken(_spectral(-np.log10(head[metric].to_numpy(dtype=float))))
     out["fontsize"] = float(fontsize)
     return out
 

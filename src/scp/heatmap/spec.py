@@ -56,6 +56,8 @@ class LegendSpec:
     vmax: float | None = None
     #: for the dot-size legend: the five breaks SCP draws (20%..100%)
     breaks: Sequence[float] = (0.2, 0.4, 0.6, 0.8, 1.0)
+    #: for the dot-size legend: the dot diameter at 100%, in inches
+    size_in: float | None = None
 
 
 @dataclass

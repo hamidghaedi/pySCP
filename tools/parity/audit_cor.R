@@ -16,6 +16,10 @@
 #                                    and how many features R picks by default
 #   cellcor_self_default_features.csv  R's matrix with features = NULL, for
 #                                    checking default selection on the full data
+#   cellcor_default_centroids.csv    R's collapsed SubCellType centroids for
+#   cellcor_default_hvf.json         every stored HVF plus 500 genes that are
+#                                    not, and the HVF list: default selection
+#                                    checked without the full matrix
 #   cellcor_<case>.csv               CellCorHeatmap()$simil_matrix per case
 #                                    (rows = query, columns = reference, in R's
 #                                    row/column order before clustering)
@@ -174,6 +178,20 @@ res_default <- CellCorHeatmap(srt_query = srt, query_group = "SubCellType")
 md <- res_default$simil_matrix
 write.csv(data.frame(row = rownames(md), md, check.names = FALSE),
           file.path(out, "cellcor_self_default_features.csv"), row.names = FALSE)
+# ... and what it needs to be checked without the full matrix: the collapsed
+# centroids R correlates (log1p of AverageExpression on the data layer, one row
+# per SubCellType level) for every stored HVF plus 500 genes that are not HVFs,
+# in object gene order, with the HVF flag. One pseudo-cell per group collapses
+# to itself, so default selection runs on these and must pick the HVFs alone.
+hvf <- VariableFeatures(srt)
+set.seed(11)
+cent_genes <- rownames(srt)[rownames(srt) %in% c(hvf, sample(setdiff(rownames(srt), hvf), 500))]
+cent <- log1p(as.matrix(AverageExpression(srt, features = cent_genes, layer = "data",
+                                          group.by = "SubCellType", verbose = FALSE)[[1]]))
+stopifnot(identical(colnames(cent), levels(srt$SubCellType)))
+write.csv(data.frame(row = colnames(cent), t(signif(cent, 10)), check.names = FALSE),
+          file.path(out, "cellcor_default_centroids.csv"), row.names = FALSE)
+write_json(list(hvf = hvf, genes = cent_genes), file.path(out, "cellcor_default_hvf.json"))
 write_json(meta, file.path(out, "cellcor_meta.json"), auto_unbox = TRUE, digits = NA)
 
 # ---------------------------------------------------------------- FeatureCorPlot

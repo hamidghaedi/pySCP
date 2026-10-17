@@ -30,6 +30,7 @@ import pandas as pd
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 
 from ..fetch import as_ordered_categorical, fetch_data, fetch_var
+from ..heatmap import glyphs
 from ..heatmap.cluster import (
     AxisOrder,
     SplitMethod,
@@ -461,6 +462,127 @@ def _column_order(mat: np.ndarray, col_split: pd.Categorical | None, *, cluster_
     return axis_order(mat.T, col_split), None
 
 
+def _fill_key(label: str, split: bool) -> str:
+    """``fill.by = "group"``: the column's split level with a split, else its group."""
+    parts = str(label).split(" : ")
+    return parts[1] if split and len(parts) > 1 else parts[0]
+
+
+def _glyph_annotation(key, ser: pd.Series, keep: np.ndarray, panels: list[PanelSpec],
+                      groups: list[str], cell_lab: Mapping[str, np.ndarray], *, palette: str,
+                      group_levels: Mapping[str, list[str]],
+                      split_levels: list[str]) -> LegendSpec | None:
+    """GroupHeatmap's ``cell_annotation``: a pie or a violin per column (8363-8484).
+
+    Appends a 10 mm custom lane to every panel and returns the legend (pies
+    only; R's violin legend is commented out).
+    """
+    numeric = pd.api.types.is_numeric_dtype(ser) and not pd.api.types.is_bool_dtype(ser)
+    split = bool(split_levels)
+    if numeric:
+        vals = ser.to_numpy(dtype=float)[keep]
+        for gi, (p, g) in enumerate(zip(panels, groups, strict=True)):
+            lab = cell_lab[g]
+            in_panel = np.array([not str(x).startswith("\0") for x in lab], dtype=bool)
+            fin = vals[in_panel & np.isfinite(vals)]
+            y_range = (float(fin.min()), float(fin.max())) if fin.size else (0.0, 1.0)
+            fills = discrete_palette(split_levels if split else group_levels[g], palette=palette)
+            per_col = [vals[lab == str(c)] for c in p.col_labels]
+            colors = [fills.get(_fill_key(c, split), "#B3B3B3") for c in p.col_labels]
+
+            def draw_violins(ax, positions, flip=False, per_col=per_col, colors=colors,
+                     y_range=y_range):
+                for k, j in enumerate(positions):
+                    box = (0.0, 1.0, k, k + 1.0) if flip else (k, k + 1.0, 0.0, 1.0)
+                    glyphs.draw_violin(ax, box, per_col[j], y_range, colors[j], flip=flip)
+
+            p.top_tracks.append(Track(name=key, side="top", kind="custom", draw=draw_violins,
+                                      size_in=10 * MM, show_name=gi == 0))
+        return None
+    if pd.api.types.is_bool_dtype(ser):
+        cat = pd.Series(pd.Categorical(ser, categories=[True, False]), index=ser.index)
+    else:
+        cat = as_ordered_categorical(ser)
+    levels = [str(c) for c in cat.cat.categories]
+    codes = np.asarray(cat.cat.codes)[keep]
+    has_na = bool((codes < 0).any())
+    colors_map = discrete_palette(levels, palette=palette, include_na=has_na)
+    wedge_colors = [colors_map[lv] for lv in levels] + ([colors_map["NA"]] if has_na else [])
+    for gi, (p, g) in enumerate(zip(panels, groups, strict=True)):
+        lab = cell_lab[g]
+        fracs = []
+        for c in p.col_labels:
+            cc = codes[lab == str(c)]
+            counts = np.bincount(cc[cc >= 0], minlength=len(levels)).astype(float)
+            if has_na:
+                counts = np.append(counts, float((cc < 0).sum()))
+            fracs.append(counts / max(counts.sum(), 1.0))
+
+        def draw_pies(ax, positions, flip=False, fracs=fracs):
+            for k, j in enumerate(positions):
+                box = (0.0, 1.0, k, k + 1.0) if flip else (k, k + 1.0, 0.0, 1.0)
+                glyphs.draw_pie(ax, box, fracs[j], wedge_colors, flip=flip)
+
+        p.top_tracks.append(Track(name=key, side="top", kind="custom", draw=draw_pies,
+                                  size_in=10 * MM, show_name=gi == 0))
+    return LegendSpec(title=key, kind="categorical",
+                      mapping={lv: colors_map[lv] for lv in levels})
+
+
+def _violin_values(adata, feats: list[str], keep: np.ndarray) -> pd.DataFrame:
+    """``FeatureStatPlot(slot = "data")``'s values: ``adata.X`` (or obs), kept cells."""
+    return fetch_data(adata, feats, layer=None).iloc[np.flatnonzero(keep)][feats]
+
+
+def _violin_layer(values: pd.DataFrame, row_feats: list[str], cols: list[str],
+                  cell_lab: np.ndarray, *, fill_by: str, fill_palette: str,
+                  fill_palcolor, feature_order: list[str], group_levels: list[str],
+                  split_levels: list[str]) -> Layer:
+    """``add_violin``: a violin per body cell, one value range per panel (8768)."""
+    split = bool(split_levels)
+    in_panel = np.array([not str(x).startswith("\0") for x in cell_lab])
+    V = values.to_numpy(dtype=float)
+    fin = V[in_panel][np.isfinite(V[in_panel])]
+    y_range = (float(fin.min()), float(fin.max())) if fin.size else (0.0, 1.0)
+    fidx = {f: k for k, f in enumerate(values.columns)}
+    col_cells = {c: np.flatnonzero(cell_lab == str(c)) for c in cols}
+    if fill_by == "feature":
+        fmap = discrete_palette(feature_order, palette=fill_palette, palcolor=fill_palcolor)
+
+        def color(f, c):
+            return fmap[f]
+    elif fill_by == "group":
+        gmap = discrete_palette(split_levels if split else group_levels, palette=fill_palette,
+                                palcolor=fill_palcolor)
+
+        def color(f, c):
+            return gmap.get(_fill_key(c, split), "#B3B3B3")
+    elif fill_by == "expression":
+        med = {(f, c): float(np.nanmedian(V[col_cells[c], fidx[f]])) if len(col_cells[c])
+               else np.nan for f in row_feats for c in cols}
+        m = np.array([v for v in med.values() if np.isfinite(v)])
+        ramp = continuous_palette(palette=fill_palette, palcolor=fill_palcolor, n=100)
+        ecmap = LinearSegmentedColormap.from_list("fill_expr", ramp, N=256)
+        enorm = Normalize(float(m.min()), float(m.max())) if m.size else Normalize(0, 1)
+
+        def color(f, c):
+            v = med[(f, c)]
+            return ecmap(enorm(v)) if np.isfinite(v) else "#B3B3B3"
+    else:
+        raise ValueError("fill_by must be one of 'feature', 'group', 'expression'")
+
+    def draw(ax, panel, rows, cols_idx, flip=False):
+        for a, r in enumerate(rows):
+            f = row_feats[r]
+            for b, j in enumerate(cols_idx):
+                c = cols[j]
+                box = (a, a + 1.0, b, b + 1.0) if flip else (b, b + 1.0, a, a + 1.0)
+                glyphs.draw_violin(ax, box, V[col_cells[c], fidx[f]], y_range, color(f, c),
+                                   flip=flip)
+
+    return Layer(kind="violin", draw=draw)
+
+
 def _enrich_kwargs(local: dict) -> dict:
     keys = ("anno_terms", "anno_keys", "anno_features", "enrichment", "enrichment_fn", "db",
             "padjust_cutoff", "pvalue_cutoff", "top_term", "show_termid", "top_word",
@@ -509,6 +631,10 @@ def group_heatmap(
     dot_size_mm: float = 8.0,
     bg_alpha: float = 0.5,
     reticle_color: str = "#808080",
+    add_violin: bool = False,
+    fill_by: Literal["feature", "group", "expression"] = "feature",
+    fill_palette: str = "Dark2",
+    fill_palcolor: Sequence[str] | None = None,
     # annotation
     cell_annotation: Sequence[str] | None = None,
     cell_annotation_palette: str | Sequence[str] | None = None,
@@ -598,11 +724,33 @@ def group_heatmap(
       same tree; here such ties keep the ``hclust`` order
       (:func:`scp.heatmap.cluster.axis_order`);
     * ``kmeans`` / ``mfuzz`` agree with R as partitions, not label for label;
-    * ``cell_annotation`` is drawn as the per-group modal value rather than
-      R's pie / violin grobs;
     * ``anno_keys`` on GO databases uses the tokenising keyword method, not
-      ``simplifyEnrichment`` (see :mod:`scp.heatmap.enrichment`).
+      ``simplifyEnrichment`` (see :mod:`scp.heatmap.enrichment`);
+    * the violins' densities are the exact Gaussian sum rather than
+      ``stats::density``'s binned FFT (about 1e-3 of the peak).
+
+    ``cell_annotation`` is drawn as R draws it (``SCP-plot.R`` 8363-8484), one
+    glyph per column in a 10 mm lane: a categorical annotation as a pie of its
+    levels among the column's cells (``CellStatPlot(plot_type = "pie")``,
+    with a legend), a numeric one as a violin of its values filled by the
+    column's group -- or split level, with ``split_by`` -- on one value range
+    per panel (``FeatureStatPlot(fill.by = "group", same.y.lims = TRUE)``, no
+    legend).  Genes are read from ``adata.X``, as R reads ``@data``.
+    ``add_violin`` draws, in every body cell, the violin of that feature in
+    that column's cells (``adata.X`` again), filled by ``fill_by`` from
+    ``fill_palette``, on one value range per panel over every feature; the
+    body is whited out underneath and its colour legend dropped, as in R.
+
+    ``flip=True`` transposes every panel and stacks the panels vertically.
+    As in R, ``cluster_rows`` / ``cluster_columns`` (and the ``*_slices``
+    pair) then name the *drawn* axes -- they are swapped on entry -- and the
+    returned matrices are not transposed.  The enrichment boxes cannot be
+    combined with ``flip``, as in R.
     """
+    if flip:
+        # SCP-plot.R 8094: the flags name the drawn axes once flipped
+        cluster_rows, cluster_columns = cluster_columns, cluster_rows
+        cluster_row_slices, cluster_column_slices = cluster_column_slices, cluster_row_slices
     if group_by is None:
         raise ValueError("`group_by` is required")
     groups = [group_by] if isinstance(group_by, str) else list(group_by)
@@ -743,13 +891,26 @@ def group_heatmap(
     gpals = _per_item(group_palette, len(groups), "group_palette")
     split_colors = (discrete_palette(split_levels, palette=cell_split_palette)
                     if split_by is not None else None)
+    # every kept cell's column label in each panel ("group" or "group : split")
+    cell_lab: dict[str, np.ndarray] = {}
+    for g in groups:
+        gv = np.asarray(as_ordered_categorical(obs[g]).astype(object))[keep]
+        clab = np.array([str(v) if pd.notna(v) else "\0" for v in gv], dtype=object)
+        if split_vals is not None:
+            clab = np.array([f"{a} : {b}" for a, b in zip(clab, split_vals, strict=True)],
+                            dtype=object)
+        cell_lab[g] = clab
     panels: list[PanelSpec] = []
     matrices: dict[str, pd.DataFrame] = {}
     col_dends: dict[str, Dendrogram] = {}
-    legends: list[LegendSpec] = [LegendSpec(title=scale_title, kind="continuous", cmap=cmap,
-                                            vmin=vmin, vmax=vmax)]
+    legends: list[LegendSpec] = []
+    if not add_violin:  # R drops the body's colour legend under violins
+        legends.append(LegendSpec(title=scale_title, kind="continuous", cmap=cmap,
+                                  vmin=vmin, vmax=vmax))
     if add_dot:
-        legends.append(LegendSpec(title=f"Percent > {exp_cutoff:g}", kind="size"))
+        legends.append(LegendSpec(title=f"Percent > {exp_cutoff:g}", kind="size",
+                                  size_in=dot_size_mm * MM))
+    violin_data = _violin_values(adata, feats, keep) if add_violin else None
     for gi, g in enumerate(groups):
         proc = processed[g][order, :]
         csplit = (pd.Categorical(col_group[g], categories=group_levels[g])
@@ -767,11 +928,17 @@ def group_heatmap(
             layers.append(Layer(kind="bg", alpha=bg_alpha))
         if add_reticle:
             layers.append(Layer(kind="reticle", color=reticle_color))
-        if add_dot:
-            # dots replace the body, so the body is whited out underneath first
+        if add_dot or add_violin:
+            # dots / violins replace the body, so it is whited out underneath first
             layers.insert(0, Layer(kind="whiteout"))
+        if add_dot:
             layers.append(Layer(kind="dot", size_matrix=pct[g][order][:, corder],
                                 base_size_in=dot_size_mm * MM))
+        if violin_data is not None:
+            layers.append(_violin_layer(
+                violin_data, [feats[i] for i in order], cols, cell_lab[g],
+                fill_by=fill_by, fill_palette=fill_palette, fill_palcolor=fill_palcolor,
+                feature_order=feats, group_levels=group_levels[g], split_levels=split_levels))
         gcols = discrete_palette(group_levels[g], palette=gpals[gi])
         top = [Track(name=g, side="top", kind="simple",
                      values=np.array([c.split(" : ")[0] for c in cols]), colors=gcols,
@@ -793,48 +960,15 @@ def group_heatmap(
         legends.append(LegendSpec(title=split_by, kind="categorical", mapping=split_colors))
 
     if cell_annotation:
-        # R draws a pie (categorical) or violin (numeric) per column; here the
-        # column's modal level or mean value fills a simple lane instead.
         pals = _per_item(cell_annotation_palette, len(cell_annotation), "cell_annotation_palette")
         for key, pal in zip(cell_annotation, pals, strict=True):
             ser = (obs[key] if key in obs.columns
                    else fetch_data(adata, [key], layer=None)[key])  # genes: R reads @data
-            numeric = pd.api.types.is_numeric_dtype(ser) and not pd.api.types.is_bool_dtype(ser)
-            if numeric:
-                avals = ser.to_numpy(dtype=float)[keep]
-                acmap = _cmap(pal or "Paired", None, f"anno_{key}")
-            else:
-                ann = as_ordered_categorical(ser)
-                cols_map = discrete_palette([str(c) for c in ann.cat.categories],
-                                            palette=pal or "Paired")
-                avals = np.asarray(ann.astype(object))[keep]
-            per_panel = []
-            for p, g in zip(panels, groups, strict=True):
-                gvals = np.asarray(as_ordered_categorical(obs[g]).astype(object))[keep].astype(str)
-                if split_vals is not None:
-                    gvals = np.char.add(np.char.add(gvals, " : "), split_vals)
-                if numeric:
-                    per_panel.append(np.array([np.nanmean(avals[gvals == str(lab)])
-                                               for lab in p.col_labels]))
-                else:
-                    per = []
-                    for lab in p.col_labels:
-                        v = pd.Series(avals[gvals == str(lab)]).dropna()
-                        per.append(str(v.astype(str).mode().iloc[0]) if len(v) else "NA")
-                    per_panel.append(np.array(per))
-            if numeric:
-                allv = np.concatenate(per_panel)
-                anorm = Normalize(float(np.nanmin(allv)), float(np.nanmax(allv)))
-                for p, vals in zip(panels, per_panel, strict=True):
-                    p.top_tracks.append(Track(name=key, side="top", kind="simple", values=vals,
-                                              cmap=acmap, norm=anorm, size_in=4 * MM))
-                legends.append(LegendSpec(title=key, kind="continuous", cmap=acmap,
-                                          vmin=anorm.vmin, vmax=anorm.vmax))
-            else:
-                for p, vals in zip(panels, per_panel, strict=True):
-                    p.top_tracks.append(Track(name=key, side="top", kind="simple", values=vals,
-                                              colors=cols_map, size_in=4 * MM))
-                legends.append(LegendSpec(title=key, kind="categorical", mapping=cols_map))
+            lg = _glyph_annotation(key, ser, keep, panels, groups, cell_lab,
+                                   palette=pal or "Paired", group_levels=group_levels,
+                                   split_levels=split_levels)
+            if lg is not None:
+                legends.append(lg)
 
     # 7. side tracks -----------------------------------------------------------
     left_tracks: list[Track] = []
@@ -984,7 +1118,14 @@ def feature_heatmap(
     size nothing is dropped and the matrices match); kmeans/mfuzz agree as
     partitions; the GO keyword method and the noise-driven zscore reorder are
     as described in :func:`group_heatmap`.
+
+    ``flip=True`` transposes the panels and stacks them vertically; as in R,
+    the ``cluster_*`` flags then name the drawn axes (they are swapped on
+    entry, ``SCP-plot.R`` 9261).
     """
+    if flip:
+        cluster_rows, cluster_columns = cluster_columns, cluster_rows
+        cluster_row_slices, cluster_column_slices = cluster_column_slices, cluster_row_slices
     if features is None:
         raise ValueError("`features` is required")
     obs = adata.obs
@@ -1185,16 +1326,24 @@ def feature_heatmap(
 _DYN_COLS = ("exp_ncells", "r.sq", "dev.expl", "peaktime", "valleytime", "padjust")
 
 
+def _dynamic_entry(adata, lineage: str, dynamic_features):
+    """What ``srt@tools[["DynamicFeatures_<l>"]]`` holds for one lineage, if supplied.
+
+    ``dynamic_features[lineage]`` (else ``adata.uns["DynamicFeatures_<l>"]``)
+    is either the ``DynamicFeatures`` table itself or a mapping in SCP's
+    layout: ``"DynamicFeatures"`` plus, optionally, ``"fitted_matrix"``,
+    ``"upr_matrix"`` and ``"lwr_matrix"`` (cells x features).
+    """
+    if dynamic_features is not None and lineage in dynamic_features:
+        return dynamic_features[lineage]
+    return (adata.uns or {}).get(f"DynamicFeatures_{lineage}")
+
+
 def _dynamic_table(adata, lineage: str, dynamic_features) -> pd.DataFrame | None:
     """``srt@tools[["DynamicFeatures_<l>"]][["DynamicFeatures"]]``, if supplied."""
-    tab = None
-    if dynamic_features is not None and lineage in dynamic_features:
-        tab = dynamic_features[lineage]
-    else:
-        stored = (adata.uns or {}).get(f"DynamicFeatures_{lineage}")
-        if isinstance(stored, Mapping) and "DynamicFeatures" in stored:
-            stored = stored["DynamicFeatures"]
-        tab = stored
+    tab = _dynamic_entry(adata, lineage, dynamic_features)
+    if isinstance(tab, Mapping):
+        tab = tab.get("DynamicFeatures")
     if tab is None:
         return None
     df = pd.DataFrame(tab).copy()
@@ -1202,6 +1351,96 @@ def _dynamic_table(adata, lineage: str, dynamic_features) -> pd.DataFrame | None
         df = df.set_index(df["features"].astype(str))
     df.index = df.index.astype(str)
     return df
+
+
+def _dynamic_fits(adata, lineage: str, dynamic_features) -> dict[str, pd.DataFrame] | None:
+    """RunDynamicFeatures' fitted / upper / lower matrices, cells x features."""
+    entry = _dynamic_entry(adata, lineage, dynamic_features)
+    if not isinstance(entry, Mapping):
+        return None
+    keys = ("fitted_matrix", "upr_matrix", "lwr_matrix")
+    if any(entry.get(k) is None for k in keys):
+        return None
+    out = {}
+    for k in keys:
+        df = pd.DataFrame(entry[k]).copy()
+        df.index = df.index.astype(str)
+        out[k] = df
+    return out
+
+
+def _r_rank(x: np.ndarray) -> np.ndarray:
+    """``rank(x)``: average ranks for ties, 1-based."""
+    from scipy.stats import rankdata
+
+    return rankdata(x, method="average")
+
+
+def _ridge_track(key: str, ser: pd.Series, cells: np.ndarray, t: np.ndarray, *,
+                 reverse: bool, palette: str, palcolor, show_name: bool) -> Track:
+    """``separate_annotation`` with a categorical column (SCP-plot.R 11428-11482).
+
+    ``CellDensityPlot(cells = <lineage cells>, group.by = key, features =
+    <lineage>, x_order = "rank", decreasing = TRUE, reverse = ...)``: one
+    density ridge per group over the ranks of the lineage's pseudotime, groups
+    stacked by decreasing median pseudotime (in level order when flipped).
+    """
+    cat = as_ordered_categorical(ser)
+    levels = [str(c) for c in cat.cat.categories]
+    colors = discrete_palette(levels, palette=palette, palcolor=palcolor)
+    codes = np.asarray(cat.cat.codes)[cells]
+    rank = _r_rank(t)
+    present = [k for k in range(len(levels)) if (codes == k).any()]
+    groups = {levels[k]: rank[codes == k] for k in present}
+    med = {levels[k]: float(np.median(t[codes == k])) for k in present}
+    by_median = sorted(present, key=lambda k: -med[levels[k]])  # stable: level order on ties
+    n = len(t)
+    a, b = (float(rank.max()), float(rank.min())) if reverse else (float(rank.min()),
+                                                                    float(rank.max()))
+
+    def geometry(flip: bool):
+        order = present if flip else by_median
+        pos = {levels[k]: float(i + 1) for i, k in enumerate(order)}
+        ridges, top = glyphs.ridgelines(groups, pos)
+        return ridges, pos, top
+
+    def draw(ax, positions, flip=False):
+        ridges, pos, top = geometry(flip)
+        glyphs.draw_ridgelines(ax, ridges, pos, colors, x_range=(a, b), y_top=top,
+                               n_cells=n, flip=flip)
+
+    track = Track(name=f"{key}\n(separate)", side="top", kind="custom", draw=draw,
+                  size_in=10 * MM, show_name=show_name)
+    return track
+
+
+def _curve_track(keys: list[str], fits: dict[str, pd.DataFrame], cell_names: np.ndarray,
+                 t: np.ndarray, *, reverse: bool, palette: str, palcolor,
+                 show_name: bool) -> tuple[Track, dict[str, str]]:
+    """``separate_annotation`` with features (SCP-plot.R 11483-11536).
+
+    ``DynamicPlot(compare_features = TRUE, x_order = "rank", add_rug =
+    FALSE)``: each feature's fitted curve and its interval, ``log1p`` of
+    RunDynamicFeatures' fitted / upper / lower values, against the rank of the
+    lineage's pseudotime.
+    """
+    colors = discrete_palette(keys, palette=palette, palcolor=palcolor)
+    rank = _r_rank(t)
+    curves = []
+    for f in keys:
+        sel = [fits[m].reindex(cell_names)[f].to_numpy(dtype=float)
+               for m in ("fitted_matrix", "lwr_matrix", "upr_matrix")]
+        with np.errstate(invalid="ignore"):
+            y, lwr, upr = (np.log1p(v) for v in sel)
+        curves.append((rank, y, lwr, upr, colors[f]))
+    n = len(t)
+
+    def draw(ax, positions, flip=False):
+        glyphs.draw_curves(ax, curves, n_cells=n, reverse=reverse, flip=flip)
+
+    track = Track(name=f"{','.join(keys)}\n(separate)", side="top", kind="custom", draw=draw,
+                  size_in=10 * MM, show_name=show_name)
+    return track, colors
 
 
 def _estimate_dynamics(t: np.ndarray, Y: np.ndarray) -> pd.DataFrame:
@@ -1235,7 +1474,7 @@ def dynamic_heatmap(
     features: Sequence[str] | None = None,
     *,
     use_fitted: bool = False,
-    dynamic_features: Mapping[str, pd.DataFrame] | None = None,
+    dynamic_features: Mapping[str, pd.DataFrame | Mapping[str, pd.DataFrame]] | None = None,
     min_expcells: int = 20,
     r_sq: float = 0.2,
     dev_expl: float = 0.2,
@@ -1267,7 +1506,9 @@ def dynamic_heatmap(
     cell_annotation_palette: str | Sequence[str] | None = None,
     feature_annotation: Sequence[str] | None = None,
     feature_annotation_palette: str | Sequence[str] | None = None,
-    separate_annotation: Sequence | None = None,
+    separate_annotation: Sequence[str | Sequence[str]] | None = None,
+    separate_annotation_palette: str | Sequence[str] = "Paired",
+    separate_annotation_palcolor: Sequence[str] | None = None,
     pseudotime_label: Sequence[float] | None = None,
     pseudotime_label_color: str = "black",
     pseudotime_label_linetype: str = "--",
@@ -1333,13 +1574,38 @@ def dynamic_heatmap(
 
     ``use_fitted=True`` deliberately raises: mgcv's GCV smoothing selection is
     not reproducible with pygam (``docs/07_milestones.md`` §9).
-    ``separate_annotation`` (whole-axis ggplot strips) is not ported.
+
+    ``separate_annotation`` adds one 10 mm strip per entry across every
+    lineage (``SCP-plot.R`` 11422-11536), drawn from the numbers R's ggplot
+    would draw:
+
+    * a categorical ``obs`` column -- ``CellDensityPlot(x_order = "rank",
+      decreasing = TRUE)``: a density ridge per group over the ranks of the
+      lineage's pseudotime, one joint ``bw.nrd0`` bandwidth, groups stacked by
+      decreasing median pseudotime (level order when flipped), reversed for
+      ``reverse_ht`` lineages, with a ``<column>\\n(separate)`` legend;
+    * a feature, a list of features or a numeric ``obs`` column --
+      ``DynamicPlot(compare_features = TRUE, x_order = "rank")``: each
+      feature's fitted curve and interval, ``log1p`` of RunDynamicFeatures'
+      fitted / upper / lower values.  Those values are an input, as mgcv's fit
+      is not reproduced here: pass ``dynamic_features={lineage: {"DynamicFeatures":
+      table, "fitted_matrix": ..., "upr_matrix": ..., "lwr_matrix": ...}}``
+      (SCP's ``srt@tools`` layout, cells x features) or store that mapping in
+      ``adata.uns["DynamicFeatures_<lineage>"]``; without it this raises.
+
+    ``separate_annotation_palette`` / ``_palcolor`` are recycled over the
+    entries, as R does.
+
+    ``flip=True`` transposes the panels and stacks them vertically; as in R,
+    the ``cluster_*`` flags then name the drawn axes (they are swapped on
+    entry).
 
     Deliberate divergences: a lineage whose name is contained in a cell
     barcode no longer corrupts the cell ids (R strips the suffix with
     ``gsub``); with non-integer counts no median scaling is applied (R still
     multiplies by the median library size); the zscore-reorder and kmeans/
-    mfuzz notes of :func:`group_heatmap` apply.
+    mfuzz notes of :func:`group_heatmap` apply; the ridge densities are the
+    exact Gaussian sum rather than ``stats::density``'s binned FFT.
     """
     if use_fitted:
         raise NotImplementedError(
@@ -1347,10 +1613,10 @@ def dynamic_heatmap(
             "docs/07_milestones.md -- mgcv's GCV smoothing selection is not "
             "reproducible with pygam, so that path is deliberately not attempted."
         )
-    if separate_annotation is not None:
-        raise NotImplementedError(
-            "`separate_annotation` is specified in docs/porting_briefs/heatmaps.md §8 but not "
-            "ported; draw scp.pl.cell_density_plot / dynamic_plot next to the heatmap instead.")
+    if flip:
+        # SCP-plot.R 11168: the flags name the drawn axes once flipped
+        cluster_rows, cluster_columns = cluster_columns, cluster_rows
+        cluster_row_slices, cluster_column_slices = cluster_column_slices, cluster_row_slices
     lins = [lineages] if isinstance(lineages, str) else list(lineages)
     obs = adata.obs
     for lin in lins:
@@ -1492,6 +1758,21 @@ def dynamic_heatmap(
         ann_frames[key] = (obs[key] if key in obs.columns
                            else fetch_data(adata, [key], layer=None)[key])  # R: @data
     panels, matrices, col_dends = [], {}, {}
+    separate: list[tuple[list[str], bool, str, Sequence[str] | None]] = []
+    if separate_annotation is not None:
+        entries = [[e] if isinstance(e, str) else [str(x) for x in e] for e in separate_annotation]
+        spals = _per_item(separate_annotation_palette, len(entries), "separate_annotation_palette")
+        spcs = (_per_item(None, len(entries), "separate_annotation_palcolor")
+                if separate_annotation_palcolor is None
+                else [separate_annotation_palcolor] * len(entries))
+        for keys, pal, pc in zip(entries, spals, spcs, strict=True):
+            col = obs[keys[0]] if len(keys) == 1 and keys[0] in obs.columns else None
+            ridge = col is not None and not (pd.api.types.is_numeric_dtype(col)
+                                              and not pd.api.types.is_bool_dtype(col))
+            missing = [k for k in keys if k not in obs.columns and k not in set(adata.var_names)]
+            if missing:
+                raise KeyError(f"separate_annotation: {','.join(missing)} is not in adata")
+            separate.append((keys, ridge, pal or "Paired", pc))
     for li, lin in enumerate(lins):
         M = mat_list[lin][order]
         cax, cdend = _column_order(M, None, cluster_columns=cluster_columns,
@@ -1509,16 +1790,44 @@ def dynamic_heatmap(
             top.append(t)
             if li == 0:
                 legends.append(lg)
+        lin_cells = cell_order[lin]
+        rev = lin in reverse
+        for keys, ridge, pal, pc in separate:
+            if ridge:
+                top.append(_ridge_track(keys[0], obs[keys[0]], lin_cells, PT[lin_cells, li],
+                                        reverse=rev, palette=pal, palcolor=pc,
+                                        show_name=li == 0))
+                if li == 0:
+                    lv = [str(c) for c in as_ordered_categorical(obs[keys[0]]).cat.categories]
+                    legends.append(LegendSpec(title=f"{keys[0]}\n(separate)", kind="categorical",
+                                              mapping=discrete_palette(lv, palette=pal,
+                                                                       palcolor=pc)))
+                continue
+            fits = _dynamic_fits(adata, lin, dynamic_features)
+            if fits is None or any(k not in fits["fitted_matrix"].columns for k in keys):
+                raise ValueError(
+                    f"separate_annotation {keys} draws RunDynamicFeatures' fitted curves for "
+                    f"{lin}, and mgcv's fit is not reproduced here: pass dynamic_features="
+                    "{lineage: {'DynamicFeatures': table, 'fitted_matrix': ..., "
+                    "'upr_matrix': ..., 'lwr_matrix': ...}} (cells x features) or store that "
+                    f"mapping in adata.uns['DynamicFeatures_{lin}'].")
+            track, fcols = _curve_track(keys, fits, names[lin_cells], PT[lin_cells, li],
+                                        reverse=rev, palette=pal, palcolor=pc,
+                                        show_name=li == 0)
+            top.append(track)
+            if li == 0:
+                legends.append(LegendSpec(title="Features\n(separate)", kind="categorical",
+                                          mapping=fcols))
         layers: list[Layer] = []
         if pseudotime_label is not None:
             t_sorted = PT[cell_order[lin], li]
 
-            def _draw(ax, panel, rows_, cols_, t_sorted=t_sorted):
+            def _draw(ax, panel, rows_, cols_, flip=False, t_sorted=t_sorted):
                 for pse in pseudotime_label:  # rank position, as R draws it
                     i = int(np.argmin(np.abs(t_sorted - float(pse)))) + 1
-                    ax.axvline(i, color=pseudotime_label_color,
-                               linestyle=pseudotime_label_linetype,
-                               linewidth=pseudotime_label_linewidth, zorder=5)
+                    line = ax.axhline if flip else ax.axvline
+                    line(i, color=pseudotime_label_color, linestyle=pseudotime_label_linetype,
+                         linewidth=pseudotime_label_linewidth, zorder=5)
             layers.append(Layer(kind="custom", draw=_draw))
         panels.append(PanelSpec(
             name=lin, matrix=M[:, corder], row_labels=row_labels,
@@ -1595,8 +1904,8 @@ def cell_cor_heatmap(
     layer: str | None = None,
     cluster_rows: bool = False,
     cluster_columns: bool = False,
-    nlabel: int = 3,
-    label_cutoff: float | None = None,
+    nlabel: int = 0,
+    label_cutoff: float | None = 0.0,
     label_by: Literal["row", "column", "both"] = "row",
     show_row_names: bool = True,
     show_column_names: bool = True,
@@ -1626,38 +1935,88 @@ def cell_cor_heatmap(
     (shown as ``1 - d / max(d)``).  See :func:`scp.heatmap.similarity.
     cell_similarity` for the formulas and the two R bugs fixed there
     (``"hamman"``, and proxyC's cancellation in ``euclidean``).
+
+    As in R:
+
+    * ``reference=None`` compares the query with itself and inherits
+      ``query_group`` and ``query_collapsing`` for the reference
+      (``SCP-plot.R`` 10150-10156);
+    * uncollapsed rows (and columns) are grouped level by level, cells of a
+      level in object order, so each group's cells sit together; cells whose
+      group is NA are dropped (10218-10241);
+    * ``features=None`` takes the stored highly variable genes of the query and
+      of the reference (``var["highly_variable"]``, Seurat's
+      ``VariableFeatures``) and intersects them (``RunKNNPredict``,
+      SCP-cell_annotation.R:122-263).  An object without the flag falls back to
+      its ``nfeatures`` most variable genes: R runs ``FindVariableFeatures``
+      (vst) there, which needs the counts and a loess fit and is not ported;
+    * nothing is labelled by default (``nlabel=0``); labels need a value of at
+      least ``label_cutoff`` (default 0) and of the ``nlabel``-th largest in
+      their row/column.
+
+    ``flip=True`` draws the reference down the rows (R's ``t(simil_matrix)``).
+    As in R, ``label_by`` then names the drawn axes, while ``cluster_rows``
+    keeps clustering the query (R swaps the flags and transposes, which
+    cancels out); the returned matrix is not transposed.
+
+    Not ported: the query/reference cell annotations, ``bulk_ref``, the
+    reduction inputs and ``features_type="DE"``.
     """
-    if reference is None:
-        reference = query
     if query_collapsing is None:
         query_collapsing = query_group is not None
+    if reference is None:
+        if ref_group is not None and ref_group != query_group:
+            warnings.warn(f"reference=None compares the query with itself, so ref_group "
+                          f"{ref_group!r} is replaced by query_group {query_group!r}, as in R; "
+                          "pass the reference explicitly to group it differently.",
+                          stacklevel=2)
+        reference, ref_group, ref_collapsing = query, query_group, query_collapsing
 
     feats = list(features) if features is not None else None
     if feats is None:
-        shared = [f for f in query.var_names if f in set(reference.var_names)]
-        if len(shared) > nfeatures:
-            # no HVF flag to lean on: fall back to the most variable shared genes
-            sub = fetch_data(query, shared, layer=layer).to_numpy(dtype=float)
-            order = np.argsort(-np.nanvar(sub, axis=0))[:nfeatures]
-            shared = [shared[i] for i in order]
-        feats = shared
+        def _hvf(adata) -> list[str]:
+            names = [str(f) for f in adata.var_names]
+            if "highly_variable" in adata.var.columns:
+                hv = adata.var["highly_variable"].fillna(False).to_numpy(dtype=bool)
+                return [f for f, h in zip(names, hv, strict=True) if h]
+            if len(names) <= nfeatures:
+                return names
+            # no stored HVF: the object's most variable genes stand in for vst
+            sub = fetch_data(adata, names, layer=layer).to_numpy(dtype=float)
+            order = np.argsort(-np.nanvar(sub, axis=0), kind="stable")[:nfeatures]
+            return [names[i] for i in sorted(order)]
+
+        hv_query = set(_hvf(query))
+        in_query = set(map(str, query.var_names))
+        # intersect(features_ref, features_query), in the reference's order
+        feats = [f for f in _hvf(reference) if f in hv_query and f in in_query]
     if not feats:
         raise ValueError("query and reference share no features")
 
     def _matrix(adata, group, collapse):
         M = fetch_data(adata, feats, layer=layer).to_numpy(dtype=float)  # cells x features
+        names = np.asarray(adata.obs_names).astype(str)
+        if group is None:
+            codes = np.zeros(adata.n_obs, dtype=int)
+            levels = [""]
+        else:
+            cat = as_ordered_categorical(adata.obs[group])
+            codes = np.asarray(cat.cat.codes)
+            levels = [str(x) for x in cat.cat.categories]
         if not collapse:
-            return M, [str(x) for x in adata.obs_names]
-        cat = as_ordered_categorical(adata.obs[group])
-        levels = [str(x) for x in cat.cat.categories]
-        vals = np.asarray(cat).astype(str)
-        rows = []
-        for lv in levels:
-            m = vals == lv
+            # level by level, object order within a level; NA groups dropped
+            idx = np.flatnonzero(codes >= 0)
+            idx = idx[np.argsort(codes[idx], kind="stable")]
+            return M[idx], [str(x) for x in names[idx]]
+        rows, kept = [], []
+        for k, lv in enumerate(levels):
+            m = codes == k
+            if not m.any():
+                continue  # levels[levels %in% cell_groups]: empty levels vanish
             # mean in LINEAR space, then log1p -- AverageExpression's convention
-            rows.append(np.log1p(np.expm1(M[m]).mean(axis=0)) if m.any()
-                        else np.full(M.shape[1], np.nan))
-        return np.vstack(rows), levels
+            rows.append(np.log1p(np.expm1(M[m]).mean(axis=0)))
+            kept.append(lv)
+        return np.vstack(rows), kept
 
     Q, q_labels = _matrix(query, query_group, query_collapsing)
     R, r_labels = _matrix(reference, ref_group, ref_collapsing)
@@ -1686,21 +2045,25 @@ def cell_cor_heatmap(
     cl = pd.Index([r_labels[i] for i in order_c])
 
     # Label the strongest matches, per row and/or column, above a cutoff.
-    def _label(ax, panel, rows, cols):
+    def _label(ax, panel, rows, cols, flip=False):
         cut = label_cutoff if label_cutoff is not None else -np.inf
+        # label_by names the DRAWN axes: flipped, the drawn rows are the reference
+        by = {"row": "column", "column": "row"}.get(label_by, label_by) if flip else label_by
         picks: set[tuple[int, int]] = set()
-        if label_by in ("row", "both"):
+        if by in ("row", "both"):
             for i in range(M.shape[0]):
                 thr = np.sort(M[i])[-min(nlabel, M.shape[1])]
                 picks |= {(i, j) for j in range(M.shape[1]) if M[i, j] >= max(thr, cut)}
-        if label_by in ("column", "both"):
+        if by in ("column", "both"):
             colpicks = set()
             for j in range(M.shape[1]):
                 thr = np.sort(M[:, j])[-min(nlabel, M.shape[0])]
                 colpicks |= {(i, j) for i in range(M.shape[0]) if M[i, j] >= max(thr, cut)}
-            picks = (picks & colpicks) if label_by == "both" else picks | colpicks
+            picks = (picks & colpicks) if by == "both" else picks | colpicks
         for i, j in picks:
-            t = ax.text(j + 0.5, i + 0.5, f"{M[i, j]:.2f}", ha="center", va="center",
+            x, y = (i + 0.5, j + 0.5) if flip else (j + 0.5, i + 0.5)
+            # grid.text(round(value, 2)): R prints 1, 0.5, 0.99 -- not 1.00
+            t = ax.text(x, y, f"{round(float(M[i, j]), 2) + 0.0:g}", ha="center", va="center",
                         fontsize=6, color="black", zorder=6)
             t.set_path_effects([pe.withStroke(linewidth=2, foreground="white")])
 

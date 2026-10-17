@@ -29,7 +29,9 @@
 #   grid field from SCP's compute_velocity_on_grid.
 # * dynamic_*.csv -- DynamicPlot point/line/ribbon layers (combine = FALSE).
 # * dynheat_*.csv -- DynamicHeatmap(use_fitted = FALSE): the processed matrix,
-#   the per-lineage cell order and the feature order/peaktime.
+#   the per-lineage cell order and the feature order/peaktime, plus the
+#   RunDynamicFeatures tables it took the peak times from
+#   (dynheat_dynamic_features_<lineage>.csv).
 # * projection_*.csv -- the composite layer of ProjectionPlot (p3) and its
 #   panel ranges.
 
@@ -280,6 +282,15 @@ wcsv(co, "dynheat_cell_order.csv")
 fm <- ht$feature_metadata
 wcsv(data.frame(feature = rownames(fm), fm[, grep("peaktime$|^features$", colnames(fm)), drop = FALSE],
                 check.names = FALSE), "dynheat_features.csv")
+# the RunDynamicFeatures tables DynamicHeatmap computed those peak times from
+# (it fits them on a local copy and does not return them): what
+# scp.pl.dynamic_heatmap(dynamic_features=) takes, one CSV per lineage
+srt_dyn <- RunDynamicFeatures(srt, lineages = c("Lineage1", "Lineage2"), features = dh_genes)
+for (l in c("Lineage1", "Lineage2")) {
+  df <- srt_dyn@tools[[paste0("DynamicFeatures_", l)]][["DynamicFeatures"]]
+  stopifnot(isTRUE(all.equal(df[rownames(fm), "peaktime"], fm[[paste0(l, "peaktime")]])))
+  wcsv(df, paste0("dynheat_dynamic_features_", l, ".csv"))
+}
 
 # --- ProjectionPlot ------------------------------------------------------------
 # ProjectionPlot returns a patchwork once a legend exists, so the composite

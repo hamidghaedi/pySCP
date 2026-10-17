@@ -62,14 +62,14 @@ fails for the reason it states, and not because of a bug in the test.
 | `paga_plot` / `graph_plot` | node medians to 1e-8, colours, edge selection and widths, net-transition logic, `segementsDf` to 1e-9 | 5, all fixed: `global_size`, transition widths, default node size, size mapping, legend | — |
 | `velocity_plot` | raw arrows to 5e-8 (both scales); grid to 5e-8 after the numpy port; `cell_dim_plot(velocity=)` grid to 5e-8 and stream field to 5e-13 through the same port | 2, both fixed: `group_by`, extra cell layer; the 5 grid/stream findings fixed by porting `compute_velocity_on_grid` | stream drawing (no metR); its grid is checked |
 | `dynamic_plot` | point x positions | 3, all fixed: no lib-normalisation, `group_by`, `compare_lineages` | the fitted curve (mgcv; documented) |
-| `dynamic_heatmap` | the package's `matrix_process` reproduces R's matrix to 4e-7 | 3: binning, row order, palette | — |
+| `dynamic_heatmap` | the package's `matrix_process` reproduces R's matrix to 4e-7; given R's `DynamicFeatures`, the row order exactly | 3, all fixed: binning, palette, and row order (the parity test now supplies R's tables) | the GAM-free fallback order (documented) |
 | `projection_plot` | reference and query colours/positions, exact | 1 deliberate (R drops out-of-range query cells, an R bug; now in the docstring) | — |
 | `enrichment_plot` | term selection; bar metric to 1e-12; dot/lollipop fill within 2/255; labels, italics, encodings, axis limits, sizes, ties and constant panels since the parity fix | 13 at audit time; all fixed (4 by the enrichment port, 9 by the parity fix) | network, enrichmap, wordcloud: ported since, verified separately |
 | `gsea_plot` | line: curve and hit ticks, exact; selection, bar order/fill/alpha, zero cross, peak, heat strip (to one 8-bit step) and per-key layout since the parity fix | 4 at audit time; all fixed | comparison and graph types: ported since, verified separately |
 | `gsea_scores` | running score to 1e-12; hits and peak exact | — | — |
 | `cell_dim_plot_3d` | traces, level order, colours, membership, xyz, exact; highlight trace exact; lineage lines to 1.3e-13 | 3, all fixed: NA handling, NA colour, defaults/layout | — |
 | `feature_dim_plot_3d` | colour values to 1e-12; title, ranges, split dropdown, highlight trace | 1, fixed: `bg_cutoff` default masks 76-80% | — (R's `All.cells` split button is broken; fixed, not reproduced) |
-| `cell_cor_heatmap` | similarity to 1.6e-9 (cosine, pearson, spearman; self and panc8 reference), collapsing, limits, labelled cells | 5: `reference=None`, uncollapsed row order, cluster leaf order, label defaults, default features | annotations, `bulk_ref` (not ported) |
+| `cell_cor_heatmap` | similarity to 1.6e-9 (cosine, pearson, spearman; self and panc8 reference), collapsing, limits, labelled cells | 5, all fixed: `reference=None`, uncollapsed row order, cluster leaf order, label defaults, default features (to 1e-11 on R's centroids) | annotations, `bulk_ref` (not ported) |
 | `feature_cor_plot` | placement, scatter, r to 5e-4, lm fit to 1e-9, r²/p; since fixed: violin shape to 5e-4, per-split r, r²/p without the fit line | 0 open (4 fixed: violin bandwidth, `split_by`, stats tied to `add_smooth`, docstring) | `calculate_coexp` (broken in R) |
 | `feature_cor_heatmap` | — | — | R's `FeatureCorHeatmap` is an empty stub |
 
@@ -395,9 +395,9 @@ makes the normalisation a no-op, as `group_heatmap` does.
 | Option / aspect | Status |
 |---|---|
 | R's matrix = per-cell, lib-normalised, z-scored jointly across lineages | **reproduced to 4e-7** by the package's own `matrix_process` (a passing test that pins the fix) |
-| `dynamic_heatmap` matrix | **differs**: 100 bins per lineage vs 799 + 693 cells |
-| feature order | **differs**: Isl1 lands 3rd, R puts it last |
-| default palette | **differs**: RdBu; R uses viridis |
+| `dynamic_heatmap` matrix | **matches** since the heatmap port: per cell, 799 + 693 columns, to 1e-6 |
+| feature order | **matches** given R's `DynamicFeatures` tables (exported by `audit_traj.R`, supplied by the test); without them the documented GAM-free proxy puts Isl1 3rd, R last |
+| default palette | **matches** since the fix: viridis, R's own 100 colours verbatim |
 | colour limit `b` | equal here (1.0), but by coincidence, since each side computes it from a different matrix |
 
 1. **The binning is not in R.** `_heatmap.py:470-481` averages cells into
@@ -425,7 +425,13 @@ makes the normalisation a no-op, as `group_heatmap` does.
    proxy (median pseudotime of the cells above the 99th percentile of a
    rolling-mean smooth). Take the max over lineages, not the first lineage.
    Then document that the row order, and only the row order, can differ from
-   R.
+   R. *Fixed:* `dynamic_heatmap` takes R's tables through `dynamic_features=`
+   (or `adata.uns`), orders by the max over lineages, and keeps R's `table()`
+   order on ties. `audit_traj.R` now exports `RunDynamicFeatures`' tables
+   (`dynheat_dynamic_features_<lineage>.csv`), and
+   `test_dynamic_heatmap_feature_order_matches_r` checks the order and the
+   per-lineage peak times exactly. Without a table the running-mean proxy
+   stands in, and its test pins that it differs from R here.
 3. **Palette.** `_heatmap.py:465` defaults to `RdBu`. R's
    `heatmap_palette = "viridis"` (`11041`). *Fix:* default `palette="viridis"`.
    `docs/04_api_mapping.md` has no entry pinning RdBu here, so this is a slip
@@ -738,10 +744,11 @@ has.
 Fixtures: `tools/parity/audit_dim3d.R` → `tests/fixtures/parity/audit/dim3d/`
 (228 KB at audit time, about 470 KB with the highlight, lineage and split
 fixtures added since), `tools/parity/audit_cor.R` →
-`tests/fixtures/parity/audit/cor/` (~990 KB). Tests:
+`tests/fixtures/parity/audit/cor/` (~1.4 MB). Tests:
 `tests/test_parity_dim3d.py` (5 pass, 6 xfail at audit time; all 11 pass
 since the 3-D fixes, and 23 with the options ported since),
-`tests/test_parity_cor.py` (17 pass, 10 xfail).
+`tests/test_parity_cor.py` (17 pass, 10 xfail at audit time; every xfail,
+`cell_cor_heatmap` and `feature_cor_plot` alike, is fixed since).
 
 Inputs: both sides read `pancreas_sub` after `NormalizeData` (its stored
 `data` slot holds raw counts). The fixtures carry the log-normalised values, so
@@ -864,14 +871,14 @@ feature.
 |---|---|
 | collapsed query x collapsed ref, `cosine` / `pearson` / `spearman` (self) | **matches** to 1.6e-9 (1e-10 at full fixture precision); row/col order identical |
 | panc8 reference, `cosine` / `spearman` | **matches** to 6.7e-9; ref columns in first-appearance order, as R |
-| uncollapsed query (`query_collapsing=False`) | values **match** to 1.4e-8 once aligned by cell; **row order differs** |
+| uncollapsed query (`query_collapsing=False`) | values **match** to 1.4e-8 once aligned by cell; row order **matches** since the fix (grouped by level) |
 | collapsing convention (`log1p(mean(expm1(x)))`) | **matches**; confirmed against Seurat 5 `AverageExpression(slot = "data")` |
 | colour limits (plain min/max) | **match** to 1e-9 |
-| labelled cells, `label_by` row / column / both, `nlabel`, `label_cutoff` | **match**: the same cells are labelled. Text format differs (`1.00` vs R `round(x, 2)` printing `1`), cosmetic |
-| default `nlabel` / `label_cutoff` | **differs**: 3 / -inf vs R 0 / 0 (R draws no labels; Python draws 24 on the 8x8 case) |
-| `cluster_rows` / `cluster_columns` | **differs**: same tree, different leaf order (all 4 cases, rows and columns) |
-| `srt_ref = NULL` with `query_group` | **differs**: Python raises `KeyError: None` |
-| default feature selection | **differs**: max abs 0.157 on the default 8x8 matrix; 3.6e-10 once Python is given R's HVF list (checked on the full h5ad, not in the suite) |
+| labelled cells, `label_by` row / column / both, `nlabel`, `label_cutoff` | **match**: the same cells are labelled, and the text is R's `round(x, 2)` printing (`1`, not `1.00`) since the fix |
+| default `nlabel` / `label_cutoff` | **match** since the fix: 0 / 0, so no labels by default |
+| `cluster_rows` / `cluster_columns` | **match** since the heatmap port's dendrogram reorder (all 4 cases, rows and columns) |
+| `srt_ref = NULL` with `query_group` | **matches** since the fix: grouping and collapsing inherited, to 1e-10 |
+| default feature selection | **matches** since the fix: every stored HVF and nothing else (3,467), matrix to 1e-10 against R's full-data default, checked in the suite on R's per-group centroids |
 | legend title | `Pearson similarity` / `Spearman similarity` vs R `Correlation similarity`. Cosmetic: R's `RunKNNPredict` renames both metrics to `"correlation"` before the title is built |
 | query/ref cell annotations, `bulk_ref`, reductions, distance metrics other than the 3 | not checkable: not ported |
 
@@ -881,7 +888,8 @@ reference is given (SCP-plot.R:10150-10156). Python only aliases the object,
 so `ref_group` stays `None` and `as_ordered_categorical(adata.obs[None])`
 raises. This is a real bug. Fix:
 `if reference is None: reference, ref_group, ref_collapsing = query, query_group, query_collapsing`
-(after resolving `query_collapsing`).
+(after resolving `query_collapsing`). *Fixed* as proposed. A `ref_group`
+passed alongside `reference=None` is overridden, as in R, with a warning.
 
 **Uncollapsed row order** (`_heatmap.py:563`). R orders query cells level by
 level (`cell_groups[["query_group"]]`, SCP-plot.R:10218-10241), so each
@@ -890,7 +898,8 @@ group's cells sit together under the group block annotation. Python keeps
 real bug.
 Fix: when not collapsing and `group` is given, reorder the rows by
 `np.argsort(cat.cat.codes, kind="stable")` (dropping NA). Apply the same to
-the reference.
+the reference. *Fixed* as proposed, for both sides. Collapsed rows now also
+drop levels without cells, as R's `levels[levels %in% cell_groups]` does.
 
 **Clustering order** (`_heatmap.py:591`, `:596`). ComplexHeatmap clusters with
 `hclust(dist(m), "complete")`, then reorders each dendrogram with
@@ -902,13 +911,15 @@ put the child with the smaller weight first (a leaf's weight is
 leaves. `test_proposed_dendrogram_reorder_reproduces_r` checks this recipe
 against R's own orders, and it reproduces all 8 orders exactly. Use the
 same helper for `feature_cor_heatmap` and the other heatmaps if they cluster
-through scipy.
+through scipy. *Fixed* by the heatmap port (`scp.heatmap.cluster`):
+`test_cellcor_cluster_order` passes for all four cases.
 
 **Defaults** (`_heatmap.py:522-523`). R's signature is `nlabel = 0,
 label_cutoff = 0` (SCP-plot.R:10128). Python's `nlabel=3` labels every
 heatmap by default, and `label_cutoff=None → -inf` would let negative
 similarities through.
-Fix: `nlabel=0, label_cutoff=0.0`.
+Fix: `nlabel=0, label_cutoff=0.0`. *Fixed.* The label text is also R's
+`round(x, 2)` printing now.
 
 **Default features** (`_heatmap.py:550-555`). R uses
 `intersect(VariableFeatures(query), VariableFeatures(ref))`
@@ -919,12 +930,20 @@ the largest variance.
 Fix: use `query.var["highly_variable"] & reference.var["highly_variable"]`
 when both exist. Otherwise compute HVGs (`sc.pp.highly_variable_genes(...,
 n_top_genes=nfeatures)`), and keep the variance ranking only as the last
-fallback.
+fallback. *Fixed:* the stored flags of both objects are intersected, in the
+reference's order. Without a flag an object falls back to its `nfeatures`
+most variable genes. scanpy is not a dependency, and Seurat's vst needs the
+counts and a loess fit. `audit_cor.R` now exports R's per-group centroids for
+every HVF plus 500 genes that are not HVFs
+(`cellcor_default_centroids.csv`), so the suite checks the default selection
+end to end. It picks exactly the 3,467 HVFs, and the matrix matches R's
+full-data default to 1e-11.
 
 Minor, not tested: Python clamps `+inf` to 1, while R uses `max(|finite|) *
 sign` (SCP-plot.R:10202), which differs only for distance metrics. R also
-drops reference cells whose `ref_group` is NA (SCP-cell_annotation.R:200);
-Python does not.
+drops reference cells whose `ref_group` is NA (SCP-cell_annotation.R:200).
+Python now drops them from uncollapsed rows and columns, and they never
+entered a collapsed centroid.
 
 ### feature_cor_plot
 

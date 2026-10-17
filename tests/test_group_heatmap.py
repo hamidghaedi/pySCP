@@ -234,8 +234,12 @@ def test_enrichment_boxes_are_right_tracks(adata):
 def test_unported_options_raise_with_a_pointer(adata):
     adata = adata.copy()
     adata.obs["pt"] = np.linspace(0, 1, adata.n_obs)
-    with pytest.raises(NotImplementedError, match="heatmaps.md"):
-        scp.pl.dynamic_heatmap(adata, ["pt"], _genes(adata), layer=None,
+    # a categorical separate_annotation is drawn; fitted curves need R's fits
+    r = scp.pl.dynamic_heatmap(adata, ["pt"], _genes(adata), layer=None,
                                separate_annotation=["leiden"])
+    assert [t.name for t in r.spec.panels[0].top_tracks][-1] == "leiden\n(separate)"
+    with pytest.raises(ValueError, match="dynamic_features"):
+        scp.pl.dynamic_heatmap(adata, ["pt"], _genes(adata), layer=None,
+                               separate_annotation=[_genes(adata)[:2]])
     with pytest.raises(NotImplementedError, match="milestone 9"):
         scp.pl.dynamic_heatmap(adata, ["pt"], _genes(adata), layer=None, use_fitted=True)

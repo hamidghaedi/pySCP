@@ -50,18 +50,54 @@ subsetting and faceting.
 
 ### Continuous
 
-R cuts the literal vector `1:100` rather than the data when `matched=False`,
-which is a bug that happens to be harmless because the result is only ever used
-as an evenly spaced ramp. `continuous_palette()` returns the ramp directly.
+```
+if n <= len(colors):  take the FIRST n colors verbatim
+else:                 colorRampPalette(colors)(n)
+```
 
-`matched=True` returns one color per element of `x` — used by the blend path
-and by the correlation blocks in `feature_cor_plot`.
+The same verbatim-slice rule, applied whatever the palette's declared type.
+It matters for the 100-colour viridis family (`viridis`, `magma`, `cividis`,
+`turbo`, `jet`, ...): at the default `n = 100` R uses their own colours,
+alpha suffix included (`#440154FF`), not a re-interpolation of them. A
+5-colour request takes the first five, which is what R does too.
+
+R cuts the literal vector `1:100` rather than the data when `matched=False`,
+which only ever yields `n` levels, so `continuous_palette()` returns the `n`
+colours directly.
+
+`matched=True` returns one colour per element of `x`: R's `cut(x, seq(min,
+max, length.out = n + 1), include.lowest = TRUE)` — `n` equal-width,
+right-closed bins, the first closed on both sides — and bin `k` takes the
+`k`-th of the `n` colours. `np.linspace` reproduces `seq`'s breaks bit for
+bit, and a `searchsorted(side="left")` reproduces `.bincode`. Rounding the
+value onto the ramp instead (what this port did at first) moves values that
+sit near a bin edge by one colour.
+
+### `colorRampPalette` truncates
+
+`color_ramp` is `grDevices::colorRampPalette` operation for operation:
+channels as `col2rgb / 255`, `approx1`'s linear interpolation (an exact hit on
+a stop returns the stop), clamped and multiplied by 255, then
+`rgb(..., maxColorValue = 255)`, which coerces to integer — **truncation**,
+not rounding. A black-to-white ramp of 3 has `#7F7F7F` in the middle, not
+`#808080`; rounding lands one 8-bit step above R on 87 of Spectral's 100
+colours. `tests/fixtures/parity/palettes/palettes.json`
+(`tools/parity/palettes.R`) pins the ramps, the continuous branch and the
+matched bins against SCP 0.5.6.
 
 ### NA
 
 `na_color` defaults to `"grey80"` = `#CCCCCC`. `na_keep=False` (the default)
 strips the `"NA"` entry from the returned mapping; `show_na=True` upstream
-promotes NaN to a real level instead.
+promotes NaN to a real level instead. With `matched=True` an NA element comes
+back as `None` — what R's `NA_keep = FALSE` filter leaves there — or as
+`na_color` with `na_keep=True`.
+
+Two R edge cases are deliberately not reproduced: a constant `x` makes
+`palette_scp(matched = TRUE)` return a *single* colour whatever the length of
+`x` (here it is repeated per element), and `reverse = TRUE` with
+`matched = TRUE` reverses the per-element vector, so colours no longer line
+up with their elements (here the scale is reversed).
 
 ## 3. Color algebra
 

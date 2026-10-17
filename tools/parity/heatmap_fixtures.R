@@ -121,6 +121,8 @@ obs <- data.frame(
   Lineage2 = srt$Lineage2
 )
 wcsv(obs, "input_obs.csv")
+# a numeric cell annotation for the GroupHeatmap violins (anno_violin.csv)
+wcsv(data.frame(row.names = colnames(srt), S_score = signif(srt$S_score, 12)), "input_scores.csv")
 writeLines(toJSON(list(
   CellType = levels(srt$CellType),
   SubCellType = levels(srt$SubCellType),
@@ -373,5 +375,143 @@ for (kind in c("terms", "keys", "features")) {
 }
 wcsv(do.call(rbind, boxes), "enrich_boxes.csv", row.names = FALSE)
 wcsv(data.frame(word = SCP::words_excluded), "words_excluded.csv", row.names = FALSE)
+
+# --- flip = TRUE ---------------------------------------------------------------
+# Every heatmap swaps cluster_rows / cluster_columns (and the *_slices pair) on
+# entry when flip = TRUE, so the user's flags name the DRAWN axes; the returned
+# matrices are not transposed. flip + cluster_columns therefore orders the
+# features as cluster_rows does without flip.
+ht <- GroupHeatmap(srt, features = features, group.by = gb, flip = TRUE, cluster_columns = TRUE,
+                   exp_method = "raw")
+fmeta(ht, "group_flip_raw_cluster_columns.csv")
+ht <- GroupHeatmap(srt, features = features, group.by = gb, n_split = 4, flip = TRUE,
+                   split_method = "hclust", cluster_columns = TRUE, cluster_column_slices = TRUE,
+                   exp_method = "raw")
+fmeta(ht, "group_flip_raw_cluster_columns_and_slices.csv")
+ht <- FeatureHeatmap(srt, features = features, group.by = "CellType", max_cells = 1000,
+                     n_split = 4, split_method = "hclust", flip = TRUE)
+fmeta(ht, "feature_flip_hclust.csv")
+invisible(dyn("dynamic_flip_hclust_peaktime.csv", n_split = 4, split_method = "hclust-peaktime", flip = TRUE))
+
+# --- cell_annotation in GroupHeatmap: a pie / violin per column ----------------
+# GroupHeatmap draws CellStatPlot(plot_type = "pie") for a categorical
+# annotation and FeatureStatPlot(fill.by = "group", same.y.lims = TRUE) for a
+# numeric one, one subplot per column, each squeezed into the column's cell
+# (SCP-plot.R:8363-8484); add_violin draws FeatureStatPlot(fill.by = fill.by)
+# into every body cell (8768). The built layer data of those subplots is what
+# the annotation shows: wedge extents and fills, violin outlines and the panel
+# ranges they are drawn in.
+# every k-th point of each outline (and its last) is plenty to compare shapes
+thin <- function(d, by, k) {
+  if (k <= 1) return(d)
+  key <- if (length(by) == 1 && by %in% colnames(d)) d[[by]] else by
+  i <- ave(seq_len(nrow(d)), key, FUN = seq_along)
+  n <- ave(seq_len(nrow(d)), key, FUN = length)
+  d[i %% k == 1 | i == n, , drop = FALSE]
+}
+built <- function(plots, name, keep = function(d) d, every = 1) {
+  rows <- list()
+  for (nm in names(plots)) {
+    b <- ggplot2::ggplot_build(plots[[nm]])
+    d <- b$data[[1]]
+    d <- tryCatch(keep(d), error = function(e) NULL)
+    if (is.null(d) || nrow(d) == 0) next  # a combination without cells
+    d$subplot <- nm
+    d$y_lo <- b$layout$panel_params[[1]]$y.range[1]
+    d$y_hi <- b$layout$panel_params[[1]]$y.range[2]
+    rows[[nm]] <- d
+  }
+  out <- thin(do.call(rbind, rows), "subplot", every)
+  num <- vapply(out, is.numeric, logical(1))
+  out[num] <- lapply(out[num], signif, 10)
+  wcsv(out, name, row.names = FALSE)
+}
+pies <- CellStatPlot(srt, plot_type = "pie", stat.by = "Phase", group.by = "CellType",
+                     palette = "Paired", title = NULL, individual = TRUE, combine = FALSE)
+built(pies, "anno_pie.csv", function(d) d[, c("fill", "ymin", "ymax", "xmin", "xmax")])
+pies <- CellStatPlot(srt, plot_type = "pie", stat.by = "Phase", group.by = "CellType",
+                     split.by = "Batch", palette = "Paired", title = NULL,
+                     individual = TRUE, combine = FALSE)
+built(pies, "anno_pie_split.csv", function(d) d[, c("fill", "ymin", "ymax", "xmin", "xmax")])
+# ggplot2 4.x appends repeated rows after the 512-point grid: sort and de-duplicate
+violin_cols <- function(d) {
+  d <- d[order(d$y), c("fill", "y", "violinwidth", "xmin", "xmax")]
+  d[!duplicated(d$y), ]
+}
+vl <- FeatureStatPlot(srt, slot = "data", stat.by = "S_score", group.by = "CellType",
+                      palette = "Paired", fill.by = "group", same.y.lims = TRUE,
+                      individual = TRUE, combine = FALSE)
+built(vl, "anno_violin.csv", violin_cols, every = 8)
+vl <- FeatureStatPlot(srt, slot = "data", stat.by = c("Ins1", "Gcg", "Sox9"), group.by = "CellType",
+                      palette = "Dark2", fill.by = "feature", same.y.lims = TRUE,
+                      individual = TRUE, combine = FALSE)
+built(vl, "add_violin.csv", violin_cols, every = 8)
+
+# --- separate_annotation in DynamicHeatmap -------------------------------------
+# A categorical column becomes CellDensityPlot(cells = <lineage cells>,
+# features = <lineage>, x_order = "rank", decreasing = TRUE, reverse = <in
+# reverse_ht>) and a feature vector DynamicPlot(compare_features = TRUE,
+# x_order = "rank", add_rug = FALSE) (SCP-plot.R:11422-11536). The ridges and
+# the fitted curves are dumped with their panel ranges, and the fits come with
+# RunDynamicFeatures' fitted / upr / lwr matrices, which is what the Python side
+# draws them from.
+sep_cells <- function(l, decreasing = FALSE) {
+  cl <- colnames(srt)[!is.na(srt[[l, drop = TRUE]])]
+  cl[order(srt[[l, drop = TRUE]][!is.na(srt[[l, drop = TRUE]])], decreasing = decreasing)]
+}
+ridges <- list()
+for (l in c("Lineage1", "Lineage2")) {
+  p <- suppressMessages(CellDensityPlot(srt = srt, cells = sep_cells(l, l == "Lineage2"),
+                                        group.by = "SubCellType", features = l, decreasing = TRUE,
+                                        x_order = "rank", palette = "Paired",
+                                        reverse = l == "Lineage2"))
+  b <- suppressMessages(ggplot2::ggplot_build(p))
+  d <- b$data[[1]][, c("x", "y", "ymin", "ymax", "fill", "group")]
+  d$lineage <- l
+  d$x_lo <- b$layout$panel_params[[1]]$x.range[1]
+  d$x_hi <- b$layout$panel_params[[1]]$x.range[2]
+  d$y_lo <- b$layout$panel_params[[1]]$y.range[1]
+  d$y_hi <- b$layout$panel_params[[1]]$y.range[2]
+  ridges[[l]] <- d
+}
+ridges <- do.call(rbind, ridges)
+ridges <- thin(ridges, paste(ridges$lineage, ridges$group), 4)
+num <- vapply(ridges, is.numeric, logical(1))
+ridges[num] <- lapply(ridges[num], signif, 10)
+wcsv(ridges, "separate_ridges.csv", row.names = FALSE)
+
+sep_feats <- c("Ins1", "Gcg")
+fits <- lapply(c("fitted_matrix", "upr_matrix", "lwr_matrix"), function(k) {
+  m <- srt@tools[["DynamicFeatures_Lineage1"]][[k]][, sep_feats, drop = FALSE]
+  data.frame(cell = rownames(m), matrix = k, signif(as.matrix(m), 9), check.names = FALSE)
+})
+wcsv(do.call(rbind, fits), "separate_fits_Lineage1.csv", row.names = FALSE)
+p <- DynamicPlot(srt = srt, cells = sep_cells("Lineage1"), lineages = "Lineage1", group.by = NULL,
+                 features = sep_feats, line_palette = "Paired", add_rug = FALSE,
+                 legend.position = "none", compare_features = TRUE, x_order = "rank")
+b <- ggplot2::ggplot_build(p)
+curves <- list()
+for (i in seq_along(b$data)) {
+  d <- b$data[[i]]
+  geom <- class(p$layers[[i]]$geom)[1]
+  colnames(d) <- sub("_ggnewscale_[0-9]+$", "", colnames(d))
+  keepc <- intersect(c("x", "y", "ymin", "ymax", "colour", "fill", "group"), colnames(d))
+  d <- d[, keepc, drop = FALSE]
+  d$geom <- geom
+  curves[[i]] <- d
+}
+allc <- unique(unlist(lapply(curves, colnames)))
+curves <- do.call(rbind, lapply(curves, function(d) {
+  for (k in setdiff(allc, colnames(d))) d[[k]] <- NA
+  d[, allc]
+}))
+curves <- thin(curves, paste(curves$geom, curves$group), 8)
+curves$x_lo <- b$layout$panel_params[[1]]$x.range[1]
+curves$x_hi <- b$layout$panel_params[[1]]$x.range[2]
+curves$y_lo <- b$layout$panel_params[[1]]$y.range[1]
+curves$y_hi <- b$layout$panel_params[[1]]$y.range[2]
+num <- vapply(curves, is.numeric, logical(1))
+curves[num] <- lapply(curves[num], signif, 10)
+wcsv(curves, "separate_curves_Lineage1.csv", row.names = FALSE)
 
 message("done: ", out)

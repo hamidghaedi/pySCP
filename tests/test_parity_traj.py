@@ -584,14 +584,47 @@ def test_dynamic_heatmap_matrix_matches_r(r_adata, dynheat):
         np.testing.assert_allclose(P, M.to_numpy()[:, sel], atol=1e-6)
 
 
-@pytest.mark.xfail(strict=True, reason="rows ordered by argmax of the first lineage's binned "
-                   "z-score; R orders by max over lineages of the GAM peaktime")
-def test_dynamic_heatmap_feature_order_matches_r(r_adata, dynheat):
+@pytest.fixture(scope="module")
+def dynamic_features():
+    """R's RunDynamicFeatures tables, one per lineage (audit_traj.R)."""
+    return {lin: _csv(f"dynheat_dynamic_features_{lin}.csv")
+            for lin in ("Lineage1", "Lineage2")}
+
+
+def test_dynamic_features_tables_are_the_ones_dynamic_heatmap_used(dynheat, dynamic_features):
+    _M, _o, feats = dynheat
+    for lin, tab in dynamic_features.items():
+        got = tab.set_index("features").loc[feats["feature"], "peaktime"].to_numpy()
+        np.testing.assert_allclose(got, feats[f"{lin}peaktime"].to_numpy(), rtol=1e-12)
+
+
+def test_dynamic_heatmap_feature_order_matches_r(r_adata, dynheat, dynamic_features):
+    """Given R's DynamicFeatures, rows follow max over lineages of the GAM
+    peaktime, ties in table() order (SCP-plot.R:11256-11265), exactly."""
+    M, _o, feats = dynheat
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        res = scp.pl.dynamic_heatmap(r_adata, ["Lineage1", "Lineage2"], list(M.index),
+                                     dynamic_features=dynamic_features)
+    assert list(res.matrices["Lineage1"].index) == feats["feature"].tolist()
+    assert list(res.spec.panels[0].row_labels) == feats["feature"].tolist()
+    vm = res.var_meta.loc[feats["feature"]]
+    np.testing.assert_allclose(vm["peaktime"], feats["peaktime"], rtol=1e-12)
+    for lin in ("Lineage1", "Lineage2"):
+        np.testing.assert_allclose(vm[f"{lin}peaktime"], feats[f"{lin}peaktime"], rtol=1e-12)
+
+
+def test_dynamic_heatmap_feature_order_without_a_table_is_the_documented_proxy(r_adata, dynheat):
+    """No table: a GAM-free running-mean proxy orders the rows. It is not mgcv,
+    and on these seven genes it differs from R's order -- the documented divergence."""
     M, _o, feats = dynheat
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         res = scp.pl.dynamic_heatmap(r_adata, ["Lineage1", "Lineage2"], list(M.index))
-    assert list(res.matrices["Lineage1"].index) == feats["feature"].tolist()
+    order = list(res.matrices["Lineage1"].index)
+    assert sorted(order) == sorted(feats["feature"])
+    assert order != feats["feature"].tolist()  # Isl1 lands 3rd; R puts it last
+    assert np.all(np.diff(res.var_meta.loc[order, "peaktime"].to_numpy()) >= 0)
 
 
 def test_dynamic_heatmap_default_palette(r_adata, dynheat):
@@ -601,8 +634,11 @@ def test_dynamic_heatmap_default_palette(r_adata, dynheat):
         res = scp.pl.dynamic_heatmap(r_adata, ["Lineage1"], list(M.index))
     cmap = res.spec.panels[0].cmap
     want = scp.continuous_palette(palette="viridis", n=100)
-    assert to_hex(cmap(0.0)).upper() == want[0].upper()
-    assert to_hex(cmap(1.0)).upper() == want[-1].upper()
+    # palette_scp(palette = "viridis") is viridis' own 100 colours, verbatim
+    # (alpha suffix included), as n does not exceed the palette's length
+    assert want == list(scp.palettes.PALETTES["viridis"].colors)
+    assert to_hex(cmap(0.0)) == to_hex(want[0])
+    assert to_hex(cmap(1.0)) == to_hex(want[-1])
 
 
 # --------------------------------------------------------------------------- #

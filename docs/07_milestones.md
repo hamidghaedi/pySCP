@@ -248,8 +248,38 @@ Not reproducible, by construction: ComplexHeatmap reorders z-scored rows by
 `-rowMeans`, which is rounding noise, so there only the tree is compared;
 `mfuzz` has no R fixture (e1071 is not in the parity environment) and its
 random start differs anyway; `anno_keys` on GO uses the tokenising keyword
-method, not `simplifyEnrichment`. Still stub: `group_heatmap`'s pie/violin
-`cell_annotation` grobs (drawn as per-group lanes) and `add_violin`.
+method, not `simplifyEnrichment`.
+
+Since then the last stubs have landed, in `heatmap/glyphs.py` and the
+renderer:
+
+* `group_heatmap`'s `cell_annotation` is drawn as R draws it. A categorical
+  annotation gets a pie per column (`CellStatPlot(plot_type = "pie")`). A
+  numeric one gets a violin per column, filled by group (or split level), on
+  one range per panel (`FeatureStatPlot(fill.by = "group", same.y.lims =
+  TRUE)`).
+* `add_violin` puts a violin of each feature into every body cell, with
+  `fill_by`, `fill_palette` and `fill_palcolor`. The body is whited out and
+  its legend dropped, as in R.
+* `flip=True` works for `group_heatmap`, `feature_heatmap`,
+  `dynamic_heatmap` and `cell_cor_heatmap`. Panels are transposed and stacked
+  vertically, annotations move to the sides ComplexHeatmap gives them, and
+  the `cluster_*` flags are swapped on entry, as R does. Enrichment boxes
+  raise with `flip`, as in R.
+
+Checked against R in `tests/test_heatmap_glyphs_parity.py`, on the
+fixtures `heatmap_fixtures.R` now also writes:
+
+* pie wedges and fills exactly, with and without `split_by`;
+* violin outlines to 3.5e-4 of the maximum width (`add_violin` 2.8e-3; the
+  rest is `stats::density`'s binning) on exactly R's 5%-expanded ranges;
+* flipped feature orders and splits exactly, for all three functions.
+  R's own flipped fixtures equal its unflipped ones with the flags swapped.
+
+The dot layer now scales the dot's *diameter* with the percentage, as
+`grid.points(size = dot_size * perc)` does (it scaled the area), with a black
+outline. The reticle runs through the cell centres. The legend column is
+stacked by measured heights, and a short heatmap grows to fit it.
 
 Build `heatmap/render.py` bottom-up and do not skip a step:
 
@@ -315,7 +345,23 @@ R's `RunDynamicFeatures` table (`dynamic_features=` or
 `adata.uns["DynamicFeatures_<lineage>"]`); without one a GAM-free running-mean
 estimate stands in. Given R's table, the cell order, the joint matrix (to
 2e-09) and every split and row order match SCP exactly — 1-D kmeans is solved
-exactly, which is the optimum R reaches. `separate_annotation` is still stub.
+exactly, which is the optimum R reaches. The audit's row-order finding is
+closed the same way: `audit_traj.R` exports the `DynamicFeatures` tables, and
+with them the row order and the per-lineage peak times match R exactly.
+
+`separate_annotation` is ported:
+
+* A categorical column becomes `CellDensityPlot`'s density ridges over the
+  pseudotime ranks: one joint `bw.nrd0` bandwidth, groups by decreasing
+  median, reversed for `reverse_ht`. It matches R's ridges to 2.5e-4 of the
+  strip height.
+* Features become `DynamicPlot`'s fitted curves and intervals. Those need
+  mgcv's fits, so they are read from R's `fitted_matrix` / `upr_matrix` /
+  `lwr_matrix`, passed with the table in SCP's `srt@tools` layout. They then
+  match R to 5e-10.
+* Without the fits, this raises and says what to pass.
+
+`flip=True` works too: panels stacked vertically, flags swapped as in R.
 
 Blocked on a GAM backend. `pygam` is the closest to `mgcv::gam(y ~ s(x,
 bs="cs") + offset(log(libsize)))`; matching mgcv's GCV smoothing-parameter
@@ -349,6 +395,22 @@ Every `distance_metric` SCP lists is implemented in `heatmap/similarity.py`
 and matches proxyC to 5e-11 on SCP's own centroids, with two R bugs fixed:
 SCP's `"hamman"` (proxyC spells it `"hamann"`, so R errors) and proxyC's
 cancellation in `euclidean`, which turns a self-similarity of 1 into 0.
+
+`cell_cor_heatmap` has no open audit finding left
+(`tests/test_parity_cor.py`):
+
+* `reference=None` inherits `query_group` and `query_collapsing`, and matches
+  R to 1.2e-9.
+* Uncollapsed rows are grouped level by level, as R orders them, with
+  NA-group cells dropped.
+* Labels default to `nlabel=0`, `label_cutoff=0`, printed as R's
+  `round(x, 2)`.
+* `features=None` takes the intersection of the stored
+  `var["highly_variable"]` flags. Checked end to end on R's centroids, it picks
+  exactly the 3,467 HVFs, and the matrix matches R's default to 1e-11.
+
+Still not ported: the query/reference cell annotations, `bulk_ref`, the
+reduction inputs and `features_type="DE"`.
 
 ### 11 — `graph_plot` + `paga_plot` — M ✅ done
 
@@ -514,7 +576,7 @@ rather than left implicit:
 | significance brackets, `stack=True`, `plot_by="feature"` (`feature_stat_plot`) | the largest remaining piece of milestone 4 |
 | `network`, `enrichmap`, `wordcloud` (`enrichment_plot`) | need igraph layouts / a keyword-enrichment backend |
 | `dynamic_heatmap(use_fitted=True)`, mgcv-matched smooths | see the milestone 9 note: not reproducible with `pygam`, so not attempted |
-| `cluster_within_group2`, heatmap enrichment tracks | milestone 7 extras |
+| `cell_cor_heatmap` cell annotations, `bulk_ref`, reductions, `features_type="DE"` | milestone 10 extras; the heatmap engine, enrichment tracks, `cluster_within_group2`, pies, violins, `separate_annotation` and `flip` have all landed |
 | `expression_stat_plot` | the DataFrame-level engine; the AnnData path covers the same grammar |
 
 Every one of these raises `NotImplementedError` naming its brief section, rather

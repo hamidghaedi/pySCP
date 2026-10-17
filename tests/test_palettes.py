@@ -5,6 +5,9 @@ population-vs-sample standard deviation never raises, it just produces a
 plausible, wrong figure.
 """
 
+import json
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -50,8 +53,10 @@ def test_named_palcolor_is_honoured():
 
 
 def test_color_ramp_endpoints_and_midpoint():
+    # rgb(..., maxColorValue = 255) coerces to integer, so the midpoint 127.5
+    # truncates to 127 (#7F); rounding gave #80, one step above R
     ramp = color_ramp(["#000000", "#FFFFFF"], 3)
-    assert ramp == ["#000000", "#808080", "#FFFFFF"]
+    assert ramp == ["#000000", "#7F7F7F", "#FFFFFF"]
 
 
 @pytest.mark.parametrize(
@@ -90,3 +95,59 @@ def test_color_limits_symmetric_branch_snaps_to_half():
     lo, hi = color_limits(rng.normal(size=(200, 200)), "zscore")
     assert lo == -hi
     assert (hi * 2) % 1 == 0  # rounded up to the nearest 0.5
+
+
+# --------------------------------------------------------------------------- #
+# golden values from R (tools/parity/palettes.R, SCP 0.5.6)
+# --------------------------------------------------------------------------- #
+_GOLD = json.loads((Path(__file__).parent / "fixtures" / "parity" / "palettes"
+                    / "palettes.json").read_text())
+
+
+def _r_na(colors):
+    """jsonlite writes R's NA as null; R's NA_color default is "grey80"."""
+    return [None if c is None else ("#CCCCCC" if c == "grey80" else c) for c in colors]
+
+
+@pytest.mark.parametrize("entry", _GOLD["ramps"], ids=lambda e: e["name"])
+def test_color_ramp_matches_color_ramp_palette(entry):
+    """colorRampPalette(colors)(n) for every n, channel for channel."""
+    for n, want in entry["ramps"].items():
+        want = [want] if isinstance(want, str) else want
+        assert color_ramp(entry["colors"], int(n)) == want, (entry["name"], n)
+
+
+@pytest.mark.parametrize("entry", _GOLD["continuous"],
+                         ids=lambda e: f"{e['palette']}-{e['n']}")
+def test_continuous_palette_matches_r(entry):
+    """Verbatim up to the palette's length, ramped beyond it."""
+    want = entry["colors"]
+    assert scp.continuous_palette(palette=entry["palette"], n=entry["n"]) == want
+    assert scp.palette_scp(palette=entry["palette"], n=entry["n"]) == want
+
+
+def _mid(e):
+    return f"{e['x']}-{e['palette']}-{e['n']}-{'keep' if e['NA_keep'] else 'drop'}"
+
+
+@pytest.mark.parametrize("entry", _GOLD["matched"], ids=_mid)
+def test_palette_scp_matched_matches_r_cut(entry):
+    """cut(x, seq(min, max, length.out = n + 1), include.lowest = TRUE), bin for bin."""
+    x = np.array([np.nan if v is None else v for v in entry["values"]], dtype=float)
+    got = list(scp.palette_scp(x, type="continuous", palette=entry["palette"], n=entry["n"],
+                               matched=True, na_keep=entry["NA_keep"]))
+    want = _r_na(entry["colors"] if isinstance(entry["colors"], list) else [entry["colors"]])
+    if entry["x"] == "constant":
+        # R returns ONE colour for a constant x; here it is repeated per element
+        assert len(got) == len(x)
+        assert {c for c, v in zip(got, x, strict=True) if np.isfinite(v)} == set(want)
+        return
+    assert got == want
+
+
+@pytest.mark.parametrize("entry", _GOLD["discrete"],
+                         ids=lambda e: f"{e['x']}-{'keep' if e['NA_keep'] else 'drop'}")
+def test_palette_scp_discrete_matched_matches_r(entry):
+    got = list(scp.palette_scp(entry["values"], type="discrete", palette="Paired",
+                               matched=True, na_keep=entry["NA_keep"]))
+    assert got == _r_na(entry["colors"])
