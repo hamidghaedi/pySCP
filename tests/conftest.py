@@ -8,6 +8,15 @@ import pandas as pd  # noqa: E402
 import pytest  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _close_figures():
+    """Close every figure a test opened, so they don't accumulate across the suite."""
+    yield
+    import matplotlib.pyplot as plt
+
+    plt.close("all")
+
+
 @pytest.fixture(scope="session")
 def adata():
     """A small seeded AnnData with four well-separated clusters.
