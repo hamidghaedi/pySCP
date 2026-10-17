@@ -32,7 +32,7 @@ Spec: ``docs/porting_briefs/heatmaps.md``.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -81,8 +81,19 @@ class Track:
     labels: Sequence[str] | None = None
     #: for kind="custom" / "block": draw into the supplied sub-axes yourself.
     #: This replaces SCP's anno_customize, which captures rendered ggplot grobs.
+    #: A "custom" track with no ``draw`` is an empty spacer (``anno_empty``).
     draw: Callable[..., None] | None = None
     legend: LegendSpec | None = None
+    #: for kind="block": print the slice label inside the block
+    show_labels: bool = True
+    #: for kind="textbox" (``anno_textbox``): one word table per group, each
+    #: with ``keyword``, ``col`` and ``fontsize`` columns; ``values`` maps every
+    #: row to its group.  ``"lines"`` puts each entry on its own line (terms),
+    #: ``"flow"`` wraps the words like running text (keywords, genes).
+    text: Mapping[str, pd.DataFrame] | None = None
+    text_mode: Literal["lines", "flow"] = "flow"
+    #: header printed above the track (``"GO_BP (terms)"``)
+    title: str | None = None
 
 
 @dataclass
@@ -106,12 +117,16 @@ class Layer:
 
 @dataclass
 class Dendrogram:
-    linkage: np.ndarray
+    #: the whole-axis tree; with a split, the tree of the slices (may be None)
+    linkage: np.ndarray | None
     order: np.ndarray
     #: True when built by cluster_within_group2 (per-slice trees grafted onto a
     #: tree of the slice centroids)
     within_group: bool = False
     size_in: float = 0.4
+    #: one tree per displayed slice (None for a one-item slice); when set, each
+    #: is drawn in its own slice so the branches line up with the gaps
+    slice_linkages: list[np.ndarray | None] | None = None
 
 
 @dataclass
@@ -199,3 +214,5 @@ class HeatmapResult:
     var_meta: pd.DataFrame | None = None
     enrichment: pd.DataFrame | None = None
     spec: HeatmapSpec | None = None
+    #: dynamic_heatmap only: the pseudotime-ordered cells of every lineage
+    cell_order: dict[str, list[str]] | None = None

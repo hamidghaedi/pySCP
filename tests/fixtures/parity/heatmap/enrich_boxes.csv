@@ -1,0 +1,106 @@
+"kind","group","keyword","col","fontsize","score","count"
+"terms","C1","[obsolete] secretion beta","#69012C",8,NA,NA
+"terms","C1","Mitotic signaling regulation","#69012C",8,NA,NA
+"terms","C1","Pancreas beta cycle the","#3F356C",8,NA,NA
+"terms","C1","Pancreas negative [obsolete] cycle mitotic","#3F356C",8,NA,NA
+"terms","C1","Differentiation response of division cell","#3F356C",8,NA,NA
+"terms","C2","Mitotic negative","#69012C",8,NA,NA
+"terms","C2","Signaling division of hormone differentiation","#9F432E",8,NA,NA
+"terms","C2","Positive cycle signaling transport","#9F432E",8,NA,NA
+"terms","C2","Insulin signaling","#A9A97E",8,NA,NA
+"terms","C2","Pancreas negative [obsolete] cycle mitotic","#3F356C",8,NA,NA
+"terms","C3","Secretion cell regulation","#69012C",8,NA,NA
+"terms","C3","Cell pancreas endocrine","#3F356C",8,NA,NA
+"terms","C3","Cell division","#3F356C",8,NA,NA
+"terms","C3","Cell signaling process","#3F356C",8,NA,NA
+"terms","C3","Differentiation response the","#3F356C",8,NA,NA
+"terms","C4","Signaling division of hormone differentiation","#3F356C",8,NA,NA
+"terms","C4","Hormone differentiation beta signaling transport","#3F356C",8,NA,NA
+"terms","C4","Pancreas negative [obsolete] cycle mitotic","#3F356C",8,NA,NA
+"terms","C4","Differentiation response of division cell","#3F356C",8,NA,NA
+"terms","C4","Cell pancreas endocrine","#3F356C",8,NA,NA
+"keys","C1","differentiation","#69012C",10,2.680694496,7
+"keys","C1","signaling","#71092D",9.333333333,2.622549138,6
+"keys","C1","mitotic","#7B1530",9.333333333,2.544753293,6
+"keys","C1","cycle","#7F1931",8.666666667,2.51089908,5
+"keys","C1","pancreas","#831D32",8.666666667,2.502016554,5
+"keys","C1","division","#A97541",9.333333333,1.903855172,6
+"keys","C1","beta","#A97F4A",7.333333333,1.829266787,3
+"keys","C1","secretion","#A9A06F",7.333333333,1.539560962,3
+"keys","C1","transport","#A9A77A",8.666666667,1.45633398,5
+"keys","C1","hormone","#A1A671",8,1.288774077,4
+"keys","C1","alpha","#8B9D68",8,1.087898836,4
+"keys","C1","endocrine","#2F6B77",6.666666667,0.5383992581,2
+"keys","C1","glucose","#27537A",6,0.3724123298,1
+"keys","C1","insulin","#3F356C",6,0.1715370881,1
+"keys","C2","signaling","#69012C",10,6.138164156,8
+"keys","C2","transport","#A98C55",10,3.929109884,8
+"keys","C2","differentiation","#A98F58",9.428571429,3.896712624,7
+"keys","C2","hormone","#A9A576",8.857142857,3.383101839,6
+"keys","C2","mitotic","#A9A77A",8.285714286,3.316006818,5
+"keys","C2","division","#A9A97E",9.428571429,3.161711906,7
+"keys","C2","cycle","#A2A773",8.285714286,2.958080584,5
+"keys","C2","beta","#49836D",8.285714286,1.549236635,5
+"keys","C2","pancreas","#49836D",8.285714286,1.528654417,5
+"keys","C2","secretion","#3A7672",7.142857143,1.311846399,3
+"keys","C2","insulin","#2F6B77",6,1.145945109,1
+"keys","C2","alpha","#294F79",7.714285714,0.7454768733,4
+"keys","C2","endocrine","#334473",6,0.5665734375,1
+"keys","C2","glucose","#3F356C",6,0.2870451123,1
+"keys","C3","signaling","#69012C",10,5.404774739,9
+"keys","C3","differentiation","#A3492D",10,4.376920059,9
+"keys","C3","transport","#A45733",9.5,4.224787643,8
+"keys","C3","division","#A8713F",9.5,3.921948857,8
+"keys","C3","pancreas","#A98952",8.5,3.540484748,6
+"keys","C3","mitotic","#A9965E",8.5,3.34273334,6
+"keys","C3","secretion","#A9A06F",7,3.132734958,3
+"keys","C3","cycle","#77956C",8,1.937781268,5
+"keys","C3","hormone","#5C8B6D",8,1.644448783,5
+"keys","C3","endocrine","#49836D",6.5,1.420543052,2
+"keys","C3","beta","#45816D",7.5,1.407370001,4
+"keys","C3","alpha","#45816D",7.5,1.397329208,4
+"keys","C3","glucose","#354071",6,0.5102173367,1
+"keys","C3","insulin","#3F356C",6,0.3576448432,1
+"keys","C4","differentiation","#69012C",8.666666667,3.666082618,6
+"keys","C4","signaling","#7B1530",10,3.514789222,8
+"keys","C4","division","#872133",9.333333333,3.425533955,7
+"keys","C4","pancreas","#9D3F2F",8.666666667,3.166758959,6
+"keys","C4","transport","#A76C3D",9.333333333,2.830790298,7
+"keys","C4","hormone","#A99A65",7.333333333,2.415126168,4
+"keys","C4","mitotic","#A9A06F",7.333333333,2.341327569,4
+"keys","C4","beta","#53876D",6.666666667,1.414010316,3
+"keys","C4","cycle","#53876D",6.666666667,1.414010316,3
+"keys","C4","alpha","#49836D",6.666666667,1.370767515,3
+"keys","C4","endocrine","#417E6F",6,1.306881347,2
+"keys","C4","secretion","#2C6779",6.666666667,1.127449187,3
+"keys","C4","glucose","#3F356C",6,0.7300113912,2
+"features","C1","Krt19","#69012C",10,4.810426323,11
+"features","C1","Spp1","#A45231",8.666666667,4.231183741,9
+"features","C1","Anxa2","#A76C3D",8.666666667,4.06255067,9
+"features","C1","Sox9","#A97B47",8,3.966468654,8
+"features","C1","Vim","#9FA56E",6.666666667,3.334451333,6
+"features","C1","Cdk1","#9AA366",7.333333333,3.25808586,7
+"features","C1","Top2a","#618C6D",7.333333333,2.877278163,7
+"features","C1","Mki67","#3F356C",6,2.182039101,5
+"features","C2","Hes6","#69012C",8,7.284795028,7
+"features","C2","Chgb","#740D2E",10,7.14830699,9
+"features","C2","Neurog3","#A55F37",10,6.201589963,9
+"features","C2","Cck","#A76C3D",9,6.050977085,8
+"features","C2","Nkx6-1","#A9A06F",10,5.311657436,9
+"features","C2","Chga","#A2A773",7,4.920004078,6
+"features","C2","Fev","#57896D",9,4.037291449,8
+"features","C2","Neurod1","#3A7672",10,3.724646324,9
+"features","C2","Pax4","#3F356C",6,2.961537585,5
+"features","C3","Arx","#69012C",10,10.30580491,13
+"features","C3","Ins1","#872133",8.285714286,9.781023337,10
+"features","C3","Mafb","#983930",9.428571429,9.333909304,12
+"features","C3","Pcsk2","#A99861",9.428571429,7.756265526,12
+"features","C3","Gcg","#A9A97D",7.142857143,7.272082664,8
+"features","C3","Gast","#9DA56B",7.714285714,6.838899242,9
+"features","C3","Pdx1","#5C8B6D",6,5.793544002,6
+"features","C3","Iapp","#27537A",7.714285714,4.717209872,9
+"features","C3","Ghrl","#3F356C",6,4.230956707,6
+"features","C4","Pyy","#69012C",10,6.860980341,13
+"features","C4","Rbp4","#A34D2F",9.333333333,6.185920721,12
+"features","C4","Sst","#9BA469",7.333333333,5.040597831,9
+"features","C4","Hhex","#3F356C",6,3.733716484,7

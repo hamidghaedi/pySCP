@@ -171,17 +171,35 @@ trick: down-regulated genes hang **below** zero and the axis is relabelled with
 `scipy.stats.gaussian_kde` gives control over the ordering rules, which matter
 here.
 
-### 7 — The heatmap engine + `group_heatmap` — L (engine + group_heatmap done)
+### 7 — The heatmap engine + `group_heatmap` / `feature_heatmap` — L ✅ done
 
 Brief: `porting_briefs/heatmaps.md`. This is the biggest single piece.
 
 Landed: `heatmap/render.py` (inch-exact GridSpec engine, nested split subgrids,
-simple/block/mark tracks, whiteout/bg/reticle/dot layers, legend column,
-dendrogram axes) and `group_heatmap`. Its matrix matches R's `matrix_list` to
-8.6e-07 — see `notebooks/01_parity_foundation.ipynb` §8.
+simple/block/mark/textbox tracks on every side, whiteout/bg/reticle/dot
+layers, legend column, per-slice dendrograms), `heatmap/cluster.py`
+(SCP's splitters and `C1..Cn` naming, ComplexHeatmap's slice clustering and
+`reorder.dendrogram`, `cluster_within_group` / `cluster_within_group2`),
+`heatmap/enrichment.py` (`heatmap_enrichment`'s word boxes plus an `ora`
+backend) and both wrappers, with `split_by`, `grouping_var`,
+`feature_split_by`, `cluster_features_by`, `cluster_row_slices`,
+`cluster_column_slices` and `split_method` `kmeans`/`hclust`/`mfuzz`.
 
-Still to do: `feature_heatmap` (per-cell, downsampled), `cluster_within_group2`,
-enrichment tracks, and the `mfuzz`/peaktime split methods.
+Verified against SCP 0.5.6 on `pancreas_sub` by
+`tools/parity/heatmap_fixtures.R`, pinned in `tests/test_heatmap_parity.py`:
+`split_by` and `grouping_var` matrices to <7e-07; every `hclust` split and
+every deterministic row/column order exactly (`cluster_within_group2`,
+`cluster_row_slices`, `cluster_column_slices`, raw-scale `cluster_rows`);
+`kmeans` with ARI 1.0; `feature_heatmap`'s per-cell matrix to 5e-10;
+`RunEnrichment`'s ORA p-values to 5e-12 (relative) and the terms / keys /
+features boxes word for word and colour for colour.
+
+Not reproducible, by construction: ComplexHeatmap reorders z-scored rows by
+`-rowMeans`, which is rounding noise, so there only the tree is compared;
+`mfuzz` has no R fixture (e1071 is not in the parity environment) and its
+random start differs anyway; `anno_keys` on GO uses the tokenising keyword
+method, not `simplifyEnrichment`. Still stub: `group_heatmap`'s pie/violin
+`cell_annotation` grobs (drawn as per-group lanes) and `add_violin`.
 
 Build `heatmap/render.py` bottom-up and do not skip a step:
 
@@ -213,9 +231,21 @@ the scene axes are pinned to the data range in a cube, the title is
 (`bg_cutoff=None`; R has no cutoff), so its colour values match R's to 1e-12.
 Still not ported: `cells.highlight`, `lineages`, `split.by`.
 
-### 9 — `dynamic_heatmap` / `dynamic_plot` — L (binned form done; fitted form deliberately not)
+### 9 — `dynamic_heatmap` / `dynamic_plot` — L (raw form done; fitted form deliberately not)
 
 Brief: `porting_briefs/heatmaps.md` §8, `trajectory_enrichment.md` §5.
+
+`dynamic_heatmap` now follows R's `use_fitted = FALSE` path: one column per
+cell ordered by pseudotime (`reverse_ht` descending), library-normalised per
+lineage, z-scored once across all lineages, features pre-sorted by peak (or
+valley) time, every `split_method` including `kmeans-peaktime` /
+`hclust-peaktime` (default `mfuzz`, as in R), lineage-membership and
+pseudotime tracks, `pseudotime_label`, enrichment boxes. Peak times come from
+R's `RunDynamicFeatures` table (`dynamic_features=` or
+`adata.uns["DynamicFeatures_<lineage>"]`); without one a GAM-free running-mean
+estimate stands in. Given R's table, the cell order, the joint matrix (to
+2e-09) and every split and row order match SCP exactly — 1-D kmeans is solved
+exactly, which is the optimum R reaches. `separate_annotation` is still stub.
 
 Blocked on a GAM backend. `pygam` is the closest to `mgcv::gam(y ~ s(x,
 bs="cs") + offset(log(libsize)))`; matching mgcv's GCV smoothing-parameter
@@ -244,6 +274,11 @@ than refitting.
 Brief: `porting_briefs/heatmaps.md` §9. Straightforward once the engine exists.
 `feature_cor_heatmap` has no R reference (the R function is an empty stub), so
 implement it clean-room.
+
+Every `distance_metric` SCP lists is implemented in `heatmap/similarity.py`
+and matches proxyC to 5e-11 on SCP's own centroids, with two R bugs fixed:
+SCP's `"hamman"` (proxyC spells it `"hamann"`, so R errors) and proxyC's
+cancellation in `euclidean`, which turns a self-similarity of 1 into 0.
 
 ### 11 — `graph_plot` + `paga_plot` — M ✅ done
 

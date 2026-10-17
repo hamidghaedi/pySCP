@@ -25,7 +25,7 @@ from matplotlib.gridspec import GridSpecFromSubplotSpec
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch, Rectangle
 
-from .spec import HeatmapSpec, LegendSpec, PanelSpec
+from .spec import HeatmapSpec, LegendSpec, PanelSpec, Track
 
 __all__ = ["render"]
 
@@ -99,7 +99,8 @@ def _draw_simple_track(ax, values, *, vertical: bool, colors=None, cmap=None, no
             ax.spines[side].set_linewidth(0.5)
 
 
-def _draw_block_track(ax, labels, positions, *, vertical: bool, colors=None):
+def _draw_block_track(ax, labels, positions, *, vertical: bool, colors=None,
+                      show_labels: bool = True):
     """One labelled rectangle per split block — ComplexHeatmap's ``anno_block``."""
     total = sum(len(p) for p in positions)
     start = 0
@@ -108,11 +109,13 @@ def _draw_block_track(ax, labels, positions, *, vertical: bool, colors=None):
         c = (colors or {}).get(str(lab), "#DDDDDD")
         if vertical:
             ax.add_patch(Rectangle((0, start), 1, size, facecolor=c, edgecolor="none"))
-            ax.text(0.5, start + size / 2, str(lab), ha="center", va="center",
-                    rotation=90, fontsize=7)
+            if show_labels:
+                ax.text(0.5, start + size / 2, str(lab), ha="center", va="center",
+                        rotation=90, fontsize=7)
         else:
             ax.add_patch(Rectangle((start, 0), size, 1, facecolor=c, edgecolor="none"))
-            ax.text(start + size / 2, 0.5, str(lab), ha="center", va="center", fontsize=7)
+            if show_labels:
+                ax.text(start + size / 2, 0.5, str(lab), ha="center", va="center", fontsize=7)
         start += size
     ax.set_xlim(0, 1 if vertical else total)
     ax.set_ylim(0, total if vertical else 1)
@@ -142,20 +145,166 @@ def _repel(targets: np.ndarray, min_gap: float, lo: float, hi: float) -> np.ndar
 
 
 def _draw_mark_track(ax, at, labels, n_rows: int, *, fontsize: float = 7.0):
-    """Called-out row labels with leader lines, repelled so they never collide."""
+    """Called-out row labels with leader lines, repelled so they never collide.
+
+    ComplexHeatmap's left-side ``anno_mark``: the labels sit on the outside,
+    right-aligned, and each leader line runs from its label to its row at the
+    edge facing the body, with a dog-leg that absorbs the repulsion.
+    """
     ax.set_xlim(0, 1)
     ax.set_ylim(0, n_rows)
     ax.invert_yaxis()
     _blank(ax)
     if not len(at):
         return
+    fig = ax.get_figure()
+    width_in = max(ax.get_position().width * fig.get_figwidth(), 1e-6)
+    x_text = max(1.0 - 0.25 / width_in, 0.05)  # 0.25 in of the lane is for the leaders
     at = np.asarray(at, dtype=float) + 0.5
-    gap = max(n_rows / max(len(at), 1) * 0.18, fontsize / 72 / max(ax.get_figure().get_figheight(), 1) * n_rows)
+    gap = max(n_rows / max(len(at), 1) * 0.18, fontsize / 72 / max(fig.get_figheight(), 1) * n_rows)
     placed = _repel(at, gap, 0.0, float(n_rows))
+    span = 1.0 - x_text
     for y_true, y_lab, lab in zip(at, placed, labels, strict=True):
-        ax.plot([0.0, 0.35, 0.6], [y_true, y_true, y_lab], color="black", linewidth=0.5,
+        ax.plot([x_text + 0.08 * span, x_text + 0.4 * span, x_text + 0.8 * span, 1.0],
+                [y_lab, y_lab, y_true, y_true], color="black", linewidth=0.5,
                 solid_joinstyle="miter", clip_on=False)
-        ax.text(0.68, y_lab, str(lab), ha="left", va="center", fontsize=fontsize, clip_on=False)
+        ax.text(x_text, y_lab, str(lab), ha="right", va="center", fontsize=fontsize,
+                clip_on=False)
+
+
+def _layout_words(fig, words, mode: str, max_w: float, pad: float):
+    """Greedy line-wrap of colored, sized words into ``max_w`` inches.
+
+    Returns ``(lines, height)``: each line a list of ``(text, color, size,
+    x_in, width_in)`` plus its height.  Widths are measured on the real
+    renderer, as ComplexHeatmap's ``textbox_grob`` measures grobs.
+    """
+    renderer = fig.canvas.get_renderer()
+
+    def measure(s, size):
+        t = fig.text(0, 0, s, fontsize=size)
+        bb = t.get_window_extent(renderer=renderer)
+        t.remove()
+        return bb.width / fig.dpi, bb.height / fig.dpi
+
+    lines: list[list] = []
+    heights: list[float] = []
+    inner = max(max_w - 2 * pad, 0.2)
+
+    def push(line, h):
+        if line:
+            lines.append(line)
+            heights.append(h)
+
+    line: list = []
+    x = 0.0
+    h = 0.0
+    for text, col, size in words:
+        size = float(size)
+        tokens = str(text).split(" ") if mode == "lines" else [str(text)]
+        if mode == "lines":  # every entry starts a new line, wrapped inside
+            push(line, h)
+            line, x, h = [], 0.0, 0.0
+        for tok in tokens:
+            w, th = measure(tok, size)
+            # a 0.5 em word space (wider than the font's, so differently styled
+            # words stay apart once hinted at a lower dpi): a measured "x x" minus
+            # "xx" comes out near zero, as text extents measure ink, not advance
+            gap = 0.5 * size / 72.0 if line else 0.0
+            if line and x + gap + w > inner:
+                push(line, h)
+                line, x, h, gap = [], 0.0, 0.0, 0.0
+            line.append((tok, col, size, x + gap, w))
+            x += gap + w
+            h = max(h, th)
+    push(line, h)
+    return lines, heights
+
+
+def _draw_textbox_track(fig, cell, track: Track, row_blocks, row_subgrid, body_top_in: float):
+    """``anno_textbox``: one rounded word box per row slice, linked to its slice.
+
+    Boxes are centred on their slice and pushed apart top-down when the text is
+    taller than the slice, which is what ``anno_zoom`` does in ComplexHeatmap.
+    Everything is drawn in figure inches, so a 2-inch box is 2 inches.
+    """
+    from matplotlib.patches import FancyBboxPatch, Polygon
+
+    sub = row_subgrid(cell)
+    fig_w, fig_h = fig.get_size_inches()
+    lane = cell.get_position(fig)
+    x0 = lane.x0 * fig_w
+    x1 = lane.x1 * fig_w
+    link_w = min(0.12, 0.25 * (x1 - x0))
+    pad = 0.04
+    values = np.asarray(track.values) if track.values is not None else None
+    boxes = []
+    for ri, (_lab, rows) in enumerate(row_blocks):
+        if values is None or not len(rows):
+            continue
+        group = str(values[rows[0]])
+        df = (track.text or {}).get(group)
+        if df is None or not len(df):
+            continue
+        pos = sub[ri, 0].get_position(fig)
+        s_top, s_bot = pos.y1 * fig_h, pos.y0 * fig_h
+        words = list(zip(df["keyword"], df["col"], df["fontsize"], strict=True))
+        lines, heights = _layout_words(fig, words, track.text_mode, x1 - x0 - link_w, pad)
+        lh = [hh * 1.25 for hh in heights]
+        boxes.append([s_top, s_bot, lines, lh, sum(lh) + 2 * pad])
+    # push apart, top to bottom, keeping each box as close to its slice as it can
+    ceiling = body_top_in
+    for b in boxes:
+        centre = (b[0] + b[1]) / 2
+        top = min(centre + b[4] / 2, ceiling)
+        b.append(top)
+        ceiling = top - b[4] - 0.03
+    bx = x0 + link_w
+    for s_top, s_bot, lines, lh, height, top in boxes:
+        fig.patches.append(Polygon(
+            [(x0, s_top), (bx, top), (bx, top - height), (x0, s_bot)], closed=True,
+            transform=fig.dpi_scale_trans, facecolor="#F5F5F5", edgecolor="#9E9E9E",
+            linewidth=0.4, zorder=1))
+        fig.patches.append(FancyBboxPatch(
+            (bx, top - height), x1 - bx, height,
+            boxstyle="round,pad=0,rounding_size=0.04", transform=fig.dpi_scale_trans,
+            facecolor="#FAFAFA", edgecolor="black", linewidth=0.5, zorder=2))
+        y = top - pad
+        for line, hh in zip(lines, lh, strict=True):
+            y -= hh
+            # runs of same-styled words go out as one string, so the font engine
+            # spaces them -- separately placed words drift together once the
+            # glyphs are hinted at a lower output dpi
+            runs: list[list] = []
+            for tok, col, size, xx, _w in line:
+                if runs and runs[-1][1] == col and runs[-1][2] == size:
+                    runs[-1][0].append(tok)
+                else:
+                    runs.append([[tok], col, size, xx])
+            for toks, col, size, xx in runs:
+                fig.text((bx + pad + xx) / fig_w, (y + hh * 0.15) / fig_h, " ".join(toks),
+                         color=col, fontsize=size, ha="left", va="bottom", zorder=3)
+    if track.title:
+        fig.text(x0 / fig_w, (body_top_in + 2.5 * MM) / fig_h, track.title, ha="left",
+                 va="bottom", fontsize=8)
+
+
+def _draw_dendrogram(ax, Z, n: int, orientation: str):
+    from scipy.cluster.hierarchy import dendrogram
+
+    if not np.asarray(Z)[:, 2].max() > 0:
+        # cluster_within_group flattens the within-group trees to height 0:
+        # ComplexHeatmap draws them as flat lines on the baseline
+        _blank(ax)
+        return
+    dendrogram(Z, ax=ax, orientation=orientation, no_labels=True,
+               link_color_func=lambda _k: "black")
+    if orientation == "left":
+        ax.set_ylim(0, 10 * n)
+        ax.invert_yaxis()
+    else:
+        ax.set_xlim(0, 10 * n)
+    _blank(ax)
 
 
 def _draw_layers(ax, panel: PanelSpec, layers, rows: np.ndarray, cols: np.ndarray, dpi_scale: float):
@@ -250,6 +399,12 @@ def render(spec: HeatmapSpec, *, dpi: float = 110.0) -> Figure:
     mark_w = max(
         (_measure_text(probe, t.labels or [], 7.0, horizontal=True) + 0.25
          for t in spec.left_tracks if t.kind == "mark"), default=0.0)
+    # top-track names print left of the first panel; make sure that margin exists
+    anno_names = [t.name for t in spec.panels[0].top_tracks if t.show_name]
+    need = _measure_text(probe, anno_names, 6.5, horizontal=True) if anno_names else 0.0
+    have = (mark_w + (spec.row_dend.size_in if spec.row_dend else 0.0)
+            + sum(t.size_in for t in spec.left_tracks if t.kind != "mark"))
+    mark_w += max(need - have, 0.0)
     plt.close(probe)
     if spec.legends:
         spec.measured.setdefault("legend_w", 1.5)
@@ -273,7 +428,7 @@ def render(spec: HeatmapSpec, *, dpi: float = 110.0) -> Figure:
     names_w = spec.measured.get("row_names_w", 0.0) if spec.show_row_names else 0.0
     legend_w = spec.measured.get("legend_w", 0.0) if spec.legends else 0.0
     bodies = [p.body_size_in if p.body_size_in is not None else 1.0 for p in spec.panels]
-    width_ratios = [mark_w, rowdend_w, left_w] + bodies + [right_w, names_w, legend_w]
+    width_ratios = [rowdend_w, mark_w, left_w] + bodies + [right_w, names_w, legend_w]
 
     gs = fig.add_gridspec(
         len(height_ratios), len(width_ratios),
@@ -349,25 +504,53 @@ def render(spec: HeatmapSpec, *, dpi: float = 110.0) -> Figure:
                 _draw_simple_track(tax, np.asarray(track.values)[cols], vertical=False,
                                    colors=track.colors, cmap=track.cmap, norm=track.norm,
                                    na_color=track.na_color, border=track.border)
-                if track.show_name and ci == len(col_blocks) - 1:
-                    tax.text(1.02, 0.5, track.name, transform=tax.transAxes, ha="left",
-                             va="center", fontsize=6.5)
+                # annotation names sit left of the first panel only, as in
+                # ComplexHeatmap (annotation_name_side = "left")
+                if track.show_name and pi == 0 and ci == 0:
+                    tax.annotate(track.name, xy=(0.0, 0.5), xycoords="axes fraction",
+                                 xytext=(-3, 0), textcoords="offset points", ha="right",
+                                 va="center", fontsize=6.5)
 
-    # --- left tracks, sharing the row subdivision --------------------------
+    # --- side tracks, sharing the row subdivision --------------------------
+    # Each side column is split into one lane per track, sized in inches, so
+    # stacked tracks sit next to each other instead of drawing over each other.
+    body_top_in = (fig_h - sum(height_ratios[:BODY_ROW]))
+
+    def side_tracks(tracks, cell):
+        if not tracks:
+            return
+        lanes = GridSpecFromSubplotSpec(
+            1, len(tracks), subplot_spec=cell,
+            width_ratios=[max(t.size_in, 1e-6) for t in tracks], wspace=0)
+        for ti, track in enumerate(tracks):
+            if track.kind == "textbox":
+                _draw_textbox_track(fig, lanes[0, ti], track, row_blocks, row_subgrid,
+                                    body_top_in)
+                continue
+            if track.kind == "custom" and track.draw is None:
+                continue  # anno_empty: a spacer
+            sub = row_subgrid(lanes[0, ti])
+            for ri, (lab, rows) in enumerate(row_blocks):
+                ax = fig.add_subplot(sub[ri, 0])
+                if track.kind == "block":
+                    _draw_block_track(ax, [lab], [rows], vertical=True, colors=track.colors,
+                                      show_labels=track.show_labels)
+                elif track.kind == "custom" and track.draw is not None:
+                    track.draw(ax, rows)
+                else:
+                    _draw_simple_track(ax, np.asarray(track.values)[rows], vertical=True,
+                                       colors=track.colors, cmap=track.cmap, norm=track.norm,
+                                       na_color=track.na_color, border=track.border)
+                if ri == 0 and track.show_name and track.kind == "simple":
+                    ax.text(0.5, 1.0, f" {track.name}", transform=ax.transAxes, rotation=90,
+                            ha="center", va="bottom", fontsize=6.5)
+
     for track in spec.left_tracks:
         if track.kind == "mark":
-            ax = fig.add_subplot(gs[BODY_ROW, 0])
+            ax = fig.add_subplot(gs[BODY_ROW, 1])
             _draw_mark_track(ax, track.at or [], track.labels or [], n_rows_total)
-            continue
-        sub = row_subgrid(gs[BODY_ROW, 2])
-        for ri, (lab, rows) in enumerate(row_blocks):
-            ax = fig.add_subplot(sub[ri, 0])
-            if track.kind == "block":
-                _draw_block_track(ax, [lab], [rows], vertical=True, colors=track.colors)
-            else:
-                _draw_simple_track(ax, np.asarray(track.values)[rows], vertical=True,
-                                   colors=track.colors, cmap=track.cmap, norm=track.norm,
-                                   na_color=track.na_color, border=track.border)
+    side_tracks([t for t in spec.left_tracks if t.kind != "mark"], gs[BODY_ROW, 2])
+    side_tracks(list(spec.right_tracks), gs[BODY_ROW, FIRST_BODY_COL + len(spec.panels)])
 
     # --- row names ---------------------------------------------------------
     if spec.show_row_names:
@@ -383,22 +566,43 @@ def render(spec: HeatmapSpec, *, dpi: float = 110.0) -> Figure:
                         va="center", fontsize=7)
 
     # --- dendrograms -------------------------------------------------------
-    if spec.row_dend is not None:
-        from scipy.cluster.hierarchy import dendrogram
-        ax = fig.add_subplot(gs[BODY_ROW, 1])
-        dendrogram(spec.row_dend.linkage, ax=ax, orientation="left", no_labels=True,
-                   link_color_func=lambda _k: "black")
-        ax.invert_yaxis()
-        _blank(ax)
+    # With a split, every slice gets its own tree in its own axes, so branches
+    # line up with the gaps -- the tree of the slices themselves is not drawn,
+    # as ComplexHeatmap does not draw it either.
+    rd = spec.row_dend
+    if rd is not None:
+        if rd.slice_linkages is not None and len(rd.slice_linkages) == len(row_blocks):
+            sub = row_subgrid(gs[BODY_ROW, 0])
+            for ri, (_, rows) in enumerate(row_blocks):
+                Z = rd.slice_linkages[ri]
+                ax = fig.add_subplot(sub[ri, 0])
+                if Z is None:
+                    _blank(ax)
+                    continue
+                _draw_dendrogram(ax, Z, len(rows), "left")
+        elif rd.linkage is not None:
+            ax = fig.add_subplot(gs[BODY_ROW, 0])
+            _draw_dendrogram(ax, rd.linkage, n_rows_total, "left")
     for pi, panel in enumerate(spec.panels):
         d = spec.col_dends.get(panel.name)
         if d is None:
             continue
-        from scipy.cluster.hierarchy import dendrogram
-        ax = fig.add_subplot(gs[2, FIRST_BODY_COL + pi])
-        dendrogram(d.linkage, ax=ax, orientation="top", no_labels=True,
-                   link_color_func=lambda _k: "black")
-        _blank(ax)
+        col_blocks = _slices(panel.col_split, panel.matrix.shape[1])
+        if d.slice_linkages is not None and len(d.slice_linkages) == len(col_blocks):
+            dsub = GridSpecFromSubplotSpec(
+                1, len(col_blocks), subplot_spec=gs[2, FIRST_BODY_COL + pi],
+                width_ratios=[max(len(p), 1) for _, p in col_blocks],
+                wspace=spec.col_gap_in / max(bodies[pi], 1e-6) * len(col_blocks))
+            for ci, (_, cols) in enumerate(col_blocks):
+                Z = d.slice_linkages[ci]
+                ax = fig.add_subplot(dsub[0, ci])
+                if Z is None:
+                    _blank(ax)
+                    continue
+                _draw_dendrogram(ax, Z, len(cols), "top")
+        elif d.linkage is not None:
+            ax = fig.add_subplot(gs[2, FIRST_BODY_COL + pi])
+            _draw_dendrogram(ax, d.linkage, panel.matrix.shape[1], "top")
 
     # --- legends -----------------------------------------------------------
     if spec.legends:

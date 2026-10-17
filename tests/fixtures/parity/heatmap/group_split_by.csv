@@ -1,0 +1,361 @@
+"feature","column","value"
+"Sox9","Ductal : G1",1.402238533
+"Anxa2","Ductal : G1",1.418210031
+"Neurog3","Ductal : G1",-0.7594540183
+"Hes6","Ductal : G1",-0.7376141951
+"Fev","Ductal : G1",-0.5273664707
+"Neurod1","Ductal : G1",-0.6324923133
+"Rbp4","Ductal : G1",-0.3670769215
+"Pyy","Ductal : G1",-0.354211744
+"Ins1","Ductal : G1",-0.2905587932
+"Gcg","Ductal : G1",-0.2887356402
+"Sst","Ductal : G1",-0.2944705189
+"Ghrl","Ductal : G1",-0.27468618
+"Krt19","Ductal : G1",1.818980373
+"Spp1","Ductal : G1",1.136087043
+"Mki67","Ductal : G1",-0.5969124783
+"Top2a","Ductal : G1",-0.7815351604
+"Cdk1","Ductal : G1",-0.645678411
+"Pax4","Ductal : G1",-0.7042247825
+"Chga","Ductal : G1",-0.5085689679
+"Chgb","Ductal : G1",-0.4435677049
+"Iapp","Ductal : G1",-0.2897835179
+"Pcsk2","Ductal : G1",-0.3730179282
+"Nkx6-1","Ductal : G1",-1.026781866
+"Pdx1","Ductal : G1",-0.3278958551
+"Mafb","Ductal : G1",-0.4397115391
+"Arx","Ductal : G1",-0.4463696026
+"Cck","Ductal : G1",-0.7281503235
+"Gast","Ductal : G1",-0.3562732708
+"Vim","Ductal : G1",1.383429463
+"Hhex","Ductal : G1",1.699094356
+"Sox9","Ductal : S",1.192221251
+"Anxa2","Ductal : S",0.6377157671
+"Neurog3","Ductal : S",-0.7572333507
+"Hes6","Ductal : S",-0.845575593
+"Fev","Ductal : S",-0.537470157
+"Neurod1","Ductal : S",-0.6324923133
+"Rbp4","Ductal : S",-0.3385751803
+"Pyy","Ductal : S",-0.3539771194
+"Ins1","Ductal : S",-0.2937451649
+"Gcg","Ductal : S",-0.2923520017
+"Sst","Ductal : S",-0.3105099349
+"Ghrl","Ductal : S",-0.2894213929
+"Krt19","Ductal : S",0.5960738518
+"Spp1","Ductal : S",0.8249503163
+"Mki67","Ductal : S",-0.1342357987
+"Top2a","Ductal : S",-0.1318562546
+"Cdk1","Ductal : S",-0.08471433277
+"Pax4","Ductal : S",-0.7191673421
+"Chga","Ductal : S",-0.504901415
+"Chgb","Ductal : S",-0.4435150496
+"Iapp","Ductal : S",-0.2895934623
+"Pcsk2","Ductal : S",-0.3677073702
+"Nkx6-1","Ductal : S",-0.9198368743
+"Pdx1","Ductal : S",-0.3232990101
+"Mafb","Ductal : S",-0.4353337748
+"Arx","Ductal : S",-0.446760558
+"Cck","Ductal : S",-0.7302583414
+"Gast","Ductal : S",-0.3432313328
+"Vim","Ductal : S",0.8852681777
+"Hhex","Ductal : S",0.7772986556
+"Sox9","Ductal : G2M",1.110754414
+"Anxa2","Ductal : G2M",0.571842551
+"Neurog3","Ductal : G2M",-0.7623174666
+"Hes6","Ductal : G2M",-0.9252359187
+"Fev","Ductal : G2M",-0.5341725668
+"Neurod1","Ductal : G2M",-0.6324923133
+"Rbp4","Ductal : G2M",-0.3239807896
+"Pyy","Ductal : G2M",-0.3555864081
+"Ins1","Ductal : G2M",-0.2935275356
+"Gcg","Ductal : G2M",-0.2926362452
+"Sst","Ductal : G2M",-0.2951092029
+"Ghrl","Ductal : G2M",-0.2953420498
+"Krt19","Ductal : G2M",0.01246244813
+"Spp1","Ductal : G2M",0.1639086012
+"Mki67","Ductal : G2M",1.761265048
+"Top2a","Ductal : G2M",1.95413038
+"Cdk1","Ductal : G2M",1.707525831
+"Pax4","Ductal : G2M",-0.7191673421
+"Chga","Ductal : G2M",-0.5126196614
+"Chgb","Ductal : G2M",-0.4429830594
+"Iapp","Ductal : G2M",-0.2938104607
+"Pcsk2","Ductal : G2M",-0.3686262821
+"Nkx6-1","Ductal : G2M",-0.5657752906
+"Pdx1","Ductal : G2M",-0.2661859896
+"Mafb","Ductal : G2M",-0.4466667585
+"Arx","Ductal : G2M",-0.4680983247
+"Cck","Ductal : G2M",-0.7313638042
+"Gast","Ductal : G2M",-0.3479837198
+"Vim","Ductal : G2M",0.7741476534
+"Hhex","Ductal : G2M",0.08002917065
+"Sox9","Ngn3 low EP : G1",0.9272739506
+"Anxa2","Ngn3 low EP : G1",1.245201333
+"Neurog3","Ngn3 low EP : G1",-0.3901863766
+"Hes6","Ngn3 low EP : G1",-0.5272399337
+"Fev","Ngn3 low EP : G1",-0.534191232
+"Neurod1","Ngn3 low EP : G1",-0.6324923133
+"Rbp4","Ngn3 low EP : G1",-0.3682687473
+"Pyy","Ngn3 low EP : G1",-0.3404848699
+"Ins1","Ngn3 low EP : G1",-0.2896752639
+"Gcg","Ngn3 low EP : G1",-0.2891913503
+"Sst","Ngn3 low EP : G1",-0.3055207428
+"Ghrl","Ngn3 low EP : G1",-0.2886331446
+"Krt19","Ngn3 low EP : G1",0.4550019323
+"Spp1","Ngn3 low EP : G1",1.440099206
+"Mki67","Ngn3 low EP : G1",-0.6386042781
+"Top2a","Ngn3 low EP : G1",-0.8259505409
+"Cdk1","Ngn3 low EP : G1",-0.6319501047
+"Pax4","Ngn3 low EP : G1",-0.7079837539
+"Chga","Ngn3 low EP : G1",-0.512687661
+"Chgb","Ngn3 low EP : G1",-0.4403401157
+"Iapp","Ngn3 low EP : G1",-0.2883027531
+"Pcsk2","Ngn3 low EP : G1",-0.3730179282
+"Nkx6-1","Ngn3 low EP : G1",-1.070794514
+"Pdx1","Ngn3 low EP : G1",-0.1590278536
+"Mafb","Ngn3 low EP : G1",-0.4466667585
+"Arx","Ngn3 low EP : G1",-0.4088437603
+"Cck","Ngn3 low EP : G1",-0.7338135741
+"Gast","Ngn3 low EP : G1",-0.3494223233
+"Vim","Ngn3 low EP : G1",1.078219428
+"Hhex","Ngn3 low EP : G1",1.106190037
+"Sox9","Ngn3 low EP : S",0.2640860972
+"Anxa2","Ngn3 low EP : S",0.8231319917
+"Neurog3","Ngn3 low EP : S",-0.5376503531
+"Hes6","Ngn3 low EP : S",-0.9507695596
+"Fev","Ngn3 low EP : S",-0.5385064052
+"Neurod1","Ngn3 low EP : S",-0.6324923133
+"Rbp4","Ngn3 low EP : S",-0.3320538802
+"Pyy","Ngn3 low EP : S",-0.3587211116
+"Ins1","Ngn3 low EP : S",-0.292206949
+"Gcg","Ngn3 low EP : S",-0.287336764
+"Sst","Ngn3 low EP : S",-0.2929423607
+"Ghrl","Ngn3 low EP : S",-0.2919485523
+"Krt19","Ngn3 low EP : S",0.01484264415
+"Spp1","Ngn3 low EP : S",1.296400224
+"Mki67","Ngn3 low EP : S",-0.02303625526
+"Top2a","Ngn3 low EP : S",0.1820813687
+"Cdk1","Ngn3 low EP : S",0.1019690315
+"Pax4","Ngn3 low EP : S",-0.6786077638
+"Chga","Ngn3 low EP : S",-0.5149973635
+"Chgb","Ngn3 low EP : S",-0.4497694458
+"Iapp","Ngn3 low EP : S",-0.2920209162
+"Pcsk2","Ngn3 low EP : S",-0.3730179282
+"Nkx6-1","Ngn3 low EP : S",-0.5781778302
+"Pdx1","Ngn3 low EP : S",0.331666838
+"Mafb","Ngn3 low EP : S",-0.4466667585
+"Arx","Ngn3 low EP : S",-0.4680983247
+"Cck","Ngn3 low EP : S",-0.7313019375
+"Gast","Ngn3 low EP : S",-0.3650863913
+"Vim","Ngn3 low EP : S",0.7457011634
+"Hhex","Ngn3 low EP : S",0.7965409399
+"Sox9","Ngn3 low EP : G2M",0.5420502346
+"Anxa2","Ngn3 low EP : G2M",0.8749445798
+"Neurog3","Ngn3 low EP : G2M",-0.4348116684
+"Hes6","Ngn3 low EP : G2M",-0.4794226809
+"Fev","Ngn3 low EP : G2M",-0.5237931384
+"Neurod1","Ngn3 low EP : G2M",-0.6324923133
+"Rbp4","Ngn3 low EP : G2M",-0.3687712195
+"Pyy","Ngn3 low EP : G2M",-0.3547054301
+"Ins1","Ngn3 low EP : G2M",-0.2903931896
+"Gcg","Ngn3 low EP : G2M",-0.2896432244
+"Sst","Ngn3 low EP : G2M",-0.3133319944
+"Ghrl","Ngn3 low EP : G2M",-0.2818778997
+"Krt19","Ngn3 low EP : G2M",-0.3363181948
+"Spp1","Ngn3 low EP : G2M",0.3818500695
+"Mki67","Ngn3 low EP : G2M",1.190666058
+"Top2a","Ngn3 low EP : G2M",0.9035465627
+"Cdk1","Ngn3 low EP : G2M",1.361569011
+"Pax4","Ngn3 low EP : G2M",-0.6871366104
+"Chga","Ngn3 low EP : G2M",-0.5075772108
+"Chgb","Ngn3 low EP : G2M",-0.447293759
+"Iapp","Ngn3 low EP : G2M",-0.2931468844
+"Pcsk2","Ngn3 low EP : G2M",-0.3730179282
+"Nkx6-1","Ngn3 low EP : G2M",-0.9337847882
+"Pdx1","Ngn3 low EP : G2M",-0.4812972325
+"Mafb","Ngn3 low EP : G2M",-0.4466667585
+"Arx","Ngn3 low EP : G2M",-0.4680983247
+"Cck","Ngn3 low EP : G2M",-0.7315268584
+"Gast","Ngn3 low EP : G2M",-0.3650863913
+"Vim","Ngn3 low EP : G2M",0.7027507151
+"Hhex","Ngn3 low EP : G2M",-0.08465576916
+"Sox9","Ngn3 high EP : G1",-0.8194947653
+"Anxa2","Ngn3 high EP : G1",-0.8443476886
+"Neurog3","Ngn3 high EP : G1",1.77850119
+"Hes6","Ngn3 high EP : G1",1.619305326
+"Fev","Ngn3 high EP : G1",-0.4373138039
+"Neurod1","Ngn3 high EP : G1",0.4386181656
+"Rbp4","Ngn3 high EP : G1",-0.38312445
+"Pyy","Ngn3 high EP : G1",-0.3542821546
+"Ins1","Ngn3 high EP : G1",-0.2853747553
+"Gcg","Ngn3 high EP : G1",-0.2907482444
+"Sst","Ngn3 high EP : G1",-0.3082611698
+"Ghrl","Ngn3 high EP : G1",-0.2916839944
+"Krt19","Ngn3 high EP : G1",0.83718657
+"Spp1","Ngn3 high EP : G1",-0.6905695728
+"Mki67","Ngn3 high EP : G1",-0.6454153862
+"Top2a","Ngn3 high EP : G1",-0.7890948926
+"Cdk1","Ngn3 high EP : G1",-0.6910992817
+"Pax4","Ngn3 high EP : G1",0.6911259756
+"Chga","Ngn3 high EP : G1",-0.2405994451
+"Chgb","Ngn3 high EP : G1",-0.3590770384
+"Iapp","Ngn3 high EP : G1",-0.2878492908
+"Pcsk2","Ngn3 high EP : G1",-0.313087834
+"Nkx6-1","Ngn3 high EP : G1",0.9673762813
+"Pdx1","Ngn3 high EP : G1",-0.5360291871
+"Mafb","Ngn3 high EP : G1",-0.3055215844
+"Arx","Ngn3 high EP : G1",-0.1710533738
+"Cck","Ngn3 high EP : G1",1.028800169
+"Gast","Ngn3 high EP : G1",-0.3516269993
+"Vim","Ngn3 high EP : G1",-0.8022141026
+"Hhex","Ngn3 high EP : G1",-1.033215194
+"Sox9","Ngn3 high EP : S",-0.5616612321
+"Anxa2","Ngn3 high EP : S",-0.9368200726
+"Neurog3","Ngn3 high EP : S",2.053535905
+"Hes6","Ngn3 high EP : S",1.751753967
+"Fev","Ngn3 high EP : S",-0.4731041058
+"Neurod1","Ngn3 high EP : S",0.4779466741
+"Rbp4","Ngn3 high EP : S",-0.3621694684
+"Pyy","Ngn3 high EP : S",-0.3507235374
+"Ins1","Ngn3 high EP : S",-0.2900964339
+"Gcg","Ngn3 high EP : S",-0.2937970149
+"Sst","Ngn3 high EP : S",-0.2960856833
+"Ghrl","Ngn3 high EP : S",-0.2966800858
+"Krt19","Ngn3 high EP : S",1.075573633
+"Spp1","Ngn3 high EP : S",-0.4333364408
+"Mki67","Ngn3 high EP : S",-0.6921977284
+"Top2a","Ngn3 high EP : S",-0.7653673243
+"Cdk1","Ngn3 high EP : S",-0.7241755108
+"Pax4","Ngn3 high EP : S",0.9372007628
+"Chga","Ngn3 high EP : S",-0.4711077038
+"Chgb","Ngn3 high EP : S",-0.436187407
+"Iapp","Ngn3 high EP : S",-0.2851233254
+"Pcsk2","Ngn3 high EP : S",-0.3556129746
+"Nkx6-1","Ngn3 high EP : S",0.9977373341
+"Pdx1","Ngn3 high EP : S",-0.6712968166
+"Mafb","Ngn3 high EP : S",-0.2890053235
+"Arx","Ngn3 high EP : S",-0.3839866056
+"Cck","Ngn3 high EP : S",0.50369376
+"Gast","Ngn3 high EP : S",-0.3650863913
+"Vim","Ngn3 high EP : S",-0.9764248983
+"Hhex","Ngn3 high EP : S",-1.061169244
+"Sox9","Ngn3 high EP : G2M",-0.936977621
+"Anxa2","Ngn3 high EP : G2M",-0.7038789689
+"Neurog3","Ngn3 high EP : G2M",0.826889734
+"Hes6","Ngn3 high EP : G2M",1.040866981
+"Fev","Ngn3 high EP : G2M",-0.08594584117
+"Neurod1","Ngn3 high EP : G2M",-4.992411296e-05
+"Rbp4","Ngn3 high EP : G2M",-0.3788949327
+"Pyy","Ngn3 high EP : G2M",-0.3500736281
+"Ins1","Ngn3 high EP : G2M",-0.2686420223
+"Gcg","Ngn3 high EP : G2M",-0.2636134077
+"Sst","Ngn3 high EP : G2M",-0.3133319944
+"Ghrl","Ngn3 high EP : G2M",-0.3055554604
+"Krt19","Ngn3 high EP : G2M",-1.151672164
+"Spp1","Ngn3 high EP : G2M",-0.6479844424
+"Mki67","Ngn3 high EP : G2M",1.839901815
+"Top2a","Ngn3 high EP : G2M",1.561968484
+"Cdk1","Ngn3 high EP : G2M",1.708917629
+"Pax4","Ngn3 high EP : G2M",0.2207928959
+"Chga","Ngn3 high EP : G2M",0.3611052726
+"Chgb","Ngn3 high EP : G2M",-0.4423885374
+"Iapp","Ngn3 high EP : G2M",-0.2916905768
+"Pcsk2","Ngn3 high EP : G2M",-0.251090865
+"Nkx6-1","Ngn3 high EP : G2M",0.1688948921
+"Pdx1","Ngn3 high EP : G2M",-0.4556160689
+"Mafb","Ngn3 high EP : G2M",-0.3554816576
+"Arx","Ngn3 high EP : G2M",-0.4680983247
+"Cck","Ngn3 high EP : G2M",0.2242432879
+"Gast","Ngn3 high EP : G2M",-0.3650863913
+"Vim","Ngn3 high EP : G2M",-0.6590037003
+"Hhex","Ngn3 high EP : G2M",-1.218827586
+"Sox9","Pre-endocrine : G1",-0.8868548836
+"Anxa2","Pre-endocrine : G1",-1.02648472
+"Neurog3","Pre-endocrine : G1",-0.01125138908
+"Hes6","Pre-endocrine : G1",0.04128888654
+"Fev","Pre-endocrine : G1",2.143938475
+"Neurod1","Pre-endocrine : G1",2.654224833
+"Rbp4","Pre-endocrine : G1",0.5635359867
+"Pyy","Pre-endocrine : G1",0.3506926965
+"Ins1","Pre-endocrine : G1",-0.2796025187
+"Gcg","Pre-endocrine : G1",-0.2891997688
+"Sst","Pre-endocrine : G1",-0.1283694339
+"Ghrl","Pre-endocrine : G1",-0.2537302194
+"Krt19","Pre-endocrine : G1",-0.8371581999
+"Spp1","Pre-endocrine : G1",-1.152307297
+"Mki67","Pre-endocrine : G1",-0.6921977284
+"Top2a","Pre-endocrine : G1",-0.7868127326
+"Cdk1","Pre-endocrine : G1",-0.6950116516
+"Pax4","Pre-endocrine : G1",0.5421615085
+"Chga","Pre-endocrine : G1",2.688742511
+"Chgb","Pre-endocrine : G1",2.891670481
+"Iapp","Pre-endocrine : G1",-0.2667627976
+"Pcsk2","Pre-endocrine : G1",0.4290322024
+"Nkx6-1","Pre-endocrine : G1",1.470438676
+"Pdx1","Pre-endocrine : G1",1.630702925
+"Mafb","Pre-endocrine : G1",1.293975389
+"Arx","Pre-endocrine : G1",1.67911335
+"Cck","Pre-endocrine : G1",0.563859415
+"Gast","Pre-endocrine : G1",0.4955976196
+"Vim","Pre-endocrine : G1",-0.7003153987
+"Hhex","Pre-endocrine : G1",0.5583934038
+"Sox9","Pre-endocrine : S",-1.184363587
+"Anxa2","Pre-endocrine : S",-1.051232853
+"Neurog3","Pre-endocrine : S",-0.3181664832
+"Hes6","Pre-endocrine : S",0.596700238
+"Fev","Pre-endocrine : S",2.068479927
+"Neurod1","Pre-endocrine : S",-0.6324923133
+"Rbp4","Pre-endocrine : S",-0.4007073763
+"Pyy","Pre-endocrine : S",-0.2884128444
+"Ins1","Pre-endocrine : S",-0.3014984553
+"Gcg","Pre-endocrine : S",-0.2980603511
+"Sst","Pre-endocrine : S",-0.3133319944
+"Ghrl","Pre-endocrine : S",-0.3055554604
+"Krt19","Pre-endocrine : S",-1.389160068
+"Spp1","Pre-endocrine : S",-1.16581769
+"Mki67","Pre-endocrine : S",-0.6921977284
+"Top2a","Pre-endocrine : S",0.2954987382
+"Cdk1","Pre-endocrine : S",-0.7241755108
+"Pax4","Pre-endocrine : S",2.440859311
+"Chga","Pre-endocrine : S",-0.5149973635
+"Chgb","Pre-endocrine : S",0.04637771543
+"Iapp","Pre-endocrine : S",-0.2972507163
+"Pcsk2","Pre-endocrine : S",-0.3730179282
+"Nkx6-1","Pre-endocrine : S",1.517867913
+"Pdx1","Pre-endocrine : S",-1.096229022
+"Mafb","Pre-endocrine : S",-0.4466667585
+"Arx","Pre-endocrine : S",-0.4680983247
+"Cck","Pre-endocrine : S",2.443414031
+"Gast","Pre-endocrine : S",-0.3650863913
+"Vim","Pre-endocrine : S",-1.295509126
+"Hhex","Pre-endocrine : S",-1.218827586
+"Sox9","Endocrine : G1",-1.049272392
+"Anxa2","Endocrine : G1",-1.00828195
+"Neurog3","Endocrine : G1",-0.6878557232
+"Hes6","Endocrine : G1",-0.5840575173
+"Fev","Endocrine : G1",-0.02055468047
+"Neurod1","Endocrine : G1",0.856706445
+"Rbp4","Endocrine : G1",3.060086979
+"Pyy","Endocrine : G1",3.110486151
+"Ins1","Endocrine : G1",3.175321082
+"Gcg","Endocrine : G1",3.175314013
+"Sst","Endocrine : G1",3.17126503
+"Ghrl","Endocrine : G1",3.17511444
+"Krt19","Endocrine : G1",-1.095812826
+"Spp1","Endocrine : G1",-1.153280017
+"Mki67","Endocrine : G1",-0.67703554
+"Top2a","Endocrine : G1",-0.8166086281
+"Cdk1","Endocrine : G1",-0.683176699
+"Pax4","Endocrine : G1",-0.6158528592
+"Chga","Endocrine : G1",1.238209009
+"Chgb","Endocrine : G1",0.967073921
+"Iapp","Endocrine : G1",3.175334702
+"Pcsk2","Endocrine : G1",3.092182764
+"Nkx6-1","Endocrine : G1",-0.02716393361
+"Pdx1","Endocrine : G1",2.354507273
+"Mafb","Endocrine : G1",2.764412283
+"Arx","Endocrine : G1",2.518392174
+"Cck","Endocrine : G1",-0.3775958242
+"Gast","Endocrine : G1",3.078371983
+"Vim","Endocrine : G1",-1.136049374
+"Hhex","Endocrine : G1",-0.4008511847

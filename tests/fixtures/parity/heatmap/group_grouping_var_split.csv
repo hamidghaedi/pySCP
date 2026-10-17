@@ -1,0 +1,331 @@
+"feature","column","value"
+"Sox9","Ductal : G1",0.1888812094
+"Anxa2","Ductal : G1",-0.1701018737
+"Neurog3","Ductal : G1",1.645190119
+"Hes6","Ductal : G1",0.0110178202
+"Fev","Ductal : G1",-1.707484565
+"Neurod1","Ductal : G1",0
+"Rbp4","Ductal : G1",0.7259943971
+"Pyy","Ductal : G1",0.2678976008
+"Ins1","Ductal : G1",-0.9911667717
+"Gcg","Ductal : G1",-1.177353571
+"Sst","Ductal : G1",0.8673888837
+"Ghrl","Ductal : G1",-0.06007984991
+"Krt19","Ductal : G1",0.0794406459
+"Spp1","Ductal : G1",0.07124115719
+"Mki67","Ductal : G1",1.462278062
+"Top2a","Ductal : G1",0.983889817
+"Cdk1","Ductal : G1",2.419200693
+"Pax4","Ductal : G1",-1.137004096
+"Chga","Ductal : G1",1.732624551
+"Chgb","Ductal : G1",-0.9411397433
+"Iapp","Ductal : G1",0.1551378238
+"Pcsk2","Ductal : G1",0
+"Nkx6-1","Ductal : G1",0.3162258306
+"Pdx1","Ductal : G1",-0.09159024817
+"Mafb","Ductal : G1",4.761120845
+"Arx","Ductal : G1",-4.761120845
+"Cck","Ductal : G1",0.1034475648
+"Gast","Ductal : G1",-4.761120845
+"Vim","Ductal : G1",-0.3552354826
+"Hhex","Ductal : G1",-0.166528985
+"Sox9","Ductal : S",0.09860826921
+"Anxa2","Ductal : S",0.00895639449
+"Neurog3","Ductal : S",0.09179143918
+"Hes6","Ductal : S",-0.4082108533
+"Fev","Ductal : S",4.761120845
+"Neurod1","Ductal : S",0
+"Rbp4","Ductal : S",-0.2745983865
+"Pyy","Ductal : S",0.08274946013
+"Ins1","Ductal : S",0.4376594117
+"Gcg","Ductal : S",0.4664044603
+"Sst","Ductal : S",-4.761120845
+"Ghrl","Ductal : S",0.6997068334
+"Krt19","Ductal : S",0.081296772
+"Spp1","Ductal : S",-0.03464039535
+"Mki67","Ductal : S",-1.325308966
+"Top2a","Ductal : S",-0.604633154
+"Cdk1","Ductal : S",-0.2068640339
+"Pax4","Ductal : S",0
+"Chga","Ductal : S",-1.011836804
+"Chgb","Ductal : S",-2.029624139
+"Iapp","Ductal : S",0.1190089558
+"Pcsk2","Ductal : S",0.2957659539
+"Nkx6-1","Ductal : S",-0.5928886482
+"Pdx1","Ductal : S",-0.09724906884
+"Mafb","Ductal : S",0.2502264696
+"Arx","Ductal : S",4.761120845
+"Cck","Ductal : S",-0.5478119394
+"Gast","Ductal : S",4.761120845
+"Vim","Ductal : S",0.0883387996
+"Hhex","Ductal : S",0.0707378381
+"Sox9","Ductal : G2M",0.1648945352
+"Anxa2","Ductal : G2M",-0.01131854003
+"Neurog3","Ductal : G2M",4.761120845
+"Hes6","Ductal : G2M",0.7857156552
+"Fev","Ductal : G2M",-4.761120845
+"Neurod1","Ductal : G2M",0
+"Rbp4","Ductal : G2M",-0.109065971
+"Pyy","Ductal : G2M",0.65866112
+"Ins1","Ductal : G2M",0.1716005605
+"Gcg","Ductal : G2M",0.6029883731
+"Sst","Ductal : G2M",0.7653209949
+"Ghrl","Ductal : G2M",-1.541502944
+"Krt19","Ductal : G2M",-0.1949128701
+"Spp1","Ductal : G2M",0.02686242518
+"Mki67","Ductal : G2M",-0.320522642
+"Top2a","Ductal : G2M",0.01571797032
+"Cdk1","Ductal : G2M",-0.2116739586
+"Pax4","Ductal : G2M",0
+"Chga","Ductal : G2M",0.2123107312
+"Chgb","Ductal : G2M",0.2620872239
+"Iapp","Ductal : G2M",-1.148844206
+"Pcsk2","Ductal : G2M",4.761120845
+"Nkx6-1","Ductal : G2M",-0.1379150451
+"Pdx1","Ductal : G2M",-0.9643679247
+"Mafb","Ductal : G2M",0
+"Arx","Ductal : G2M",0
+"Cck","Ductal : G2M",-1.699524915
+"Gast","Ductal : G2M",0.8051410143
+"Vim","Ductal : G2M",-0.3041519658
+"Hhex","Ductal : G2M",0.2367563741
+"Sox9","Ngn3 low EP : G1",0.3392110324
+"Anxa2","Ngn3 low EP : G1",-0.3337318292
+"Neurog3","Ngn3 low EP : G1",-0.2457496494
+"Hes6","Ngn3 low EP : G1",0.5274355505
+"Fev","Ngn3 low EP : G1",4.761120845
+"Neurod1","Ngn3 low EP : G1",0
+"Rbp4","Ngn3 low EP : G1",2.269723997
+"Pyy","Ngn3 low EP : G1",1.338822054
+"Ins1","Ngn3 low EP : G1",0.361821378
+"Gcg","Ngn3 low EP : G1",-0.1348512046
+"Sst","Ngn3 low EP : G1",-0.5092031578
+"Ghrl","Ngn3 low EP : G1",-0.1362354597
+"Krt19","Ngn3 low EP : G1",-0.3751025036
+"Spp1","Ngn3 low EP : G1",-0.2784786592
+"Mki67","Ngn3 low EP : G1",4.761120845
+"Top2a","Ngn3 low EP : G1",4.761120845
+"Cdk1","Ngn3 low EP : G1",0.5385096241
+"Pax4","Ngn3 low EP : G1",-4.761120845
+"Chga","Ngn3 low EP : G1",-4.761120845
+"Chgb","Ngn3 low EP : G1",2.77374857
+"Iapp","Ngn3 low EP : G1",-1.37246098
+"Pcsk2","Ngn3 low EP : G1",0
+"Nkx6-1","Ngn3 low EP : G1",0.8691491335
+"Pdx1","Ngn3 low EP : G1",0.5049038395
+"Mafb","Ngn3 low EP : G1",0
+"Arx","Ngn3 low EP : G1",-4.761120845
+"Cck","Ngn3 low EP : G1",0
+"Gast","Ngn3 low EP : G1",4.761120845
+"Vim","Ngn3 low EP : G1",0.0902412225
+"Hhex","Ngn3 low EP : G1",0.02773912388
+"Sox9","Ngn3 low EP : S",0.6816404867
+"Anxa2","Ngn3 low EP : S",0.2252786947
+"Neurog3","Ngn3 low EP : S",0.1629227088
+"Hes6","Ngn3 low EP : S",-0.3895801251
+"Fev","Ngn3 low EP : S",0
+"Neurod1","Ngn3 low EP : S",0
+"Rbp4","Ngn3 low EP : S",1.278937111
+"Pyy","Ngn3 low EP : S",0.5013415741
+"Ins1","Ngn3 low EP : S",0.5427381763
+"Gcg","Ngn3 low EP : S",-1.48124896
+"Sst","Ngn3 low EP : S",-4.761120845
+"Ghrl","Ngn3 low EP : S",0.09969464641
+"Krt19","Ngn3 low EP : S",0.9800442528
+"Spp1","Ngn3 low EP : S",-0.6422723354
+"Mki67","Ngn3 low EP : S",3.19797806
+"Top2a","Ngn3 low EP : S",2.228797364
+"Cdk1","Ngn3 low EP : S",1.579085424
+"Pax4","Ngn3 low EP : S",-4.761120845
+"Chga","Ngn3 low EP : S",0
+"Chgb","Ngn3 low EP : S",0
+"Iapp","Ngn3 low EP : S",0.7722817735
+"Pcsk2","Ngn3 low EP : S",0
+"Nkx6-1","Ngn3 low EP : S",-0.7284128016
+"Pdx1","Ngn3 low EP : S",0.8204060626
+"Mafb","Ngn3 low EP : S",0
+"Arx","Ngn3 low EP : S",0
+"Cck","Ngn3 low EP : S",4.761120845
+"Gast","Ngn3 low EP : S",0
+"Vim","Ngn3 low EP : S",-0.4625685395
+"Hhex","Ngn3 low EP : S",-0.4609277092
+"Sox9","Ngn3 low EP : G2M",0.2653699473
+"Anxa2","Ngn3 low EP : G2M",1.30635061
+"Neurog3","Ngn3 low EP : G2M",0.2002224802
+"Hes6","Ngn3 low EP : G2M",1.209686164
+"Fev","Ngn3 low EP : G2M",4.761120845
+"Neurod1","Ngn3 low EP : G2M",0
+"Rbp4","Ngn3 low EP : G2M",0.155359661
+"Pyy","Ngn3 low EP : G2M",1.106778244
+"Ins1","Ngn3 low EP : G2M",4.761120845
+"Gcg","Ngn3 low EP : G2M",-2.638556386
+"Sst","Ngn3 low EP : G2M",0
+"Ghrl","Ngn3 low EP : G2M",1.418970567
+"Krt19","Ngn3 low EP : G2M",-0.01150334545
+"Spp1","Ngn3 low EP : G2M",0.257559337
+"Mki67","Ngn3 low EP : G2M",-0.7506239077
+"Top2a","Ngn3 low EP : G2M",-0.6916566503
+"Cdk1","Ngn3 low EP : G2M",-0.1392707249
+"Pax4","Ngn3 low EP : G2M",4.761120845
+"Chga","Ngn3 low EP : G2M",4.761120845
+"Chgb","Ngn3 low EP : G2M",-4.761120845
+"Iapp","Ngn3 low EP : G2M",-1.722005917
+"Pcsk2","Ngn3 low EP : G2M",0
+"Nkx6-1","Ngn3 low EP : G2M",-0.4461665962
+"Pdx1","Ngn3 low EP : G2M",0.2665581613
+"Mafb","Ngn3 low EP : G2M",0
+"Arx","Ngn3 low EP : G2M",0
+"Cck","Ngn3 low EP : G2M",4.761120845
+"Gast","Ngn3 low EP : G2M",0
+"Vim","Ngn3 low EP : G2M",0.2777135607
+"Hhex","Ngn3 low EP : G2M",1.767729752
+"Sox9","Ngn3 high EP : G1",0.08195092266
+"Anxa2","Ngn3 high EP : G1",-0.1416210549
+"Neurog3","Ngn3 high EP : G1",0.2528636465
+"Hes6","Ngn3 high EP : G1",0.009721250867
+"Fev","Ngn3 high EP : G1",0.05558821439
+"Neurod1","Ngn3 high EP : G1",0.1875511657
+"Rbp4","Ngn3 high EP : G1",-0.7080881227
+"Pyy","Ngn3 high EP : G1",0.434758119
+"Ins1","Ngn3 high EP : G1",0.2287528615
+"Gcg","Ngn3 high EP : G1",-0.4438437965
+"Sst","Ngn3 high EP : G1",4.761120845
+"Ghrl","Ngn3 high EP : G1",-0.3140804972
+"Krt19","Ngn3 high EP : G1",0.1897346513
+"Spp1","Ngn3 high EP : G1",-0.4828586023
+"Mki67","Ngn3 high EP : G1",1.240498297
+"Top2a","Ngn3 high EP : G1",4.761120845
+"Cdk1","Ngn3 high EP : G1",0.3983526479
+"Pax4","Ngn3 high EP : G1",0.05977376306
+"Chga","Ngn3 high EP : G1",-1.151623412
+"Chgb","Ngn3 high EP : G1",-1.287184692
+"Iapp","Ngn3 high EP : G1",1.104411786
+"Pcsk2","Ngn3 high EP : G1",-0.3670156827
+"Nkx6-1","Ngn3 high EP : G1",-0.02740943704
+"Pdx1","Ngn3 high EP : G1",-0.674721854
+"Mafb","Ngn3 high EP : G1",-0.3770361398
+"Arx","Ngn3 high EP : G1",-0.1260883412
+"Cck","Ngn3 high EP : G1",-0.1900708176
+"Gast","Ngn3 high EP : G1",-0.454868738
+"Vim","Ngn3 high EP : G1",0.2551496724
+"Hhex","Ngn3 high EP : G1",-0.1507031353
+"Sox9","Ngn3 high EP : S",-0.1287961246
+"Anxa2","Ngn3 high EP : S",-1.587613285
+"Neurog3","Ngn3 high EP : S",-0.7213192775
+"Hes6","Ngn3 high EP : S",0.01177151596
+"Fev","Ngn3 high EP : S",4.761120845
+"Neurod1","Ngn3 high EP : S",-4.761120845
+"Rbp4","Ngn3 high EP : S",0.04579881637
+"Pyy","Ngn3 high EP : S",1.281594876
+"Ins1","Ngn3 high EP : S",-1.224813744
+"Gcg","Ngn3 high EP : S",4.761120845
+"Sst","Ngn3 high EP : S",-4.761120845
+"Ghrl","Ngn3 high EP : S",0.5157034067
+"Krt19","Ngn3 high EP : S",-0.6908082408
+"Spp1","Ngn3 high EP : S",-0.2036687422
+"Mki67","Ngn3 high EP : S",0
+"Top2a","Ngn3 high EP : S",0.2775964301
+"Cdk1","Ngn3 high EP : S",0
+"Pax4","Ngn3 high EP : S",-0.1109727534
+"Chga","Ngn3 high EP : S",1.946031957
+"Chgb","Ngn3 high EP : S",2.084280205
+"Iapp","Ngn3 high EP : S",0.499442761
+"Pcsk2","Ngn3 high EP : S",4.761120845
+"Nkx6-1","Ngn3 high EP : S",-0.6228272258
+"Pdx1","Ngn3 high EP : S",0.3916476611
+"Mafb","Ngn3 high EP : S",1.466057655
+"Arx","Ngn3 high EP : S",4.761120845
+"Cck","Ngn3 high EP : S",0.5661222417
+"Gast","Ngn3 high EP : S",0
+"Vim","Ngn3 high EP : S",-0.6760987384
+"Hhex","Ngn3 high EP : S",2.129457107
+"Sox9","Ngn3 high EP : G2M",4.761120845
+"Anxa2","Ngn3 high EP : G2M",4.761120845
+"Neurog3","Ngn3 high EP : G2M",-0.61152185
+"Hes6","Ngn3 high EP : G2M",-0.4102221516
+"Fev","Ngn3 high EP : G2M",4.761120845
+"Neurod1","Ngn3 high EP : G2M",4.761120845
+"Rbp4","Ngn3 high EP : G2M",-0.09570432595
+"Pyy","Ngn3 high EP : G2M",1.424322737
+"Ins1","Ngn3 high EP : G2M",4.761120845
+"Gcg","Ngn3 high EP : G2M",1.137275558
+"Sst","Ngn3 high EP : G2M",0
+"Ghrl","Ngn3 high EP : G2M",0
+"Krt19","Ngn3 high EP : G2M",4.761120845
+"Spp1","Ngn3 high EP : G2M",3.580725698
+"Mki67","Ngn3 high EP : G2M",-0.7030739315
+"Top2a","Ngn3 high EP : G2M",-1.60277299
+"Cdk1","Ngn3 high EP : G2M",-0.6569212778
+"Pax4","Ngn3 high EP : G2M",-0.8652318347
+"Chga","Ngn3 high EP : G2M",4.761120845
+"Chgb","Ngn3 high EP : G2M",4.761120845
+"Iapp","Ngn3 high EP : G2M",4.761120845
+"Pcsk2","Ngn3 high EP : G2M",4.761120845
+"Nkx6-1","Ngn3 high EP : G2M",-0.8472835597
+"Pdx1","Ngn3 high EP : G2M",-0.5516516925
+"Mafb","Ngn3 high EP : G2M",4.761120845
+"Arx","Ngn3 high EP : G2M",0
+"Cck","Ngn3 high EP : G2M",0.2056523196
+"Gast","Ngn3 high EP : G2M",0
+"Vim","Ngn3 high EP : G2M",4.761120845
+"Hhex","Ngn3 high EP : G2M",0
+"Sox9","Pre-endocrine : G1",0.05741969162
+"Anxa2","Pre-endocrine : G1",-1.988374469
+"Neurog3","Pre-endocrine : G1",0.005284877963
+"Hes6","Pre-endocrine : G1",-0.1704371315
+"Fev","Pre-endocrine : G1",0.2358239048
+"Neurod1","Pre-endocrine : G1",-0.2520191656
+"Rbp4","Pre-endocrine : G1",-0.01551443677
+"Pyy","Pre-endocrine : G1",0.9005080041
+"Ins1","Pre-endocrine : G1",-0.07351089102
+"Gcg","Pre-endocrine : G1",0.9213743102
+"Sst","Pre-endocrine : G1",2.929897997
+"Ghrl","Pre-endocrine : G1",0.08162070163
+"Krt19","Pre-endocrine : G1",0.3761951386
+"Spp1","Pre-endocrine : G1",0.1684740686
+"Mki67","Pre-endocrine : G1",0
+"Top2a","Pre-endocrine : G1",1.250405883
+"Cdk1","Pre-endocrine : G1",-2.756883968
+"Pax4","Pre-endocrine : G1",0.03588546875
+"Chga","Pre-endocrine : G1",-0.06878566752
+"Chgb","Pre-endocrine : G1",-0.40253409
+"Iapp","Pre-endocrine : G1",-0.8203916384
+"Pcsk2","Pre-endocrine : G1",-0.8558998332
+"Nkx6-1","Pre-endocrine : G1",-0.1438156851
+"Pdx1","Pre-endocrine : G1",-0.008827108192
+"Mafb","Pre-endocrine : G1",-0.4055436453
+"Arx","Pre-endocrine : G1",-0.2486175813
+"Cck","Pre-endocrine : G1",0.3059652941
+"Gast","Pre-endocrine : G1",0.3407259683
+"Vim","Pre-endocrine : G1",0.1822239227
+"Hhex","Pre-endocrine : G1",-0.7857633867
+"Sox9","Endocrine : G1",-0.3410739148
+"Anxa2","Endocrine : G1",-0.6506549272
+"Neurog3","Endocrine : G1",0.4905139312
+"Hes6","Endocrine : G1",-0.04070630801
+"Fev","Endocrine : G1",0.1500554995
+"Neurod1","Endocrine : G1",-0.1002712046
+"Rbp4","Endocrine : G1",-0.2651735134
+"Pyy","Endocrine : G1",-0.3966182575
+"Ins1","Endocrine : G1",-0.1321772672
+"Gcg","Endocrine : G1",0.2121144476
+"Sst","Endocrine : G1",-0.6495596844
+"Ghrl","Endocrine : G1",-0.8568460137
+"Krt19","Endocrine : G1",0.4263986922
+"Spp1","Endocrine : G1",-0.3585983483
+"Mki67","Endocrine : G1",-1.049580976
+"Top2a","Endocrine : G1",-0.4184901642
+"Cdk1","Endocrine : G1",0.4654416871
+"Pax4","Endocrine : G1",-0.1384306907
+"Chga","Endocrine : G1",0.0892087152
+"Chgb","Endocrine : G1",0.2496421359
+"Iapp","Endocrine : G1",-0.234340809
+"Pcsk2","Endocrine : G1",0.1545527276
+"Nkx6-1","Endocrine : G1",-0.3110655034
+"Pdx1","Endocrine : G1",0.06474665392
+"Mafb","Endocrine : G1",0.0510963321
+"Arx","Endocrine : G1",0.2406618317
+"Cck","Endocrine : G1",-0.2556766626
+"Gast","Endocrine : G1",0.5448715767
+"Vim","Endocrine : G1",0.09505927251
+"Hhex","Endocrine : G1",-0.854128049

@@ -1,0 +1,5 @@
+{
+  "CellType": ["Ductal", "Ngn3 low EP", "Ngn3 high EP", "Pre-endocrine", "Endocrine"],
+  "SubCellType": ["Ductal", "Ngn3 low EP", "Ngn3 high EP", "Pre-endocrine", "Beta", "Alpha", "Delta", "Epsilon"],
+  "Phase": ["G1", "S", "G2M"]
+}
