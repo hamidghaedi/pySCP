@@ -121,12 +121,15 @@ def main() -> int:
              "regulation of insulin secretion", "peptide hormone processing",
              "epithelial cell differentiation", "Notch signaling pathway",
              "cell fate commitment", "glucose homeostasis"]
+    count = rng.integers(5, 45, len(terms))
     enr = pd.DataFrame({
         "ID": [f"GO:{i:07d}" for i in range(len(terms))],
         "Description": terms,
+        "GeneRatio": [f"{c}/120" for c in count],
+        "BgRatio": [f"{b}/18000" for b in rng.integers(60, 600, len(terms))],
         "pvalue": np.sort(rng.uniform(1e-9, 0.02, len(terms))),
         "p.adjust": np.sort(rng.uniform(1e-7, 0.04, len(terms))),
-        "Count": rng.integers(5, 45, len(terms)),
+        "Count": count,
         "Groups": "Endocrine",
         "Database": "GO_BP",
     })

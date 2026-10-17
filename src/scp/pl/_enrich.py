@@ -15,21 +15,22 @@ Ported from SCP (Hao Zhang, https://github.com/zhanghao-njmu/SCP, GPL-3),
 from __future__ import annotations
 
 import math
-import textwrap
+import warnings
 from collections.abc import Mapping, Sequence
 from typing import Literal
 
-import matplotlib.pyplot as plt
+import matplotlib as mpl
 import numpy as np
 import pandas as pd
 from matplotlib.cm import ScalarMappable
-from matplotlib.colors import LinearSegmentedColormap, Normalize
+from matplotlib.colors import LinearSegmentedColormap, Normalize, to_hex
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 
 from ..layout import LegendColumn, PanelGrid
-from ..palettes import continuous_palette, discrete_palette
-from ..theme import theme_scp
+from ..palettes import color_ramp, continuous_palette, discrete_palette
+from ..theme import theme_scp, theme_scp_rc
 from . import _enrich_draw as draw
 from . import _enrich_graph as eg
 
@@ -171,12 +172,88 @@ def _prepare_enrichment(
 
 
 def _ratio(x) -> float:
-    a, b = str(x).split("/")
+    """``"k/n"`` -> ``k / n``, as R's ``strsplit(x, "/")``; a number passes."""
+    s = str(x)
+    if "/" not in s:
+        return float(s)
+    a, b = s.split("/")
     return float(a) / float(b)
 
 
 def _wrap_desc(descriptions, width: int) -> list[str]:
     return [eg.r_strwrap(eg.capitalize(d), width) for d in descriptions]
+
+
+def _rescale_norm(v: np.ndarray) -> Normalize:
+    """The continuous scale's range.  ``scales::rescale`` maps a zero-width
+    range to the midpoint of the output, so a panel whose values are all equal
+    is drawn in the middle colour, not the first one."""
+    lo, hi = float(np.nanmin(v)), float(np.nanmax(v))
+    if not hi > lo:
+        return Normalize(lo - 0.5, lo + 0.5)
+    return Normalize(lo, hi)
+
+
+def _color_levels(enrichment: pd.DataFrame, color_by: str) -> list[str]:
+    """``levels(df[[color_by]])``: first-appearance order over the whole input
+    table, set before ``group_use`` / ``db`` filter it (``SCP-plot.R:12773-12779``)."""
+    if color_by in enrichment:
+        return _levels(enrichment[color_by])
+    default = {"Database": "custom", "Groups": "all"}
+    if color_by in default:
+        return [default[color_by]]
+    raise ValueError(f"color_by={color_by!r} is not a column of the enrichment table")
+
+
+def enrichment_panel_frame(
+    df: pd.DataFrame,
+    *,
+    plot_type: str,
+    metric: str,
+    character_width: int = 50,
+) -> tuple[pd.DataFrame, list[str]]:
+    """The data of one ``bar`` / ``dot`` / ``lollipop`` panel
+    (``SCP-plot.R:12900-13017``).
+
+    ``df`` is one panel of :func:`_prepare_enrichment`: significant terms in
+    stable metric order, cut to ``top_term`` per (Database x Group).  Adds
+    ``metric = -log10(<metric>)``, the capitalised and ``strwrap``-ped
+    ``Description``, the parsed ``GeneRatio`` / ``FoldEnrichment`` where the
+    type uses them, and ``_y``, the 0-based position on the term axis (0 at
+    the bottom).  Returns the rows sorted by ``_y`` and the axis levels.
+
+    The term order is R's factor levels:
+
+    * ``bar``: ``unique(rev(Description))`` -- the most significant on top,
+      and of two tied terms the one listed first on top;
+    * ``dot``: rows ordered by ``GeneRatio`` decreasing (stable), then
+      ``unique(rev(...))`` -- the highest ratio on top;
+    * ``lollipop``: ``unique(Description[order(FoldEnrichment)])`` -- the
+      highest fold enrichment on top.
+    """
+    d = df.reset_index(drop=True).copy()
+    need = {"dot": ("GeneRatio", "Count"), "lollipop": ("GeneRatio", "BgRatio")}
+    missing = [c for c in need.get(plot_type, ()) if c not in d]
+    if missing:
+        raise ValueError(f"plot_type={plot_type!r} needs the column(s) {missing}")
+    d["metric"] = -np.log10(d[metric].to_numpy(dtype=float))
+    d["Description"] = _wrap_desc(d["Description"], character_width)
+    if plot_type in ("dot", "lollipop"):
+        d["GeneRatio"] = [_ratio(x) for x in d["GeneRatio"]]
+    if plot_type == "dot":
+        d = d.iloc[np.argsort(-d["GeneRatio"].to_numpy(dtype=float), kind="stable")]
+        levels = list(dict.fromkeys(reversed(d["Description"].tolist())))
+    elif plot_type == "lollipop":
+        d["BgRatio"] = [_ratio(x) for x in d["BgRatio"]]
+        d["FoldEnrichment"] = d["GeneRatio"] / d["BgRatio"]
+        o = d.iloc[np.argsort(d["FoldEnrichment"].to_numpy(dtype=float), kind="stable")]
+        levels = list(dict.fromkeys(o["Description"]))
+    else:
+        levels = list(dict.fromkeys(reversed(d["Description"].tolist())))
+    pos = {lv: i for i, lv in enumerate(levels)}
+    d["_y"] = [pos[x] for x in d["Description"]]
+    d = d.iloc[np.argsort(d["_y"].to_numpy(), kind="stable")].reset_index(drop=True)
+    return d, levels
 
 
 def _comparison_levels(sub: pd.DataFrame, ids: Sequence[str]) -> list[str]:
@@ -324,6 +401,28 @@ def enrichment_plot(
     ``top_term`` (default 6, or 100 for ``enrichmap``) is applied per
     (Database x Group).  ``id_use`` selects terms by ID and lifts ``top_term``.
 
+    Term labels are SCP's ``capitalize()`` then ``str_wrap(character_width)``
+    (base R ``strwrap``: every line shorter than the width, never broken at a
+    hyphen), and every label that wraps is set in italic.  Each panel is its
+    own ggplot in R, so each has its own colour and size scale; a panel whose
+    metric is constant is drawn in the palette's middle colour, as
+    ``scales::rescale`` maps a zero-width range to 0.5.  Sizes follow
+    ``scale_size(range = c(3, 6))``: diameter ``3 + 3 * sqrt(rescaled)`` mm.
+
+    ``bar``
+        ``-log10(metric)``, filled by ``color_by`` (``palette_scp`` over that
+        column's first-appearance levels in the whole input), with the
+        ``Count`` at each bar end and the value axis fixed at
+        ``[0, 1.3 * max]``.  The most significant term is on top; of tied
+        terms, the one listed first.
+    ``dot``
+        x = ``GeneRatio``, rows ordered by it (highest on top), fill
+        ``-log10(metric)``, size ``Count``, axis ``[0, 1.3 * max]``.
+    ``lollipop``
+        x = ``FoldEnrichment`` = ``GeneRatio / BgRatio``, rows ordered by it,
+        a black stem under a stem in the fill colour, size ``GeneRatio``,
+        axis ``[0, 1.2 * max]``.
+
     ``network``
         The term-gene bipartite graph: terms are numbered nodes coloured from
         ``palette``; each gene is a label filled with the ``network_blendmode``
@@ -391,10 +490,9 @@ def enrichment_plot(
             extra_legend=extra, panel_size=panel_size or (3.6, 3.6), size_label="GeneRatio")
 
     keys = [k for k, _, _ in panels]
-    pg = PanelGrid(len(panels), panel_size=psize, nrow=nrow, ncol=ncol, keys=keys, theme=th,
-                   legend=LegendColumn(position="right"))
-
     if plot_type in ("network", "enrichmap", "wordcloud"):
+        pg = PanelGrid(len(panels), panel_size=psize, nrow=nrow, ncol=ncol, keys=keys, theme=th,
+                       legend=LegendColumn(position="right"))
         _draw_graph_family(
             pg, panels, plot_type=plot_type, metric=metric, gene_col="geneID",
             palette=palette, palcolor=palcolor, character_width=character_width,
@@ -412,36 +510,41 @@ def enrichment_plot(
 
     ramp = continuous_palette(palette=palette, palcolor=palcolor, n=100)
     cmap = LinearSegmentedColormap.from_list("enr", ramp, N=256)
-    for key, _dg, g in panels:
+    fs = th.size("axis.text") * 0.75
+    if plot_type == "bar":
+        bar_colors = discrete_palette(_color_levels(enrichment, color_by), palette=palette,
+                                      palcolor=palcolor)
+    frames = [enrichment_panel_frame(g, plot_type=plot_type, metric=metric,
+                                     character_width=character_width) for _, _, g in panels]
+    # panel_size is the panel; the term labels (and a colourbar) come on top
+    label_in = draw.text_width_in([lv for _, lev in frames for lv in lev], fs)
+    pg = PanelGrid(len(panels), panel_size=(psize[0] + label_in + (0.0 if plot_type == "bar"
+                                                                    else 0.9), psize[1]),
+                   nrow=nrow, ncol=ncol, keys=keys, theme=th,
+                   legend=LegendColumn(position="right"))
+    multi = len(panels) > 1
+    for (key, _dg, _g), (frame, levels) in zip(panels, frames, strict=True):
         ax = pg.axes[key]
-        g = g.assign(_score=-np.log10(g[metric].astype(float).clip(lower=1e-300)))
-        g = g.sort_values("_score", kind="mergesort")
-        # terms are long; wrap them or the axis eats the panel
-        labels = [textwrap.fill(str(d), character_width) for d in g["Description"]]
-        y = np.arange(len(g))
-        counts = (g["Count"].to_numpy(dtype=float) if "Count" in g
-                  else np.full(len(g), 1.0))
-        norm = Normalize(float(g["_score"].min()), float(g["_score"].max()))
-        cvec = cmap(norm(g["_score"].to_numpy()))
-
+        ax.set_title(str(key), fontsize=th.size("strip.text"))
         if plot_type == "bar":
-            ax.barh(y, g["_score"], color=cvec, edgecolor="black", linewidth=0.4)
-        elif plot_type == "dot":
-            ax.scatter(g["_score"], y, s=20 + 80 * counts / max(counts.max(), 1),
-                       color=cvec, edgecolor="black", linewidth=0.4, zorder=3)
-        elif plot_type == "lollipop":
-            ax.hlines(y, 0, g["_score"], color="#B0B0B0", linewidth=1, zorder=1)
-            ax.scatter(g["_score"], y, s=20 + 80 * counts / max(counts.max(), 1),
-                       color=cvec, edgecolor="black", linewidth=0.4, zorder=3)
-        ax.set_yticks(y)
-        ax.set_yticklabels(labels, fontsize=6.5)
-        ax.set_xlabel(f"-log10({metric})")
-        ax.set_title(str(key), fontsize=th.size("plot.title"))
-        ax.set_ylim(-0.7, len(g) - 0.3)
-
-    sm = ScalarMappable(cmap=cmap, norm=Normalize(0, 1))
-    cb = pg.fig.colorbar(sm, ax=list(pg.axes.values()), fraction=0.02, pad=0.02)
-    cb.set_label(f"-log10({metric}), scaled per panel", fontsize=th.size("legend.title"))
+            cols = [bar_colors.get(str(v), "#CCCCCC") for v in frame[color_by]]
+            draw.draw_enrichment_bar(ax, frame, levels, colors=cols, metric=metric, fontsize=fs)
+            continue
+        vals = frame["metric"].to_numpy(dtype=float)
+        norm = _rescale_norm(vals)
+        fill = [to_hex(c) for c in cmap(norm(vals))]
+        size_col = "Count" if plot_type == "dot" else "GeneRatio"
+        sv = frame[size_col].to_numpy(dtype=float)
+        sizes = draw._area_size(sv, float(np.nanmin(sv)), float(np.nanmax(sv)), (3.0, 6.0))
+        draw.draw_enrichment_points(ax, frame, levels, plot_type=plot_type, fill=fill,
+                                    sizes=sizes, fontsize=fs)
+        # every panel is its own ggplot in R, so each has its own scales
+        cb = pg.fig.colorbar(ScalarMappable(cmap=cmap, norm=norm), ax=[ax], fraction=0.046,
+                             pad=0.03, shrink=0.7)
+        cb.set_label(f"-log10({metric})", fontsize=th.size("legend.title"))
+        cb.outline.set_edgecolor("black")
+        pg.legend.add(f"{size_col} ({key})" if multi else size_col,
+                      draw.size_range_handles(sv))
     return pg.finish()
 
 
@@ -577,24 +680,62 @@ def _draw_graph_family(
 # --------------------------------------------------------------------------- #
 # GSEA
 # --------------------------------------------------------------------------- #
+def _key_parts(key: str) -> tuple[str, str]:
+    """``"<Group>-<Database>"`` -> ``(group, database)``."""
+    g, _, d = str(key).rpartition("-")
+    return (g, d) if g else (str(key), "custom")
+
+
+def _per_key_mapping(results) -> Mapping | None:
+    """The per-key results of SCP's shape, or of a bare
+    ``{key: {"result": df, "geneList": ..., ...}}`` mapping; else ``None``."""
+    if isinstance(results, pd.DataFrame) or not isinstance(results, Mapping):
+        return None
+    if "enrichment" in results:
+        return dict(results.get("results", {}))
+    if results and "table" not in results and all(
+            isinstance(v, Mapping) and "result" in v for v in results.values()):
+        return results
+    return None
+
+
+def _gsea_sources(results) -> dict[str, Mapping]:
+    """Per key, whatever of ``geneList`` / ``geneSets`` / ``exponent`` was
+    passed: the ``gseaResult`` slots ``gsInfo`` reads (``SCP-plot.R:14545``)."""
+    per = _per_key_mapping(results) or {}
+    return {str(k): v for k, v in per.items()
+            if isinstance(v, Mapping) and "geneList" in v and "geneSets" in v}
+
+
 def _gsea_tables(results) -> tuple[pd.DataFrame, dict[str, pd.DataFrame], dict]:
     """Normalise the accepted inputs to (flat table, per-key results, curves).
 
-    Accepted: a flat GSEA DataFrame; ``{"table": df, "curves": {...}}``; or
+    Accepted: a flat GSEA DataFrame; ``{"table": df, "curves": {...}}``;
     SCP's own shape, ``{"enrichment": df, "results": {"<Group>-<Database>":
-    df | {"result": df, ...}}}``.  Without per-key results they are rebuilt
-    from the flat table, ordered as RunGSEA orders them (groups fastest within
-    each database).
+    df | {"result": df, "geneList": ..., "geneSets": ..., "exponent": ...}}}``;
+    or the bare ``{"<Group>-<Database>": {"result": df, ...}}`` mapping.
+    Without per-key results they are rebuilt from the flat table, ordered as
+    RunGSEA orders them (groups fastest within each database).
     """
     curves: dict = {}
     per: dict[str, pd.DataFrame] = {}
+    keyed = _per_key_mapping(results)
     if isinstance(results, pd.DataFrame):
         table = results.copy()
-    elif "enrichment" in results:
-        table = pd.DataFrame(results["enrichment"]).copy()
-        for k, v in dict(results.get("results", {})).items():
-            per[str(k)] = pd.DataFrame(v["result"] if isinstance(v, Mapping) else v).copy()
-        curves = results.get("curves", {})
+    elif keyed is not None:
+        for k, v in keyed.items():
+            r = pd.DataFrame(v["result"] if isinstance(v, Mapping) else v).copy()
+            g, d = _key_parts(str(k))
+            if "Groups" not in r:
+                r["Groups"] = g
+            if "Database" not in r:
+                r["Database"] = d
+            per[str(k)] = r
+        if "enrichment" in results:
+            table = pd.DataFrame(results["enrichment"]).copy()
+        else:
+            table = pd.concat(list(per.values()), ignore_index=True) if per else pd.DataFrame()
+        curves = results.get("curves", {}) if "enrichment" in results else {}
     else:
         table = pd.DataFrame(results.get("table", [])).copy()
         curves = results.get("curves", {})
@@ -799,16 +940,46 @@ def gsea_plot(
     Port of ``GSEAPlot`` (SCP, Hao Zhang, https://github.com/zhanghao-njmu/SCP,
     ``R/SCP-plot.R:13563``).
 
-    ``plot_type="line"`` stacks three sub-panels at relative heights
-    ``1.5 : 0.5 : 1``:
+    Every type except ``comparison`` is drawn once per result key
+    (``"<Group>-<Database>"``, after ``group_use``), as R loops
+    ``names(res)``, and the panels are laid out by :class:`~scp.layout.PanelGrid`.
+    Gene sets are selected per key by SCP's rule (``SCP-plot.R:13743-13756``):
+    ``metric < cutoff`` (strict; the metric is ``p.adjust``, or ``pvalue`` when
+    ``padjust_cutoff is None``), ordered by the metric with ties in table
+    order, the ``top_term`` best with NES > 0 (``"pos"``) or NES < 0
+    (``"neg"``); ``"both"`` takes ``ceiling(top_term / 2)`` of each, up first.
+    ``id_use`` overrides the selection (a dict is looked up by group).
 
-    1. the running enrichment score, over red/blue half-plane shading, with a
-       peak marker (up-triangle when NES > 0, down when NES < 0) and optional
-       core-gene labels;
-    2. the hit ticks — one band per gene set, or, for a single set, a
-       ranking-metric heat strip below the ticks;
-    3. the ranked metric as stems to zero, with a dashed line at the
-       zero-crossing rank.
+    ``line`` -- one block per key, three sub-panels at relative heights
+    ``1.5 : 0.5 : 1``, with every selected set overlaid:
+
+    1. the running enrichment score over red/blue half-plane shading.  With a
+       single set: a dashed crosshair to the peak
+       (``which.max(abs(runningScore))``), a triangle there (up, red when
+       NES > 0; down, blue otherwise), the first ``n_coregene`` core genes
+       (or ``features_label``) marked and labelled, and the description as
+       title with the ``(NES=..., p.adjust=..., stars)`` line as an italic
+       subtitle.  With several sets the lines are coloured from ``palette``
+       (unless ``line_color`` has one colour per set) and listed in a "Term"
+       legend;
+    2. one band of hit ticks per set, the first set on top; for a single set
+       the ticks are black over a heat strip of the ranking metric (clipped to
+       its 2-98% quantiles, 99 bins per sign on SCP's two ramps);
+    3. the ranked metric as grey30 stems, labelled "Positively" /
+       "Negatively correlated", with a dashed line and label at the zero
+       cross ``median(x[y == y[which.min(abs(y))]])``.
+
+    The key is written down the right of its block.  ``line`` needs the
+    running scores: pass ``geneList`` (a ranked :class:`pandas.Series`),
+    ``geneSets`` (``{ID: genes}``) and ``exponent`` per key, or precomputed
+    :func:`gsea_scores` frames as ``curves`` (see *Input* below).
+
+    ``bar`` -- one panel per key: NES bars in ``order(NES)`` (most negative at
+    the bottom), filled Pos/Neg from ``palette`` (``palette_scp(c("Neg",
+    "Pos"))``, so ``palcolor`` is read as (Pos, Neg)) with alpha
+    ``-log10(metric)`` on ggplot's 0.1-1 range, the description written
+    inside the panel at zero on the side away from the bar, and x limits
+    ``+-max|NES|``.  A "Direction" legend appears for ``direction="both"``.
 
     ``comparison``
         Groups x gene-set dots: size ``setSize``, fill NES on a symmetric
@@ -824,11 +995,29 @@ def gsea_plot(
         defaults to 6, or 100 for ``enrichmap``.  The same divergences as
         :func:`enrichment_plot` apply.
 
-    Input is a flat GSEA table (``scp.io.GSEA_COLUMNS``), ``{"table": df,
-    "curves": {id: gsea_scores(...)}}`` for ``line``, or SCP's
-    ``{"enrichment": df, "results": {key: df}}``.  ``gseapy.prerank`` output
-    maps on with renaming (``Term`` -> ``ID``/``Description``, ``FDR q-val``
-    -> ``p.adjust``, ``Lead_genes`` -> ``core_enrichment``).
+    *Input* -- any of:
+
+    * a flat GSEA table (``scp.io.GSEA_COLUMNS``; ``Groups`` / ``Database``
+      default to ``"all"`` / ``"custom"``), split into keys as RunGSEA does;
+    * SCP's ``{"enrichment": df, "results": {key: res}}``, where ``res`` is
+      the key's result table or a dict ``{"result": df, "geneList": Series,
+      "geneSets": {ID: genes}, "exponent": 1.0}`` holding the ``gseaResult``
+      slots ``gsInfo`` reads;
+    * the bare per-key mapping ``{key: {"result": df, "geneList": ...,
+      "geneSets": ..., "exponent": ...}}``;
+    * ``{"table": df, "curves": curves}`` with ``curves`` either
+      ``{ID: gsea_scores(...)}`` or ``{key: {ID: gsea_scores(...)}}``.
+
+    ``gseapy.prerank`` output maps on with renaming (``Term`` ->
+    ``ID``/``Description``, ``FDR q-val`` -> ``p.adjust``, ``Lead_genes`` ->
+    ``core_enrichment``).
+
+    Deliberate divergences: R's label "Negtively correlated" is spelt
+    correctly; R's three ``line`` sub-plots train their x scales separately
+    (they disagree by up to one rank), here they share one; core-gene labels
+    are nudged as ggrepel's ``nudge_x`` / ``nudge_y`` place them but not
+    repelled; and a sign with a single ranked value, where R's ``cut()`` stops
+    on non-unique breaks, gets the first colour of its ramp.
     """
     table, per, curves = _gsea_tables(results)
     if top_term is None:
@@ -859,26 +1048,21 @@ def gsea_plot(
             norm=Normalize(-lim, lim), fill_label="NES", edge=edge, stroke=0.8,
             extra_legend=extra, panel_size=panel_size or (3.6, 3.6), size_label="setSize")
 
+    metric, value = _metric(pvalue_cutoff, padjust_cutoff)
+    selected = _gsea_selection(
+        per, group_use=group_use, metric=metric, metric_value=value,
+        top_term=None if plot_type == "wordcloud" else top_term, direction=direction,
+        id_use=id_use)
+    if not selected:
+        raise ValueError("no gene sets survive the cutoffs")
+    keys = [k for k, _, _ in selected]
+    multi = len(selected) > 1
+
     if plot_type in ("network", "enrichmap", "wordcloud"):
-        metric, value = _metric(pvalue_cutoff, padjust_cutoff)
-        keys = list(per)
-        if group_use is not None:
-            gu = {str(g) for g in ([group_use] if isinstance(group_use, str) else group_use)}
-            keys = [k for k in keys if k.rsplit("-", 1)[0] in gu]
         panels = []
         descriptions: dict[str, list[str]] = {}
         counts: dict[str, list[int]] = {}
-        for k in keys:
-            res = per[k].copy()
-            res["Groups"] = res["Groups"].astype(str) if "Groups" in res else k.rsplit("-", 1)[0]
-            if "Database" not in res:
-                res["Database"] = k.rsplit("-", 1)[-1]
-            ids = gsea_select_ids(res, metric=metric, metric_value=value,
-                                  top_term=None if plot_type == "wordcloud" else top_term,
-                                  direction=direction, id_use=id_use,
-                                  group=str(res["Groups"].iloc[0]) if len(res) else None)
-            if not ids:
-                continue
+        for k, res, ids in selected:
             df = res.set_index(res["ID"].astype(str)).loc[ids].reset_index(drop=True)
             panels.append((k, (None, None), df))
             if plot_type == "network":
@@ -886,12 +1070,9 @@ def gsea_plot(
             elif plot_type == "enrichmap":
                 descriptions[k] = _wrap_desc(df["Description"], character_width)
                 counts[k] = [len(eg._split_genes(g)) for g in df["core_enrichment"]]
-        if not panels:
-            raise ValueError("no gene sets survive the cutoffs")
         th = theme_scp(aspect_ratio=1)
         psize = panel_size or _PANEL_DEFAULT[plot_type]
-        pg = PanelGrid(len(panels), panel_size=psize, nrow=nrow, ncol=ncol,
-                       keys=[k for k, _, _ in panels], theme=th,
+        pg = PanelGrid(len(panels), panel_size=psize, nrow=nrow, ncol=ncol, keys=keys, theme=th,
                        legend=LegendColumn(position="right"))
         excluded = tuple(words_excluded) if words_excluded is not None else eg.WORDS_EXCLUDED
         _draw_graph_family(
@@ -911,82 +1092,302 @@ def gsea_plot(
             counts=counts if plot_type == "enrichmap" else None)
         return pg.finish()
 
-    if table.empty:
-        raise ValueError("no GSEA results to plot")
-    if padjust_cutoff is not None and "p.adjust" in table:
-        table = table[table["p.adjust"] <= padjust_cutoff]
-    if direction == "pos":
-        table = table[table["NES"] > 0]
-    elif direction == "neg":
-        table = table[table["NES"] < 0]
-    if table.empty:
-        raise ValueError("no gene sets survive the cutoffs")
-    table = table.reindex(table["NES"].abs().sort_values(ascending=False).index).head(top_term)
-    psize = panel_size or (3.2, 3.0)
-
+    th = theme_scp()
+    fs = th.size("axis.text") * 0.8
     if plot_type == "bar":
-        ax_fig = plt.figure(figsize=(psize[0] * 1.4, psize[1]))
-        ax = ax_fig.add_subplot()
-        y = np.arange(len(table))
-        ax.barh(y, table["NES"], color=np.where(table["NES"] > 0, "#B2182B", "#2166AC"),
-                edgecolor="black", linewidth=0.4)
-        ax.set_yticks(y)
-        ax.set_yticklabels([textwrap.fill(str(d), 50) for d in table["Description"]],
-                           fontsize=6.5)
-        ax.set_xlabel("NES")
-        ax_fig.set_layout_engine("constrained")
-        return ax_fig
+        frames = [gsea_bar_frame(res, ids, metric=metric, character_width=character_width)
+                  for _, res, ids in selected]
+        if panel_size is None:
+            # the descriptions sit inside the panel, each on the half away from
+            # its bar, so a half-panel must hold the widest of them
+            label_in = draw.text_width_in([d for f in frames for d in f["Description"]], fs)
+            rows = max(len(f) for f in frames)
+            panel_size = (max(4.0, 2 * label_in + 1.0), max(3.0, 0.45 * rows))
+        pg = PanelGrid(len(selected), panel_size=panel_size, nrow=nrow, ncol=ncol, keys=keys,
+                       theme=th, legend=LegendColumn(position="right"))
+        pal = list(reversed(palcolor)) if isinstance(palcolor, Sequence) and \
+            not isinstance(palcolor, str) else palcolor
+        colors = discrete_palette(["Neg", "Pos"], palette=palette, palcolor=pal)
+        for (k, _res, _ids), frame in zip(selected, frames, strict=True):
+            ax = pg.axes[k]
+            draw.draw_gsea_bar(ax, frame, colors=colors, fontsize=fs)
+            group, db = _key_parts(k)
+            _facet_strips(ax, group, db, th)
+            suffix = f" ({k})" if multi else ""
+            if direction == "both":
+                pg.legend.add(f"Direction{suffix}", [
+                    Patch(facecolor=colors[d], edgecolor="black", label=d) for d in ("Pos", "Neg")])
+            pg.legend.add(f"-log10({metric}){suffix}", _alpha_handles(frame["alpha_raw"]))
+        return pg.finish()
 
-    # plot_type == "line": the canonical three-panel GSEA figure
-    n = len(table)
-    fig = plt.figure(figsize=(psize[0], psize[1] * n))
-    gs = fig.add_gridspec(n * 3, 1,
-                          height_ratios=[6, 1.2, 2.5] * n, hspace=0.08)
-    colors = ([line_color] * n if isinstance(line_color, str) else list(line_color))
-    for i, (_, row) in enumerate(table.iterrows()):
-        cur = curves.get(str(row["ID"]))
-        if cur is None:
-            raise ValueError(
-                f"no running-score curve for {row['ID']!r}; pass "
-                "{'table': df, 'curves': {id: scp.pl.gsea_scores(...)}}"
-            )
-        x = cur["x"].to_numpy() if "x" in cur else np.arange(len(cur))
-        # gsea_scores emits the port's own column names; accept R's too so a
-        # frame lifted straight out of clusterProfiler still plots.
-        rs_col = "running_score" if "running_score" in cur else "runningScore"
-        rs = cur[rs_col].to_numpy()
-        hits = np.flatnonzero(cur["position"].to_numpy() == 1) if "position" in cur else []
+    # plot_type == "line"
+    sources = _gsea_sources(results)
+    rng = np.random.default_rng(seed)
+    pg = PanelGrid(len(selected), panel_size=panel_size or (4.5, 4.5), nrow=nrow, ncol=ncol,
+                   keys=keys, theme=th, legend=LegendColumn(position="right"))
+    for k, res, ids in selected:
+        rows = res.set_index(res["ID"].astype(str), drop=False).loc[ids].reset_index(drop=True)
+        labels = gsea_network_descriptions(rows, metric, character_width)
+        sets = []
+        gene_list: np.ndarray | None = None
+        for tid, lab in zip(ids, labels, strict=True):
+            cur = _gsea_curve(k, tid, sources, curves)
+            x = cur["x"].to_numpy(dtype=float)
+            sets.append({"id": tid, "label": lab, "x": x,
+                         "running_score": cur["running_score"].to_numpy(dtype=float),
+                         "hits": x[cur["position"].to_numpy() == 1], "frame": cur})
+            if gene_list is None and "metric" in cur:
+                gene_list = cur["metric"].to_numpy(dtype=float)
+        if gene_list is None:
+            raise ValueError(f"no ranked metric for {k!r}: pass its 'geneList', or curves "
+                             "with a 'metric' column (scp.pl.gsea_scores emits one)")
+        lc = [line_color] if isinstance(line_color, str) else list(line_color)
+        if len(lc) == len(sets):
+            color_use = lc
+        else:
+            pal_lines = discrete_palette(list(dict.fromkeys(labels)), palette=palette,
+                                         palcolor=palcolor)
+            color_use = [pal_lines[lab] for lab in labels]
+        single = None
+        strip = None
+        if len(sets) == 1:
+            s0 = sets[0]
+            i = int(np.argmax(np.abs(s0["running_score"])))
+            row = rows.iloc[0]
+            single = {"peak": (float(s0["x"][i]), float(s0["running_score"][i])),
+                      "nes": float(row["NES"]), "title": str(row["Description"]),
+                      "subtitle": labels[0].rsplit("\n", 1)[-1],
+                      "genes": _core_gene_rows(s0["frame"], row, n_coregene=n_coregene,
+                                               sample_coregene=sample_coregene,
+                                               features_label=features_label, rng=rng)}
+            strip = gsea_heat_strip(gene_list)
+        cross = (gsea_zero_cross(gene_list)
+                 if np.nanmax(gene_list) > 0 and np.nanmin(gene_list) < 0 else None)
+        n_rank = len(gene_list)
+        lo = 0.0 if (single is not None or np.nanmax(gene_list) > 0) else 1.0
+        hi = float(n_rank + 1) if strip else float(n_rank)
+        pad = 0.01 * (hi - lo)
+        axes = _split_block(pg, k)
+        draw.draw_gsea_line(axes, sets, colors=color_use, gene_list=gene_list,
+                            line_width=line_width, single=single, heat_strip=strip,
+                            zero_cross=cross, xlim=(lo - pad, hi + pad), fontsize=fs)
+        # R centres the key on the whole block; on the top panel's centre it
+        # cannot reach into the zero-gap stack and push the sub-panels apart
+        axes[0].text(1.02, 0.5, k, transform=axes[0].transAxes, rotation=-90, ha="left",
+                     va="center", fontsize=th.size("strip.text"))
+        if len(set(color_use)) > 1:
+            pg.legend.add(f"Term{f' ({k})' if multi else ''}", [
+                Line2D([], [], color=c, linewidth=line_width * draw.LWD, label=lab)
+                for lab, c in dict(zip(labels, color_use, strict=True)).items()])
+        pg.axes[k] = axes[0]
+    return pg.finish()
 
-        top = fig.add_subplot(gs[i * 3])
-        top.plot(x, rs, color=colors[i % len(colors)], linewidth=line_width)
-        top.axhline(0, color="grey", linewidth=0.6, linestyle="--")
-        top.set_xticks([])
-        top.set_ylabel("Running\nenrichment", fontsize=7)
-        top.set_title(textwrap.fill(str(row["Description"]), 46), fontsize=8)
-        top.text(0.98, 0.95, f"NES = {row['NES']:.2f}\np.adj = {row['p.adjust']:.2g}",
-                 transform=top.transAxes, ha="right", va="top", fontsize=6.5)
 
-        mid = fig.add_subplot(gs[i * 3 + 1])
-        mid.vlines(x[hits], 0, 1, color="black", linewidth=0.4)
-        mid.set_xticks([])
-        mid.set_yticks([])
-        mid.set_xlim(x.min(), x.max())
+def _gsea_selection(
+    per: Mapping[str, pd.DataFrame],
+    *,
+    group_use,
+    metric: str,
+    metric_value: float,
+    top_term: int | None,
+    direction: str,
+    id_use,
+) -> list[tuple[str, pd.DataFrame, list[str]]]:
+    """``for (nm in names(res))`` after ``group_use``: each key's result and
+    its selected gene-set IDs; keys selecting nothing are dropped, as R's
+    ``plist[[nm]] <- NULL; next``."""
+    gu = None
+    if group_use is not None:
+        gu = {str(g) for g in ([group_use] if isinstance(group_use, str) else group_use)}
+    out = []
+    for k, r in per.items():
+        res = r.copy()
+        res["Groups"] = res["Groups"].astype(str)
+        group = str(res["Groups"].iloc[0]) if len(res) else _key_parts(k)[0]
+        if gu is not None and group not in gu and _key_parts(k)[0] not in gu:
+            continue
+        ids = gsea_select_ids(res, metric=metric, metric_value=metric_value, top_term=top_term,
+                              direction=direction, id_use=id_use, group=group)
+        if ids:
+            out.append((k, res, ids))
+    return out
 
-        bot = fig.add_subplot(gs[i * 3 + 2])
-        metric_col = "metric" if "metric" in cur else "geneList"
-        if metric_col in cur:
-            gl = cur[metric_col].to_numpy()
-            bot.fill_between(x, 0, gl, color="#B0B0B0")
-            bot.axhline(0, color="grey", linewidth=0.6)
-        bot.set_xlabel("Rank in ordered gene list", fontsize=7)
-        bot.set_ylabel("Ranked\nmetric", fontsize=7)
-        bot.set_xlim(x.min(), x.max())
-    fig.set_layout_engine("constrained")
-    return fig
+
+def gsea_bar_frame(
+    res: pd.DataFrame,
+    ids: Sequence[str],
+    *,
+    metric: str,
+    character_width: int = 50,
+) -> pd.DataFrame:
+    """The data of one ``GSEAPlot(plot_type = "bar")`` panel
+    (``SCP-plot.R:14041-14051``): the selected sets in ``order(NES)``
+    (stable), wrapped descriptions with ``_y`` = their level (0 at the
+    bottom), ``Direction`` Pos/Neg, ``alpha_raw = -log10(metric)`` and
+    ``alpha``, ggplot's ``scale_alpha`` (range 0.1-1) over the panel."""
+    sub = res.set_index(res["ID"].astype(str), drop=False).loc[list(ids)]
+    sub = sub.iloc[np.argsort(sub["NES"].to_numpy(dtype=float), kind="stable")]
+    sub = sub.reset_index(drop=True)
+    sub["Description"] = _wrap_desc(sub["Description"], character_width)
+    levels = list(dict.fromkeys(sub["Description"]))
+    pos = {lv: i for i, lv in enumerate(levels)}
+    sub["_y"] = [pos[d] for d in sub["Description"]]
+    sub["Direction"] = np.where(sub["NES"].to_numpy(dtype=float) > 0, "Pos", "Neg")
+    raw = -np.log10(sub[metric].to_numpy(dtype=float))
+    sub["alpha_raw"] = raw
+    sub["alpha"] = _alpha_scale(raw, raw)
+    return sub
+
+
+def _alpha_scale(v, domain) -> np.ndarray:
+    """``scale_alpha(range = c(0.1, 1))``; a zero-width domain maps to 0.55."""
+    v = np.asarray(v, dtype=float)
+    lo, hi = float(np.nanmin(domain)), float(np.nanmax(domain))
+    if not hi > lo:
+        return np.full(v.shape, 0.55)
+    return np.clip(0.1 + 0.9 * (v - lo) / (hi - lo), 0.0, 1.0)
+
+
+def _alpha_handles(raw) -> list[Patch]:
+    raw = np.asarray(raw, dtype=float)
+    br = draw._size_breaks(float(np.nanmin(raw)), float(np.nanmax(raw)))
+    return [Patch(facecolor="#595959", edgecolor="none", alpha=float(a), label=draw._fmt(b))
+            for b, a in zip(br, _alpha_scale(br, raw), strict=True)]
+
+
+def _facet_strips(ax, group: str, db: str, th) -> None:
+    """``facet_grid(Database ~ Groups)`` on one panel: the group on top, the
+    database down the right."""
+    ax.set_title(group, fontsize=th.size("strip.text"))
+    ax.text(1.02, 0.5, db, transform=ax.transAxes, rotation=-90, ha="left", va="center",
+            fontsize=th.size("strip.text"))
+
+
+def _split_block(pg: PanelGrid, key: str):
+    """Replace a PanelGrid cell with GSEAPlot's 1.5 : 0.5 : 1 stack."""
+    old = pg.axes[key]
+    spec = old.get_subplotspec()
+    assert spec is not None
+    old.remove()
+    sub = spec.subgridspec(3, 1, height_ratios=[1.5, 0.5, 1.0], hspace=0.0)
+    with mpl.rc_context(theme_scp_rc(pg.theme)):
+        return tuple(pg.fig.add_subplot(sub[i]) for i in range(3))
+
+
+def _gsea_curve(key: str, tid: str, sources: Mapping[str, Mapping], curves: Mapping) -> pd.DataFrame:
+    """The running score of set ``tid`` in result ``key``, as
+    :func:`gsea_scores` lays it out (``x``, ``running_score``, ``position``,
+    ``gene``, ``metric``): computed from the key's ``geneList`` / ``geneSets``
+    when given, else looked up in ``curves`` by key then by ID."""
+    src = sources.get(key)
+    if src is not None:
+        gl = src["geneList"]
+        gl = gl if isinstance(gl, pd.Series) else pd.Series(gl)
+        sets = src["geneSets"]
+        if tid not in sets:
+            raise ValueError(f"gene set {tid!r} is not in the geneSets of {key!r}")
+        return gsea_scores(gl, sets[tid], float(src.get("exponent", 1.0)))
+    cur = None
+    if isinstance(curves.get(key), Mapping):
+        cur = curves[key].get(tid)
+    if cur is None and isinstance(curves.get(tid), pd.DataFrame):
+        cur = curves[tid]
+    if cur is None:
+        raise ValueError(
+            f"no running-score curve for {tid!r} in {key!r}; pass the key's geneList and "
+            "geneSets, or {'table': df, 'curves': {id: scp.pl.gsea_scores(...)}}")
+    cur = pd.DataFrame(cur).copy()
+    # gsea_scores emits the port's own column names; accept R's gsInfo ones too
+    if "running_score" not in cur:
+        cur["running_score"] = cur["runningScore"]
+    if "metric" not in cur and "geneList" in cur:
+        cur["metric"] = cur["geneList"]
+    if "x" not in cur:
+        cur["x"] = np.arange(1, len(cur) + 1)
+    if "gene" not in cur:
+        cur["gene"] = cur["x"].astype(str)
+    return cur
+
+
+def _core_gene_rows(cur: pd.DataFrame, row: pd.Series, *, n_coregene: int, sample_coregene: bool,
+                    features_label, rng) -> pd.DataFrame | None:
+    """The labelled hits of a single-set line plot (``SCP-plot.R:13860-13893``):
+    ``features_label``, else the first ``n_coregene`` core-enrichment genes in
+    ranked-list order (a random draw with ``sample_coregene``)."""
+    if not ((n_coregene is not None and n_coregene > 1) or features_label):
+        return None
+    if features_label:
+        labels = [str(g) for g in features_label]
+    else:
+        core = eg._split_genes(row.get("core_enrichment"))
+        n = min(int(n_coregene), len(core))
+        if sample_coregene:
+            labels = [str(g) for g in rng.choice(core, n, replace=False)]
+        else:
+            cs = set(core)
+            labels = [g for g in cur["gene"].astype(str) if g in cs][:n]
+    hit = (cur["position"].to_numpy() == 1) & cur["gene"].astype(str).isin(labels).to_numpy()
+    df = cur[hit]
+    drop = [g for g in labels if g not in set(df["gene"].astype(str))]
+    if drop:
+        warnings.warn(f"Gene {','.join(drop)} is not in the geneset of the "
+                      f"{row['Description']}", stacklevel=3)
+    return df
+
+
+def gsea_zero_cross(values) -> float:
+    """The rank GSEAPlot marks as the zero cross (``SCP-plot.R:13932-13934``):
+    ``median(x[y == y[which.min(abs(y))]])`` over the ranked metric ``y``,
+    ``x`` 1-based."""
+    y = np.asarray(values, dtype=float)
+    min_y = y[int(np.argmin(np.abs(y)))]
+    return float(np.median(np.flatnonzero(y == min_y) + 1))
+
+
+def _cut_ramp(v: np.ndarray, ramp: Sequence[str]) -> list[str]:
+    """``ramp[cut(v, seq(min, max, len = 100), include.lowest = TRUE)]``:
+    99 right-closed bins, so the ramp's 100th colour is never used."""
+    lo, hi = float(np.min(v)), float(np.max(v))
+    if not hi > lo:  # R's cut() stops on non-unique breaks here
+        return [ramp[0]] * len(v)
+    breaks = lo + np.arange(100) * ((hi - lo) / 99)
+    breaks[-1] = hi
+    idx = np.clip(np.searchsorted(breaks, v, side="left"), 1, 99)
+    return [ramp[i - 1] for i in idx]
+
+
+def gsea_heat_strip(values) -> list[tuple[float, float, str]]:
+    """The ranking-metric strip of a single-set line plot
+    (``SCP-plot.R:13895-13930``) as ``(xmin, xmax, colour)`` rectangles.
+
+    The metric is clipped to its 2% / 98% quantiles (R's type-7, numpy's
+    default); positives are binned onto ``#F5DCDC -> #C40003``, negatives onto
+    ``#1D008F -> #DDDCF5``, zeros stay white.  As in R, each colour becomes
+    one rectangle from its first rank, as wide as its count.
+    """
+    y = np.asarray(values, dtype=float).copy()
+    q_hi, q_lo = np.quantile(y, 0.98), np.quantile(y, 0.02)
+    y[y > q_hi] = q_hi
+    y[y < q_lo] = q_lo
+    col = np.array(["white"] * len(y), dtype=object)
+    pos, neg = np.flatnonzero(y > 0), np.flatnonzero(y < 0)
+    if len(pos):
+        col[pos] = _cut_ramp(y[pos], color_ramp(["#F5DCDC", "#C40003"], 100))
+    if len(neg):
+        col[neg] = _cut_ramp(y[neg], color_ramp(["#1D008F", "#DDDCF5"], 100))
+    first: dict[str, int] = {}
+    count: dict[str, int] = {}
+    for i, c in enumerate(col, start=1):
+        first.setdefault(c, i)
+        count[c] = count.get(c, 0) + 1
+    return [(float(first[c]), float(first[c] + count[c]), str(c)) for c in first]
 
 
 def gsea_scores(gene_list: pd.Series, gene_set: Sequence[str], exponent: float = 1.0) -> pd.DataFrame:
     """The weighted KS running score (Subramanian et al.).
+
+    Port of ``gseaScores`` (SCP, Hao Zhang, https://github.com/zhanghao-njmu/SCP,
+    ``R/SCP-plot.R:14570``); verified against it to 1e-12.
 
     ``gene_list`` must be sorted **descending** by the ranking metric::
 

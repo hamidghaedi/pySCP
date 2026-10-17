@@ -63,8 +63,8 @@ fails for the reason it states, and not because of a bug in the test.
 | `dynamic_plot` | point x positions | 3, all fixed: no lib-normalisation, `group_by`, `compare_lineages` | the fitted curve (mgcv; documented) |
 | `dynamic_heatmap` | the package's `matrix_process` reproduces R's matrix to 4e-7 | 3: binning, row order, palette | — |
 | `projection_plot` | reference and query colours/positions, exact | 1 deliberate (R drops out-of-range query cells, an R bug) | — |
-| `enrichment_plot` | term selection; bar metric to 1e-12; dot/lollipop fill within 2/255 | 13 at audit time, 9 open after the enrichment port (encodings, labels, ties, constant panels) | network, enrichmap, wordcloud: ported since, verified separately |
-| `gsea_plot` | line: curve and hit ticks, exact | 4: term selection, bar, missing line decorations, layout/input | comparison and graph types: ported since, verified separately |
+| `enrichment_plot` | term selection; bar metric to 1e-12; dot/lollipop fill within 2/255; labels, italics, encodings, axis limits, sizes, ties and constant panels since the parity fix | 13 at audit time; all fixed (4 by the enrichment port, 9 by the parity fix) | network, enrichmap, wordcloud: ported since, verified separately |
+| `gsea_plot` | line: curve and hit ticks, exact; selection, bar order/fill/alpha, zero cross, peak, heat strip (to one 8-bit step) and per-key layout since the parity fix | 4 at audit time; all fixed | comparison and graph types: ported since, verified separately |
 | `gsea_scores` | running score to 1e-12; hits and peak exact | — | — |
 | `cell_dim_plot_3d` | traces, level order, colours, membership, xyz, exact | 3, all fixed: NA handling, NA colour, defaults/layout | highlight, lineages (not ported) |
 | `feature_dim_plot_3d` | colour values to 1e-12 | 1, fixed: `bg_cutoff` default masks 76-80% | split dropdown (not ported) |
@@ -453,7 +453,8 @@ makes the normalisation a no-op, as `group_heatmap` does.
 
 Fixtures: `tools/parity/audit_enrich.R` → `tests/fixtures/parity/audit/enrich/`
 (588 KB, byte-identical across reruns); tests: `tests/test_parity_enrich.py`
-(14 pass, 15 strict xfail after the enrichment port; it was 10 and 19 at audit time).
+(39 pass, no xfail, after the parity fix; it was 10 pass and 19 strict xfail at
+audit time, 14 and 15 after the enrichment port).
 
 **How the R side was built.** `org.Mm.eg.db` and `msigdbr` are not installed,
 so no species database is used. Gene sets are built from the data and passed to
@@ -484,17 +485,17 @@ No R package was installed.
 | bar: length = -log10(p.adjust), most significant on top | **matches to 1e-12** | `test_bar_order_and_metric_match` |
 | dot/lollipop: fill = -log10(p.adjust) on Spectral over each panel's range | **matches within 2/255** (ggplot interpolates in CIELAB) | `test_point_fill_follows_the_metric_gradient` |
 | panel order | **matches** (first appearance) since the network/enrichmap/wordcloud port | `test_panel_order_is_first_appearance` |
-| label text: capitalize + str_wrap(50) | **differs** | xfail; fix verified by a passing test |
-| italic for wrapped labels | **differs** (never italic) | xfail |
-| bar fill = `color_by` (Database) | **differs** (gradient instead) | xfail |
-| bar Count labels, value axis = 1.3 x max | **differs** (absent; axis 26.27 vs 32.53) | xfail |
-| dot: x = GeneRatio, rows ordered by GeneRatio | **differs** (x = -log10 p) | xfail |
-| dot/lollipop size mapping | **differs** (relative area 0.64 vs 0.25) | xfail |
-| lollipop: x = FoldEnrichment, ordered by it | **differs** | xfail |
-| ties in the metric | **differs** (order reversed) | xfail |
+| label text: capitalize + str_wrap(50) | **fixed; matches exactly** (every label R drew, enrichment and GSEA) | `test_labels_are_capitalised_and_wrapped_like_stringr`, `test_plotted_labels_are_scp_strwrap_not_stringr` |
+| italic for wrapped labels | **fixed; matches exactly** | `test_wrapped_labels_are_italic` |
+| bar fill = `color_by` (Database) | **fixed; matches exactly** (`#5E4FA2`) | `test_bar_fill_is_color_by` |
+| bar Count labels, value axis = 1.3 x max | **fixed; matches to 1e-9** (axis limit; labels exact) | `test_bar_count_labels_and_axis_limit` |
+| dot: x = GeneRatio, rows ordered by GeneRatio | **fixed; matches to 1e-7** (order exact) | `test_dot_x_is_gene_ratio` |
+| dot/lollipop size mapping | **fixed; matches to 1e-6** (relative area) | `test_dot_size_mapping` |
+| lollipop: x = FoldEnrichment, ordered by it | **fixed; matches to 1e-7** (order exact) | `test_lollipop_x_is_fold_enrichment` |
+| ties in the metric | **fixed; matches exactly** | `test_ties_keep_table_order_top_down` |
 | strict cutoff `<` | **matches** since the network/enrichmap/wordcloud port | passing test |
 | `padjust_cutoff=None` → metric = pvalue | **matches** since the network/enrichmap/wordcloud port | passing test |
-| constant-metric panel colour | **differs** (first colour; R uses the midpoint #FEFEBC) | xfail |
+| constant-metric panel colour | **fixed; matches within 2/255** (#FEFEBC) | `test_constant_metric_panel_gets_mid_colour` |
 | comparison | **matches** since the network/enrichmap/wordcloud port (one Groups x terms matrix) | passing test; frames also pinned in `tests/test_enrich_parity.py` |
 | network / enrichmap / wordcloud | ported after this audit; graphs, communities and word tables verified in `tests/test_enrich_parity.py` (GO wordcloud uses a documented substitute) | — |
 
@@ -504,24 +505,35 @@ cutoff precedence, capitalisation, wrapping, italics and FoldEnrichment. The
 code does not deliver it. All are real bugs. Line numbers are against
 `src/scp/pl/_enrich.py` at 2604bc6.
 
-1. **Panel order.** `_enrich.py:111-114`: `df.groupby(panels, observed=True)`
+**Status: all thirteen are fixed.** Items 1, 9, 10 and 12 landed with the
+network/enrichmap/wordcloud port; the rest with the parity fix, which draws
+bar/dot/lollipop from `enrichment_panel_frame` (R's factor levels, parsed
+ratios) through `_enrich_draw.draw_enrichment_bar` / `draw_enrichment_points`.
+Where the fix differs from the proposal below, the item says so.
+
+1. **Panel order.** *Fixed (enrichment port).* `_enrich.py:111-114`: `df.groupby(panels, observed=True)`
    on plain string columns sorts the keys, which gives Ductal, Endocrine,
    Ngn3 high EP. R (`SCP-plot.R:12773-12779`, `12824`) factors Groups and
    Database with `levels = unique(x)` and `split()`s in that order.
    *Fix:* turn each `split_by` column into
    `pd.Categorical(col, categories=pd.unique(col))` (or call
    `fetch.as_ordered_categorical`) before `groupby(..., sort=True, observed=True)`.
-2. **Labels.** `_enrich.py:130`, `161`: `textwrap.fill(d, character_width)`
+2. **Labels.** *Fixed, but not as proposed.* SCP's own `str_wrap`
+   (`utils.R:872`) masks stringr's and is base `strwrap`, which keeps every
+   line strictly shorter than the width; textwrap and stringr allow a line of
+   exactly the width. On 4 of the 27 fixture descriptions the two disagree, and
+   every label R drew sides with `strwrap`. The port uses the existing
+   `_enrich_graph.r_strwrap`. Original diagnosis: `_enrich.py:130`, `161`: `textwrap.fill(d, character_width)`
    with no capitalisation. textwrap also breaks on hyphens: "pre-\nendocrine"
    where stringr writes "\npre-endocrine". R: `12909-12910` (and 12863-12864,
    12958-12959, 13014-13015). *Fix:* `d = d[:1].upper() + d[1:]`, then
    `textwrap.fill(d, character_width, break_on_hyphens=False)`. With that
    change Python reproduces `str_wrap` exactly on every description in the
    fixture (`test_python_wrap_matches_stringr_once_hyphens_are_kept`).
-3. **Italic wrapped labels.** `_enrich.py:167`: missing. R: `12937`.
+3. **Italic wrapped labels.** *Fixed.* `_enrich.py:167`: missing. R: `12937`.
    *Fix:* after `set_yticklabels`, call `t.set_fontstyle("italic")` on every
    label whose text contains `"\n"`.
-4. **Bar encodings.** `_enrich.py:135-138`: the fill is the score gradient.
+4. **Bar encodings.** *Fixed.* `_enrich.py:135-138`: the fill is the score gradient.
    R (`12913-12926`) has `fill = color_by` through
    `palette_scp(levels(df[[color_by]]), palette)`, Count drawn as text twice
    (a white bold underlay, then black, at `hjust=-0.5`), and
@@ -531,45 +543,46 @@ code does not deliver it. All are real bugs. Line numbers are against
    `scp.discrete_palette(["custom"], "Spectral")` already returns R's
    `#5E4FA2`; the bar just never calls it, and draws the gradient's
    `#4175B4` instead.
-5. **Dot.** `_enrich.py:140`: `x = _score`, rows sorted by score. R
+5. **Dot.** *Fixed.* `_enrich.py:140`: `x = _score`, rows sorted by score. R
    (`12950-12976`): `GeneRatio = k/n` parsed from the string; rows ordered by
    `GeneRatio` descending then `rev()`, so the highest is on top; `x = GeneRatio`;
    `xlim = (0, 1.3*max)`; `fill = metric`; `size = Count`. *Fix:* parse
    GeneRatio, `g = g.sort_values("GeneRatio", kind="stable")`, scatter
    `(GeneRatio, y)`.
-6. **Lollipop.** `_enrich.py:143-145`: `x = _score`. R (`13001-13030`):
+6. **Lollipop.** *Fixed.* `_enrich.py:143-145`: `x = _score`. R (`13001-13030`):
    `FoldEnrichment = GeneRatio/BgRatio`, rows ordered by FoldEnrichment
    ascending, a black 2-wide segment under a 1-wide segment coloured by metric,
    `size = GeneRatio`, `xlim = (0, 1.2*max)`. *Fix:* compute FoldEnrichment
    (the docstring already says to). Sort by it with a stable sort and draw two
    `hlines` from 0 to FE: black, then the metric colour.
-7. **Size mapping** (dot, lollipop, comparison). `_enrich.py:140`, `144`,
+7. **Size mapping** (dot, lollipop, comparison). *Fixed* (comparison by the
+   enrichment port). `_enrich.py:140`, `144`,
    `155`: area = `20 + 80*v/max`. R `scale_size(range=c(3,6))` maps
    diameter = `3 + 3*sqrt((v-min)/(max-min))` mm (`12967`, `13031`).
    `scale_size_area(max_size=6)` in comparison maps diameter =
    `6*sqrt(v/max)` mm (`12872`). *Fix:*
    `d = 3 + 3*np.sqrt(rescale(v))`, `s = (d * 72/25.4)**2`, with ggplot's
    point-size factor `.pt = 72.27/25.4`.
-8. **Ties.** `_enrich.py:117`+`128`: `nlargest` keeps table order, then
+8. **Ties.** *Fixed.* `_enrich.py:117`+`128`: `nlargest` keeps table order, then
    `sort_values("_score")` ascending puts the *first* of a tie at the bottom.
    R `order()` is stable and `levels = unique(rev(...))` (`12816`, `12911`)
    puts the first listed on top. *Fix:* order by the raw metric with
    `kind="stable"`, take `head(top_term)`, then reverse for drawing
    (`y = arange(n)[::-1]`).
-9. **Cutoff.** `_enrich.py:96-99`: `<=`, and `pvalue_cutoff` applies even
+9. **Cutoff.** *Fixed (enrichment port).* `_enrich.py:96-99`: `<=`, and `pvalue_cutoff` applies even
    when `padjust_cutoff` is set. R `12804-12815`:
    `metric = "pvalue" if padjustCutoff is None else "p.adjust"`, then
    `metric < metric_value` (strict). *Fix:*
    `metric, cut = ("p.adjust", padjust_cutoff) if padjust_cutoff is not None else ("pvalue", pvalue_cutoff)`;
    `df = df[df[metric] < cut]`.
-10. **Metric under the p-value path.** `_enrich.py:109` and `168` hardcode
+10. **Metric under the p-value path.** *Fixed (enrichment port).* `_enrich.py:109` and `168` hardcode
     `p.adjust`. R `12908`: `-log10(df[[metric]])`, axis label
     `-log10(<metric>)`. *Fix:* use the `metric` from item 9 in both places.
-11. **Zero-width colour range.** `_enrich.py:134`: `Normalize(v, v)` maps
+11. **Zero-width colour range.** *Fixed* (the norm is centred on the value). `_enrich.py:134`: `Normalize(v, v)` maps
     everything to 0, the first ramp colour. ggplot's `rescale` maps a zero
     range to 0.5, giving `#FEFEBC` on Spectral. *Fix:*
     `if vmin == vmax: cvec = cmap(np.full(n, 0.5))`.
-12. **Comparison.** `_enrich.py:146-164` draws one matrix per `split_by`
+12. **Comparison.** *Fixed (enrichment port).* `_enrich.py:146-164` draws one matrix per `split_by`
     panel. Under the default `split_by=("Database","Groups")` that is five
     one-column panels. R (`12833-12898`) behaves differently:
     * it collects the per-panel top-term IDs (`ids`) and plots *every* row of
@@ -585,7 +598,9 @@ code does not deliver it. All are real bugs. Line numbers are against
     *Fix:* special-case `comparison` before the per-panel loop. Build `ids`
     exactly as R does, then draw a single axes (per Database) with the
     encodings above.
-13. **Defaults and options.** These diverge too, though the fixture does not
+13. **Defaults and options.** *`top_term` and `compare_only_sig` (enrichment
+    port) and `color_by` (parity fix) are done; there is still no `db=`, by
+    design: the input is a table, so filter it first.* These diverge too, though the fixture does not
     exercise them:
     * `top_term` defaults to `None` (all terms); R defaults to 6 (100 for
       enrichmap);
@@ -600,22 +615,25 @@ code does not deliver it. All are real bugs. Line numbers are against
 | line: plotted running score | **matches to 1e-12** (it is `gsea_scores` output) | `test_gsea_line_draws_gseaScores_and_hits` |
 | line: hit ticks | **matches exactly** (every hit position) | same |
 | `direction="pos"` term set on the real data | **matches** (by coincidence: \|NES\| and p.adjust order agree there) | `test_gsea_pos_selection_agrees_on_real_data` |
-| term selection rule (p.adjust < cutoff, ranked by p.adjust) | **differs** on the discriminating case | xfail |
-| `direction="both"` | **differs** in 5/5 groups | xfail |
-| bar order (NES ascending) | **differs** | xfail |
-| bar fill (Spectral Pos/Neg) and alpha = -log10(p.adjust) | **differs** (`#B2182B` vs `#9E0142`; no alpha) | xfail |
-| line: zero-cross dashed line | **differs** (absent) | xfail |
-| line: peak marker and crosshair | **differs** (absent) | xfail |
-| line: one panel per (group, db) with all terms overlaid | **differs structurally**: Python draws one 3-row block per term and has no per-group dispatch | described below, not tested |
+| term selection rule (p.adjust < cutoff, ranked by p.adjust) | **fixed; matches exactly** on the discriminating case, both directions | `test_gsea_selection_ranks_by_padjust`, `test_gsea_selection_edge_case_both_directions` |
+| `direction="both"` | **fixed; matches exactly** in 5/5 groups | `test_gsea_both_splits_up_and_down` |
+| bar order (NES ascending) | **fixed; matches exactly** | `test_gsea_bar_order_is_nes_ascending` |
+| bar fill (Spectral Pos/Neg) and alpha = -log10(p.adjust) | **fixed; matches** (fill exact, alpha to 1e-6) | `test_gsea_bar_fill_and_alpha` |
+| line: zero-cross dashed line | **fixed; matches exactly** (all 5 keys) | `test_gsea_line_marks_the_zero_cross`, `test_gsea_zero_cross_matches_R_on_every_key` |
+| line: peak marker and crosshair | **fixed; matches to 1e-12** | `test_gsea_line_marks_the_peak` |
+| line: one panel per (group, db) with all terms overlaid | **fixed**: one 3-row block per key, terms overlaid in R's order, first set's tick band on top, "Term" legend; curves computed from the documented `geneList`/`geneSets` input match R to 1e-12 | `test_gsea_line_draws_gseaScores_and_hits`, `test_gsea_line_is_one_block_per_key_with_a_term_legend`, `test_gsea_line_computes_curves_from_the_documented_input` |
+| line: half-plane shading, ranking-metric heat strip | **fixed**: shading as R's `bg_dat`; heat strip rectangles exact, colours within one 8-bit step (`gsea_heat_strip.csv`, replayed from R) | `test_gsea_line_shades_the_half_planes`, `test_gsea_heat_strip_matches_R`, `test_gsea_line_draws_the_heat_strip` |
+| `bar` / `line` layout | **fixed**: both go through `PanelGrid` (one panel or block per key) instead of calling `plt.figure` | `test_gsea_bar_panels_per_key_on_one_grid`, `test_gsea_line_and_bar_compose_on_a_panel_grid` |
 | comparison / network / enrichmap / wordcloud | ported after this audit; verified in `tests/test_enrich_parity.py` | — |
 
-1. **Selection.** `_enrich.py:220-228`: `p.adjust <= cutoff`, then sort by
+1. **Selection.** *Fixed:* every type goes through `gsea_select_ids` per key. `_enrich.py:220-228`: `p.adjust <= cutoff`, then sort by
    `|NES|` descending, `head(top_term)`. R (`13743-13756`, `14013-14026`):
    `metric < cutoff`, `order(metric)`, top `topTerm` of NES>0 and of NES<0.
    `direction="both"` takes `head(c(head(up, ceil(k/2)), head(down, ceil(k/2))), k)`.
    *Fix:* port that block literally. Use `kind="stable"` sorts on `metric`,
    and apply the same `metric` switch as enrichment item 9.
-2. **Bar.** `_enrich.py:236-246`: rows sit in selection order, coloured
+2. **Bar.** *Fixed* (`gsea_bar_frame` + `_enrich_draw.draw_gsea_bar`; the
+   in-panel text is clipped to the panel, as ggplot's coord clips it). `_enrich.py:236-246`: rows sit in selection order, coloured
    `#B2182B`/`#2166AC`, with no alpha and term names on the y axis. R
    (`14041-14078`):
    * rows are `order(NES)` ascending;
@@ -631,7 +649,11 @@ code does not deliver it. All are real bugs. Line numbers are against
    `discrete_palette(["Neg","Pos"], palette)` (verified: it returns R's
    `#5E4FA2` / `#9E0142`),
    `alpha = 0.1 + 0.9*rescale(-log10 p)`, then the text and limits above.
-3. **Line, missing decorations.** The docstring (`_enrich.py:199-205`)
+3. **Line, missing decorations.** *Fixed, all four,* plus the core-gene
+   labels (nudged as ggrepel nudges them, then spread apart vertically rather
+   than repelled). The heat strip is pinned by a new fixture,
+   `gsea_heat_strip.csv`, which `audit_enrich.R` now writes by replaying
+   `SCP-plot.R:13895-13923`. The docstring (`_enrich.py:199-205`)
    promises these, but the code (`268-291`) draws none:
    * the red/blue half-plane shading (R `13803`);
    * the peak triangle and dashed crosshair at `which.max(abs(runningScore))`
@@ -643,7 +665,12 @@ code does not deliver it. All are real bugs. Line numbers are against
    Python's bottom panel is a `fill_between` area. R draws `geom_segment`
    stems in grey30. *Fix:* add each element; the zero-cross is
    `x[np.abs(y) == np.abs(y).min()]`, then the median.
-4. **Line, layout and input contract.** R plots one figure per result key
+4. **Line, layout and input contract.** *Fixed:* one block per key with the
+   terms overlaid; the documented per-key `{"result", "geneList",
+   "geneSets", "exponent"}` input is accepted (inside SCP's
+   `{"enrichment", "results"}` or bare), and running scores are computed from
+   it; `{"table", "curves"}` still works, with `curves` keyed by ID or by key
+   then ID. `bar` and `line` now go through `PanelGrid`. R plots one figure per result key
    (`"<Group>-<Database>"`) with every selected term overlaid in p1 and
    stacked tick bands in p2 (`13740-14006`). Python draws one block per term
    and has no notion of groups. On top of that, the docstring describes an
@@ -673,11 +700,23 @@ has.
   single-brackets a data.frame, so the test is always TRUE. A
   user-supplied factor order on `Groups` is always replaced by first-appearance
   order. Harmless for RunEnrichment output, but it is a bug.
-* `"Negtively correlated "` (`13948`) and `corss_x`: a typo, cosmetic.
+* `"Negtively correlated "` (`13948`) and `corss_x`: a typo, cosmetic. The
+  port spells the label correctly.
+* SCP's `str_wrap` (`utils.R:872`) is base `strwrap`, not stringr's, so a
+  line never reaches `character_width` characters. The audit's proposed
+  textwrap fix would have matched stringr and missed four descriptions.
+* With a single positive (or negative) ranked value, `cut(..., breaks =
+  seq(min, max, len = 100))` stops on non-unique breaks, so `GSEAPlot`'s
+  single-set line plot errors. The port colours that value with its ramp's
+  first colour.
+* The three sub-plots of the line figure train their x scales separately
+  (p1 includes the crosshair's x = 0, p2 the heat strip's N + 1), so their
+  ticks disagree by up to one rank. The port shares one x range.
 * `RunDEtest` is broken on SeuratObject >= 5 (`GetAssayData(slot=)`), so
   SCP's documented enrichment pipeline cannot run in this environment as
   shipped.
-* `docs/04_api_mapping.md` gives `gseaScores` at line 14602; it is at 14570.
+* `docs/04_api_mapping.md` gave `gseaScores` at line 14602; it is at 14570
+  (corrected).
 
 ## 3-D and correlation families
 

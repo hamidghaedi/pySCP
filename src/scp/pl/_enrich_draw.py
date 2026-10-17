@@ -14,18 +14,23 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from typing import cast
 
 import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
-from matplotlib.collections import LineCollection
+from matplotlib.collections import LineCollection, PolyCollection
+from matplotlib.figure import Figure
+from matplotlib.font_manager import FontProperties
 from matplotlib.legend import Legend
 from matplotlib.legend_handler import HandlerBase
 from matplotlib.lines import Line2D
 from matplotlib.offsetbox import AnnotationBbox, TextArea, VPacker
 from matplotlib.patches import Circle, Patch, Polygon
 from matplotlib.text import Text
+from matplotlib.textpath import TextToPath
 from matplotlib.ticker import MaxNLocator
+from matplotlib.transforms import offset_copy
 
 from ..layout import LegendColumn
 from ..theme import halo
@@ -453,3 +458,301 @@ def size_area_handles(v: np.ndarray, size_max: float, fmt=_fmt) -> list[Line2D]:
         out.append(Line2D([], [], marker="o", linestyle="none", markerfacecolor="#4D4D4D",
                           markeredgecolor="black", markersize=d * DOT, label=fmt(b)))
     return out
+
+
+# --------------------------------------------------------------------------- #
+# bar / dot / lollipop (EnrichmentPlot, SCP-plot.R:12900-13047)
+# --------------------------------------------------------------------------- #
+GRID_GREY80 = "#CCCCCC"
+_DASHED = (0, (4, 4))
+
+
+def text_width_in(texts: Sequence[str], fontsize: float) -> float:
+    """Width in inches of the widest line among ``texts`` (italic when the
+    text wraps, as the term axes draw it), measured from the font itself so a
+    panel can be sized for its labels before anything is drawn."""
+    ttp = TextToPath()
+    widest = 0.0
+    for t in texts:
+        prop = FontProperties(size=fontsize, style="italic" if "\n" in t else "normal")
+        for line in str(t).split("\n"):
+            w, _, _ = ttp.get_text_width_height_descent(line, prop, ismath=False)
+            widest = max(widest, float(w))
+    return widest / 72.0
+
+
+def _term_axis(ax: Axes, levels: Sequence[str], fontsize: float) -> None:
+    """The discrete term axis after ``coord_flip``: level 1 at the bottom,
+    ggplot's 0.6 discrete expansion, and SCP's italic face for every level
+    that wraps onto a second line (``SCP-plot.R:12937``)."""
+    ax.set_yticks(range(len(levels)))
+    labels = ax.set_yticklabels(list(levels), fontsize=fontsize, linespacing=0.9)
+    for lab in labels:
+        lab.set_fontstyle("italic" if "\n" in lab.get_text() else "normal")
+    ax.set_ylim(-0.6, len(levels) - 0.4)
+    ax.set_ylabel("")
+    ax.set_axisbelow(True)
+    ax.grid(True, color=GRID_GREY80, linestyle=_DASHED, linewidth=0.5)
+
+
+def draw_enrichment_bar(
+    ax: Axes,
+    frame: pd.DataFrame,
+    levels: Sequence[str],
+    *,
+    colors: Sequence[str],
+    metric: str,
+    fontsize: float,
+) -> None:
+    """``geom_bar`` of ``-log10(metric)`` filled by ``color_by``, with the
+    ``Count`` written twice at the bar end (a white bold underlay, then
+    black, ``hjust = -0.5``, size 3.5) and the value axis fixed at
+    ``[0, 1.3 * max]`` with no expansion (``SCP-plot.R:12913-12926``)."""
+    y = frame["_y"].to_numpy(dtype=float)
+    v = frame["metric"].to_numpy(dtype=float)
+    ax.barh(y, v, height=0.9, color=list(colors), edgecolor="black", linewidth=0.5 * LWD,
+            zorder=2)
+    fs = 3.5 * PT
+    if "Count" in frame:
+        for yi, vi, c in zip(y, v, frame["Count"], strict=True):
+            s = str(int(c))
+            # hjust = -0.5: the left edge sits half a label width past the bar
+            tr = offset_copy(ax.transData, fig=cast(Figure, ax.figure), x=0.3 * fs * len(s), y=0,
+                             units="points")
+            ax.text(vi, yi, s, transform=tr, ha="left", va="center", fontsize=fs,
+                    color="white", fontweight="bold", zorder=3)
+            ax.text(vi, yi, s, transform=tr, ha="left", va="center", fontsize=fs,
+                    color="black", zorder=4)
+    hi = float(np.nanmax(v)) if len(v) else 1.0
+    ax.set_xlim(0.0, 1.3 * hi)
+    ax.set_xlabel(f"-log10({metric})")
+    _term_axis(ax, levels, fontsize)
+
+
+def draw_enrichment_points(
+    ax: Axes,
+    frame: pd.DataFrame,
+    levels: Sequence[str],
+    *,
+    plot_type: str,
+    fill: Sequence,
+    sizes: np.ndarray,
+    fontsize: float,
+) -> None:
+    """``dot``: ``geom_point(shape = 21)`` at ``GeneRatio``, axis to
+    ``1.3 * max`` (``SCP-plot.R:12965-12976``).  ``lollipop``: a black
+    2-wide stem under a 1-wide stem in the fill colour, then the point, at
+    ``FoldEnrichment``, axis to ``1.2 * max`` (``13018-13032``).  ``sizes``
+    are ggplot sizes in mm."""
+    y = frame["_y"].to_numpy(dtype=float)
+    if plot_type == "dot":
+        x = frame["GeneRatio"].to_numpy(dtype=float)
+        hi, xlabel = 1.3, "GeneRatio"
+    else:
+        x = frame["FoldEnrichment"].to_numpy(dtype=float)
+        hi, xlabel = 1.2, "Fold Enrichment"
+        ax.hlines(y, 0, x, colors="black", linewidth=2 * LWD, zorder=1)
+        ax.hlines(y, 0, x, colors=list(fill), linewidth=1 * LWD, zorder=2)
+    ax.scatter(x, y, s=(np.asarray(sizes, dtype=float) * DOT) ** 2, c=list(fill),
+               edgecolors="black", linewidths=0.5 * LWD, zorder=3)
+    top = float(np.nanmax(x)) if len(x) else 1.0
+    ax.set_xlim(0.0, hi * top)
+    ax.set_xlabel(xlabel)
+    if plot_type == "dot":
+        ax.tick_params(axis="x", labelrotation=45)
+        for lab in ax.get_xticklabels():
+            lab.set_horizontalalignment("right")
+            lab.set_rotation_mode("anchor")
+    _term_axis(ax, levels, fontsize)
+
+
+def size_range_handles(v: np.ndarray, rng: tuple[float, float] = (3.0, 6.0),
+                       fmt=_fmt) -> list[Line2D]:
+    """Legend keys of ``scale_size(range = rng, breaks_extended(n = 4))``,
+    drawn as SCP overrides them (``fill = "grey30"``, shape 21)."""
+    v = np.asarray(v, dtype=float)
+    lo, hi = float(np.nanmin(v)), float(np.nanmax(v))
+    br = _size_breaks(lo, hi)
+    sizes = _area_size(br, lo, hi, rng)
+    return [Line2D([], [], marker="o", linestyle="none", markerfacecolor="#4D4D4D",
+                   markeredgecolor="black", markersize=float(s) * DOT, label=fmt(b))
+            for b, s in zip(br, sizes, strict=True)]
+
+
+# --------------------------------------------------------------------------- #
+# GSEA bar and line (GSEAPlot, SCP-plot.R:13740-14078)
+# --------------------------------------------------------------------------- #
+def draw_gsea_bar(
+    ax: Axes,
+    frame: pd.DataFrame,
+    *,
+    colors: dict[str, str],
+    fontsize: float,
+) -> None:
+    """``geom_col(NES)`` filled by direction with ``alpha`` from the metric,
+    the description written *inside* the panel at x = 0 (``hjust`` flipped by
+    sign, nudged 0.05), y axis text blanked and x limits ``+-max|NES|``
+    (``SCP-plot.R:14052-14076``)."""
+    y = frame["_y"].to_numpy(dtype=float)
+    nes = frame["NES"].to_numpy(dtype=float)
+    ax.axvline(0, color="black", linewidth=0.5 * LWD, zorder=1)
+    bars = ax.barh(y, nes, height=0.9, color=[colors[d] for d in frame["Direction"]],
+                   edgecolor="black", linewidth=0.5 * LWD, zorder=2)
+    for p, a in zip(bars.patches, frame["alpha"], strict=True):
+        p.set_alpha(float(a))
+    for yi, n, d in zip(y, nes, frame["Description"], strict=True):
+        pos = n > 0
+        # inside the panel, clipped to it as ggplot's coord clips; not a
+        # decoration, so constrained layout must not make room for it
+        t = ax.text(-0.05 if pos else 0.05, yi, str(d), ha="right" if pos else "left",
+                    va="center", fontsize=fontsize, linespacing=0.9, zorder=3, clip_on=True,
+                    fontstyle="italic" if "\n" in str(d) else "normal")
+        t.set_in_layout(False)
+    m = float(np.nanmax(np.abs(nes))) if len(nes) else 1.0
+    # coord_cartesian(xlim = c(-m, m)) keeps ggplot's default 5% expansion
+    ax.set_xlim(-1.1 * m, 1.1 * m)
+    n_lev = int(frame["_y"].max()) + 1 if len(frame) else 0
+    ax.set_ylim(-0.6, n_lev - 0.4)
+    ax.set_yticks([])
+    ax.set_xlabel("NES")
+    ax.set_ylabel("Description")
+
+
+def _classic(ax: Axes) -> None:
+    """``theme_classic`` plus the black border and the dashed grey90
+    major/minor grid GSEAPlot gives each of its three sub-panels."""
+    for side in ("top", "right", "bottom", "left"):
+        ax.spines[side].set_visible(True)
+        ax.spines[side].set_color("black")
+        ax.spines[side].set_linewidth(1.0)
+    ax.set_axisbelow(True)
+    ax.minorticks_on()
+    ax.grid(True, which="both", color="#E5E5E5", linestyle=_DASHED, linewidth=0.5)
+    ax.tick_params(which="minor", length=0)
+
+
+def _spread(y: np.ndarray, ax: Axes, fontsize: float, ylim: tuple[float, float]) -> np.ndarray:
+    """Push label rows apart vertically so no two overlap: a one-dimensional
+    stand-in for ggrepel, which SCP uses for the core-gene labels."""
+    y = np.asarray(y, dtype=float).copy()
+    if len(y) < 2:
+        return y
+    fig = cast(Figure, ax.figure)
+    h_in = ax.get_position().height * fig.get_size_inches()[1]
+    gap = (fontsize * 1.25 / 72.0) / max(h_in, 1e-6) * (ylim[1] - ylim[0])
+    order = np.argsort(-y, kind="stable")
+    for a, b in zip(order[:-1], order[1:], strict=True):
+        y[b] = min(y[b], y[a] - gap)
+    low = ylim[0] + gap / 2 - y[order[-1]]
+    if low > 0:
+        y += low
+    return y
+
+
+def draw_gsea_line(
+    axes: tuple[Axes, Axes, Axes],
+    sets: Sequence[dict],
+    *,
+    colors: Sequence[str],
+    gene_list: np.ndarray,
+    line_width: float,
+    line_alpha: float = 1.0,
+    single: dict | None = None,
+    heat_strip: Sequence[tuple[float, float, str]] | None = None,
+    zero_cross: float | None = None,
+    xlim: tuple[float, float],
+    fontsize: float,
+) -> None:
+    """GSEAPlot's three stacked panels for one result key
+    (``SCP-plot.R:13792-13970``).
+
+    ``sets`` holds, per gene set, ``x``, ``running_score``, ``hits`` (the x of
+    every hit), ``label`` and ``id``; every set is overlaid in the top panel
+    and gets its own band of ticks in the middle one, the first set on top.
+    ``single`` (one set only) adds the peak triangle with its dashed
+    crosshair, the core-gene labels and the title; ``heat_strip`` is the
+    ranking-metric strip under the ticks.
+    """
+    top, mid, bot = axes
+    for ax in axes:
+        _classic(ax)
+        ax.set_xlim(*xlim)
+
+    # p1: running score over red/blue half planes
+    lo = min(0.0, *(float(np.min(s["running_score"])) for s in sets))
+    hi = max(0.0, *(float(np.max(s["running_score"])) for s in sets))
+    span = (hi - lo) or 1.0
+    ylo, yhi = lo - 0.05 * span, hi + 0.05 * span
+    top.axhspan(0, yhi, facecolor="#C40003", alpha=0.2, linewidth=0, zorder=0)
+    top.axhspan(ylo, 0, facecolor="#1D008F", alpha=0.2, linewidth=0, zorder=0)
+    top.axhline(0, color="#666666", linewidth=0.5 * LWD, zorder=1)
+    for s, c in zip(sets, colors, strict=True):
+        top.plot(s["x"], s["running_score"], color=c, linewidth=line_width * LWD,
+                 alpha=line_alpha, label=s["label"], gid=s["id"], zorder=2)
+    top.set_ylim(ylo, yhi)
+    top.set_ylabel("Enrichment Score")
+    top.tick_params(axis="x", which="both", labelbottom=False, length=0)
+
+    if single is not None:
+        px, py = single["peak"]
+        top.plot([0, px], [py, py], color="black", linestyle="--", linewidth=0.5 * LWD, zorder=3)
+        top.plot([px, px], [0, py], color="black", linestyle="--", linewidth=0.5 * LWD, zorder=3)
+        neg = single["nes"] < 0
+        top.scatter([px], [py], marker="v" if neg else "^", s=(2.5 * DOT) ** 2 * 1.6,
+                    c="#5E34F5" if neg else "#F52323", edgecolors="black",
+                    linewidths=0.5 * LWD, zorder=5)
+        genes = single.get("genes")
+        if genes is not None and len(genes):
+            gx = genes["x"].to_numpy(dtype=float)
+            gy = genes["running_score"].to_numpy(dtype=float)
+            top.scatter(gx, gy, s=(1.5 * DOT) ** 2, c="black", zorder=4)
+            label_fs = single.get("label_size", 4.0) * PT
+            nx = 0.05 * (xlim[1] - xlim[0])
+            ny = 0.05 * span
+            tx = gx + np.where(gy >= 0, nx, -nx)
+            ty = _spread(gy + np.where(gy > 0, -ny, ny), top, label_fs, (ylo, yhi))
+            for xi, yi, lx, ly, g in zip(gx, gy, tx, ty, genes["gene"], strict=True):
+                t = top.annotate(str(g), (xi, yi), xytext=(lx, ly), fontsize=label_fs,
+                                 ha="left" if yi >= 0 else "right", va="center",
+                                 zorder=6,
+                                 arrowprops=dict(arrowstyle="-", color="#666666",
+                                                 linewidth=0.5 * LWD, shrinkA=0, shrinkB=2))
+                halo(t, "white", 0.1)
+        top.set_title(f"{single['title']}\n", loc="left", fontsize=fontsize * 1.2)
+        top.text(0.0, 1.01, single["subtitle"], transform=top.transAxes, ha="left",
+                 va="bottom", fontstyle="italic", fontsize=fontsize)
+
+    # p2: one band of hit ticks per set, the first set on top
+    n = len(sets)
+    for i, (s, c) in enumerate(zip(reversed(list(sets)), reversed(list(colors)), strict=True)):
+        lc = mid.vlines(s["hits"], i, i + 1, colors="black" if n == 1 else c,
+                        linewidth=0.5 * LWD, alpha=line_alpha, zorder=2)
+        lc.set_gid(s["id"])
+    if heat_strip:
+        polys = [[(a, 0.0), (b, 0.0), (b, 0.3), (a, 0.3)] for a, b, _ in heat_strip]
+        mid.add_collection(PolyCollection(polys, facecolors=[c for *_, c in heat_strip],
+                                          edgecolors="none", alpha=0.95, zorder=3))
+    mid.set_ylim(0, n)
+    mid.set_xticks([])
+    mid.set_yticks([])
+    mid.minorticks_off()
+    mid.grid(False, which="both")
+
+    # p3: the ranked metric as stems, the correlated-side labels, zero cross
+    gl = np.asarray(gene_list, dtype=float)
+    x = np.arange(1, len(gl) + 1, dtype=float)
+    bot.vlines(x, 0, gl, colors="#4D4D4D", linewidth=0.5 * LWD, zorder=2)
+    fs = 4 * PT
+    if np.nanmax(gl) > 0:
+        bot.text(0, 1, " Positively correlated", transform=bot.get_xaxis_transform(),
+                 ha="left", va="top", color="#C81A1F", fontsize=fs)
+    if np.nanmin(gl) < 0:
+        bot.text(1, 0, "Negatively correlated ", transform=bot.transAxes, ha="right",
+                 va="bottom", color="#3C298C", fontsize=fs)
+    if zero_cross is not None:
+        bot.axvline(zero_cross, color="black", linestyle="--", linewidth=0.5 * LWD, zorder=3)
+        up = abs(float(np.nanmax(gl))) > abs(float(np.nanmin(gl)))
+        bot.text(zero_cross, 0, f"Zero cross at {zero_cross:.15g}", ha="center",
+                 va="bottom" if up else "top", fontsize=fs, zorder=4)
+    bot.set_ylabel("Ranked List Metric")
+    bot.set_xlabel("Rank in Ordered Dataset")

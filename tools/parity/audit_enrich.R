@@ -248,6 +248,32 @@ cv <- cv[cv$position == 1 | cv$peak | (cv$x %% 50 == 1), ]
 wcsv(cv, "gsea_curves.csv")
 wcsv(do.call(rbind, crosses), "gsea_zero_cross.csv")
 
+# the ranking-metric heat strip of a single-set line plot, replayed verbatim
+# from GSEAPlot (SCP-plot.R:13895-13923) for the same reason as the selection
+strips <- list()
+for (nm in names(gs$results)) {
+  y <- y_raw <- unname(gs$results[[nm]]@geneList)
+  y[y > quantile(y_raw, 0.98)] <- quantile(y_raw, 0.98)
+  y[y < quantile(y_raw, 0.02)] <- quantile(y_raw, 0.02)
+  col <- rep("white", length(y))
+  y_pos <- which(y > 0)
+  if (length(y_pos) > 0) {
+    y_pos_i <- cut(y[y_pos], breaks = seq(min(y[y_pos], na.rm = TRUE), max(y[y_pos], na.rm = TRUE),
+                                          len = 100), include.lowest = TRUE)
+    col[y_pos] <- colorRampPalette(c("#F5DCDC", "#C40003"))(100)[y_pos_i]
+  }
+  y_neg <- which(y < 0)
+  if (length(y_neg) > 0) {
+    y_neg_i <- cut(y[y_neg], breaks = seq(min(y[y_neg], na.rm = TRUE), max(y[y_neg], na.rm = TRUE),
+                                          len = 100), include.lowest = TRUE)
+    col[y_neg] <- colorRampPalette(c("#1D008F", "#DDDCF5"))(100)[y_neg_i]
+  }
+  xmin <- which(!duplicated(col))
+  xmax <- xmin + as.numeric(table(col)[as.character(unique(col))])
+  strips[[nm]] <- data.frame(key = nm, xmin = xmin, xmax = xmax, col = unique(col))
+}
+wcsv(do.call(rbind, strips), "gsea_heat_strip.csv")
+
 for (dirn in c("pos", "both")) {
   pb <- GSEAPlot(srt, db = "custom", group_by = "CellType", plot_type = "bar",
                  direction = dirn, combine = FALSE)

@@ -324,6 +324,15 @@ spiral, not ggwordcloud's packer; mark labels are stacked down the panel
 edges rather than placed by ggforce; the `hull` mark is convex, not
 `concaveman`'s concave hull.
 
+`bar`, `dot` and `lollipop` were then checked against `EnrichmentPlot`'s
+plotted frames (`docs/parity_audit.md`, enrichment family) and every mismatch
+fixed: labels are SCP's `capitalize()` + `strwrap` (not stringr's wrap, which
+differs on lines of exactly the width) and italic when wrapped; the bar is
+filled by `color_by` with the Count at its end and a `1.3 x max` axis; the dot
+plots `GeneRatio` and the lollipop `FoldEnrichment`, each ordered by it;
+sizes follow `scale_size(range = c(3, 6))`; ties keep table order top-down;
+and a constant-metric panel takes the palette's middle colour.
+
 Keep enrichment computation **out** of the plotting layer: accept a DataFrame
 matching `io.ENRICHMENT_COLUMNS`, with a pluggable `enrichment_fn` for the
 heatmap tracks.
@@ -338,6 +347,16 @@ before; `comparison`, `network`, `enrichmap` and `wordcloud` reuse milestone
 `format(digits = 3)` rules -- and core-enrichment genes. The comparison frame,
 both graphs, the partitions and the word tables match `GSEAPlot`'s on
 `pancreas_sub`.
+
+The parity fix brought `line` and `bar` in line with R: SCP's selection
+(`metric < cutoff`, ranked by the metric, `ceiling(k/2)` per sign for
+`"both"`) for every type; `bar` in `order(NES)` with Spectral Pos/Neg fill,
+alpha `-log10(p.adjust)` and the description inside the panel; `line` as one
+block per result key with every selected set overlaid, the half-plane shading,
+the single-set peak crosshair, core-gene labels and ranking-metric heat strip,
+and the dashed zero-cross line. Both now go through `PanelGrid` instead of
+creating their own figure. `line` computes its running scores from a key's
+`geneList` / `geneSets` / `exponent`, the input its docstring describes.
 
 ---
 

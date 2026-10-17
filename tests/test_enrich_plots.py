@@ -289,5 +289,84 @@ def test_unknown_layout_and_cluster_raise():
                                enrichmap_cluster="fluid_communities")
 
 
+def test_bar_fill_follows_color_by_levels_of_the_whole_table():
+    """palette_scp(levels(df[[color_by]])): first-appearance levels over the
+    input, before group_use filters it, so a group keeps its colour."""
+    df = toy_enrichment()
+    pal = scp.discrete_palette(["Beta", "Alpha"], "Spectral")
+    fig = scp.pl.enrichment_plot(df, plot_type="bar", color_by="Groups", group_use=["Alpha"],
+                                 top_term=3)
+    (ax,) = [a for a in fig.axes if a.get_title()]
+    assert {matplotlib.colors.to_hex(p.get_facecolor()) for p in ax.patches} == \
+        {pal["Alpha"].lower()}
+    matplotlib.pyplot.close(fig)
+    with pytest.raises(ValueError, match="color_by"):
+        scp.pl.enrichment_plot(df, plot_type="bar", color_by="nope")
+
+
+def test_dot_and_lollipop_need_their_ratio_columns():
+    df = toy_enrichment().drop(columns=["BgRatio"])
+    fig = scp.pl.enrichment_plot(df, plot_type="dot", top_term=2)  # GeneRatio is enough
+    matplotlib.pyplot.close(fig)
+    with pytest.raises(ValueError, match="BgRatio"):
+        scp.pl.enrichment_plot(df, plot_type="lollipop", top_term=2)
+
+
+def test_dot_panels_carry_their_own_colourbar_and_size_legend():
+    fig = scp.pl.enrichment_plot(toy_enrichment(), plot_type="dot", top_term=3)
+    assert len([a for a in fig.axes if a.get_label() == "<colorbar>"]) == 2
+    assert [lg.get_title().get_text() for lg in fig.legends] == \
+        ["Count (GO_BP | Beta):", "Count (GO_BP | Alpha):"]
+    matplotlib.pyplot.close(fig)
+
+
+def test_gsea_bar_palcolor_is_read_as_pos_then_neg():
+    """R passes palette_scp(c("Neg", "Pos"), palcolor = rev(palcolor))."""
+    fig = scp.pl.gsea_plot(toy_gsea(), plot_type="bar", direction="both", group_use=["Beta"],
+                           top_term=4, palcolor=["#FF0000", "#0000FF"])
+    ax = fig.axes[0]
+    got = {matplotlib.colors.to_hex(p.get_facecolor(), keep_alpha=False): p.get_width() > 0
+           for p in ax.patches}
+    assert got == {"#ff0000": True, "#0000ff": False}
+    matplotlib.pyplot.close(fig)
+
+
+def test_gsea_line_without_running_scores_names_what_to_pass():
+    with pytest.raises(ValueError, match="geneList"):
+        scp.pl.gsea_plot(toy_gsea(), plot_type="line", top_term=1)
+
+
+def test_gsea_line_and_bar_compose_on_a_panel_grid():
+    """One figure per call, one panel (bar) or one 3-row block (line) per key."""
+    rng = np.random.default_rng(0)
+    df = toy_gsea()
+    gl = pd.Series(np.sort(rng.normal(size=60))[::-1],
+                   index=[f"{'AB'[i % 2]}{i // 2}" for i in range(60)])
+    sets = {i: g.split("/") for i, g in zip(df["ID"], df["core_enrichment"], strict=True)}
+    res = {f"{g}-GO_BP": {"result": df[df["Groups"] == g], "geneList": gl, "geneSets": sets}
+           for g in ("Beta", "Alpha")}
+    bar = scp.pl.gsea_plot(res, plot_type="bar", direction="both", top_term=2)
+    assert [a.get_title() for a in bar.axes] == ["Beta", "Alpha"]
+    line = scp.pl.gsea_plot(res, plot_type="line", direction="both", top_term=2)
+    assert len(line.axes) == 6
+    assert line.get_layout_engine() is not None
+    matplotlib.pyplot.close("all")
+
+
+def test_gsea_heat_strip_and_zero_cross_golden():
+    y = np.array([3.0, 2.0, 1.0, 0.5, -0.5, -0.5, -2.0, -4.0])
+    # min |y| is first reached at rank 4 (0.5); only that value counts
+    assert en.gsea_zero_cross(y) == 4.0
+    assert en.gsea_zero_cross(np.array([2.0, -0.5, 0.5, -0.5, -1.0])) == 3.0
+    strip = en.gsea_heat_strip(np.array([2.0, 1.0, 0.0, -1.0, -2.0]))
+    # quantile clipping keeps the ends; each sign spans its own 99-bin ramp
+    assert [(a, b) for a, b, _ in strip] == [(1, 2), (2, 3), (3, 4), (4, 5), (5, 6)]
+    cols = [c for *_, c in strip]
+    assert cols[2] == "white"
+    assert cols[0] == scp.palettes.color_ramp(["#F5DCDC", "#C40003"], 100)[98]
+    assert cols[4] == scp.palettes.color_ramp(["#1D008F", "#DDDCF5"], 100)[0]
+
+
 def test_rendered_example_exists():
-    assert (Path(__file__).parent / "fixtures" / "example_enrichment_network.png").exists()
+    for name in ("enrichment_network", "enrichment_dot", "gsea_line"):
+        assert (Path(__file__).parent / "fixtures" / f"example_{name}.png").exists()
