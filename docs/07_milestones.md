@@ -20,26 +20,59 @@ order, `default_reduction` picks `X_umap`, a two-panel split figure renders.
 
 ---
 
-### 2 — `cell_dim_plot` overlays — M
+### 2 — `cell_dim_plot` overlays — M ✅ done
 
 Brief: `porting_briefs/dim_plots.md` §1.6.
 
-Add, in this order: `cells_highlight` polish · `add_density` (both the contour
-and the filled-KDE variants) · `graph` edges (use the sparse COO triplets and a
-`LineCollection`; **do not** densify the adjacency as R does) · `add_mark`
-(hull/ellipse/rect/circle via `scipy.spatial.ConvexHull` and
-`matplotlib.patches`) · `stat_by` pie insets (`inset_axes` at each group's
-median position, sized as a fraction of the axis range) · `hex` binning.
+Landed, in SCP's layer order: `add_mark` (hull/ellipse/rect/circle) · `graph`
+edges (COO triplets into one `LineCollection`; the adjacency is never
+densified) · `add_density` (contours and the filled KDE raster) · `hex` ·
+`cells_highlight` validation and `alpha_highlight` · `stat_by` insets (pie,
+ring, bar) · `lineages` · `paga` · `velocity` (raw, grid, stream) · a
+`label_repel` pass. The numeric cores are in `pl/_dim_geom.py`, the layers in
+`pl/_dim_layers.py`.
 
-Depends on nothing beyond milestone 1.
+Verified against SCP 0.5.6 on `pancreas_sub` (`tools/parity/dim_overlays.R`
+writes the fixtures, `tests/test_dim_parity.py` compares, no R needed): the
+KDE grid to 6e-9 relative and the contour levels exactly; every R contour
+vertex lies on the Python surface at its level to 1e-10; hexagon cells and
+counts identical (670 of 670, including the 5 ggplot censors at the limits)
+and alpha to 1e-7; graph edges identical (1536 segments, widths to 2e-5 mm);
+LOESS lineage curves to 8.5e-8; PAGA node positions, colours and edge widths
+exact; raw velocity arrows exact; inset centres and sizes exact and pie
+fractions to 1e-7; ggforce's enclosing circle to 1e-6 mm and ellipse centre
+and semi-axes to 4e-8 mm.
+
+Found along the way, and documented in the docstrings: ggforce's ellipse angle
+loses the sign of the axis' y-component, so 4 of the 5 `CellType` ellipses it
+draws are mirrored and do not enclose their points (the port draws the
+enclosing one); `PAGAPlot(cells=)` intersects group names with cell names and
+drops every node.
+
+Not verified against R, and why: the `hull` mark ports `concaveman`, which is
+not installed in the parity environment; grid and stream velocity delegate to
+scvelo, which is not installed here (tested with a precomputed grid in its two
+return shapes); the stream drawing is matplotlib's `streamplot`, not metR, so
+it is not a numeric match by construction. `stat_plot_type` beyond
+pie/ring/bar raises.
 
 ### 3 — `feature_dim_plot` — M ✅ done
 
 Brief: `porting_briefs/dim_plots.md` §2.
 
 Landed: both halves, verified against R in `notebooks/01_parity_foundation.ipynb`
-(`nPos` counts and percentages agree exactly). Still stub within it: `add_density`,
-`graph`, `lineages`, `hex` binning and `calculate_coexp`.
+(`nPos` counts and percentages agree exactly), and since then `add_density`,
+`graph`, `lineages`, `hex` (mean value per hexagon over flat background
+hexagons), labels at the 95th–99th percentile band, highlight over-layers and
+`calculate_coexp` through the shared `scp.fetch.calculate_coexp`. The CoExp
+values match `FeatureDimPlot(calculate_coexp = TRUE)` to 4e-9 relative and the
+per-hexagon means match `stat_summary_hex` to 1e-7.
+`keep_scale="feature"` now pools over every cell before `cells` subsets, as
+R's `dat_exp` does.
+
+SCP 0.5.6 cannot run `calculate_coexp` as shipped under SeuratObject 5:
+`check_DataType` calls `GetAssayData(slot = )`, which is defunct. The parity
+script shims that one call.
 
 Two halves. The standard path is the easier one, but three details define how
 it looks: ascending-value draw order with NaN first, `bg_cutoff=0` NaN-masking

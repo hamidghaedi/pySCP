@@ -1,0 +1,16 @@
+"panel","stat","group","value"
+"CellType:Ductal:","G1","Ductal",0.343096234
+"CellType:Ductal:","S","Ductal",0.443514644
+"CellType:Ductal:","G2M","Ductal",0.213389121
+"CellType:Ngn3 low EP:","G1","Ngn3 low EP",0.555555556
+"CellType:Ngn3 low EP:","S","Ngn3 low EP",0.234567901
+"CellType:Ngn3 low EP:","G2M","Ngn3 low EP",0.209876543
+"CellType:Ngn3 high EP:","G1","Ngn3 high EP",0.797619048
+"CellType:Ngn3 high EP:","S","Ngn3 high EP",0.148809524
+"CellType:Ngn3 high EP:","G2M","Ngn3 high EP",0.0535714286
+"CellType:Pre-endocrine:","G1","Pre-endocrine",0.993333333
+"CellType:Pre-endocrine:","S","Pre-endocrine",0.00666666667
+"CellType:Pre-endocrine:","G2M","Pre-endocrine",0
+"CellType:Endocrine:","G1","Endocrine",1
+"CellType:Endocrine:","S","Endocrine",0
+"CellType:Endocrine:","G2M","Endocrine",0

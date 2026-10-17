@@ -7,10 +7,10 @@ body raises · **n/a** = nothing to port.
 
 | R (`SCP-plot.R`) | Line | Python | Status | Milestone |
 |---|---|---|---|---|
-| `CellDimPlot` | 1328 | `scp.pl.cell_dim_plot` | done (core; overlays stub) | 2 |
-| `FeatureDimPlot` | 2042 | `scp.pl.feature_dim_plot` | done (standard + blend; `add_density`/`graph`/`lineages`/`hex` stub) | 3 |
+| `CellDimPlot` | 1328 | `scp.pl.cell_dim_plot` | done (all overlays; `stat_plot_type` limited to pie/ring/bar) | 2 |
+| `FeatureDimPlot` | 2042 | `scp.pl.feature_dim_plot` | done (standard + blend, all overlays, `calculate_coexp`) | 3 |
 | `CellDimPlot3D` | 2843 | `scp.pl.cell_dim_plot_3d` | done | 8 |
-| `FeatureDimPlot3D` | 3066 | `scp.pl.feature_dim_plot_3d` | done | 8 |
+| `FeatureDimPlot3D` | 3066 | `scp.pl.feature_dim_plot_3d` | done (incl. `calculate_coexp`) | 8 |
 | `FeatureStatPlot` | 3524 | `scp.pl.feature_stat_plot` | done (5 plot_types + bg_by/overlays; `stack`/`plot_by='feature'`/stats stub) | 4 |
 | `ExpressionStatPlot` | 3723 | `scp.pl.expression_stat_plot` | stub | 4 |
 | `CellStatPlot` | 4463 | `scp.pl.cell_stat_plot` | done (11/11 types + `individual`; sankey/chord/venn verified vs R) | 5 |
@@ -72,6 +72,9 @@ body raises · **n/a** = nothing to port.
 | `cell_density_plot` | added `y_min`, `y_max`, `y_nbreaks`, `keep_empty`, `aspect_ratio`, `legend_position`, `nrow`, `ncol`, `byrow` | Same omission; all nine are parameters of `CellDensityPlot` and the layout ones are needed for multi-feature figures. |
 | `enrichment_plot` | added `compare_only_sig`, `network_labelsize`, `network_adjscale`, `network_adjiter`, `enrichmap_layout`, `enrichmap_label`, `enrichmap_labelsize`, `enrichmap_show_keyword`, `enrichmap_expand`, `keyword_background`; `panel_size` now defaults to `None` (per-type size) | The first eight are `EnrichmentPlot` parameters the scaffold left out. `enrichmap_nlabel` keeps its corrected spelling (R: `enrlichmap_nlabel`). `keyword_background` is new: a `{GO ID: term name}` map that lets the GO wordcloud run simplifyEnrichment's keyword test, whose term-document matrix only ships with the R package. |
 | `gsea_plot` | added `group_use`, `id_use`, `pvalue_cutoff`, `compare_only_sig`, `character_width`, `palcolor`, the whole `network_*` / `enrichmap_*` / wordcloud block of `enrichment_plot`, `keyword_background`, `nrow`, `ncol`; `top_term` now defaults to `None` (6, or 100 for `enrichmap`, as R's `ifelse`); `panel_size` defaults to `None` | All are `GSEAPlot` parameters needed by the types it shares with `EnrichmentPlot`. Also accepts SCP's own `{"enrichment": df, "results": {key: df}}` shape. |
+| `cell_dim_plot` | added the settings of every overlay: `hex`, `hex_linewidth`, `hex_count`, `hex_bins`, `hex_binwidth`; `label_point_size`, `label_point_color`, `label_segment_color`; `alpha_highlight`; `density_color`, `density_filled_palette`, `density_filled_palcolor`; `mark_expand`, `mark_alpha`, `mark_linetype`; `edge_size`, `edge_alpha`, `edge_color`; the eleven `lineages_*`, eleven `paga_*` and nine `velocity_*` parameters; `streamline_width`, `streamline_alpha`, `streamline_color`, `streamline_palette`, `streamline_palcolor`, `streamline_bg_color`, `streamline_bg_stroke`; `stat_type`, `stat_plot_type`, `stat_plot_position`, `stat_plot_size`, `stat_plot_palette`, `stat_palcolor`, `stat_plot_alpha`, `stat_plot_label`, `stat_plot_label_size` | The scaffold declared the overlay switches but not their settings. All are `CellDimPlot` parameters with R's defaults, keyword-only, so no existing call changes. Lengths stay ggplot millimetres; `mark_expand` is a number of mm rather than a `unit`, and `lineages_arrow` is the head length in inches (or `None`) rather than a grid `arrow`. `velocity_n_neighbors=None` means R's `ceiling(n_cells / 50)`. metR's `streamline_L`, `streamline_minL`, `streamline_res` and `streamline_n` are not added, because matplotlib's `streamplot` has nothing they could control. `velocity` names the scvelo key: `velocity="velocity"` reads `obsm["velocity_umap"]`. |
+| `feature_dim_plot` | added `hex`, `hex_linewidth`, `hex_color`, `hex_bins`, `hex_binwidth`; `label_repulsion`, `label_point_size`, `label_point_color`, `label_segment_color`; `alpha_highlight`; `density_color`, `density_filled_palette`, `density_filled_palcolor`; `edge_size`, `edge_alpha`, `edge_color`; the eleven `lineages_*` parameters | The same omission; all are `FeatureDimPlot` parameters with R's defaults and units. |
+| `feature_dim_plot_3d` | added `calculate_coexp` | A `FeatureDimPlot3D` parameter the scaffold left out. It appends a `CoExp` trace through the shared `scp.fetch.calculate_coexp`. |
 
 ## Argument renaming rules
 

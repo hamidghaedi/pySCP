@@ -66,12 +66,9 @@ def test_force_guard_raises_instead_of_prompting(adata):
         scp.pl.cell_dim_plot(ad, "many")
 
 
-@pytest.mark.parametrize(
-    "kw", [{"add_density": True}, {"graph": "connectivities"}, {"stat_by": "batch"}]
-)
-def test_unimplemented_overlays_raise_with_a_pointer(adata, kw):
-    with pytest.raises(NotImplementedError, match="milestones"):
-        scp.pl.cell_dim_plot(adata, "leiden", **kw)
+def test_unported_stat_plot_types_raise_with_a_pointer(adata):
+    with pytest.raises(NotImplementedError, match="dim_plots.md"):
+        scp.pl.cell_dim_plot(adata, "leiden", stat_by="batch", stat_plot_type="rose")
 
 
 def test_declared_level_order_survives(adata):
