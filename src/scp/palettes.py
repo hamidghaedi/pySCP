@@ -82,7 +82,13 @@ PALETTES = _PaletteRegistry()
 
 
 def list_palettes(type: PaletteType | None = None) -> list[str]:
-    """Names of the bundled palettes, optionally filtered by kind."""
+    """Names of the bundled palettes, optionally filtered by kind.
+
+    The name listing of ``show_palettes(return_names = TRUE)``
+    (``SCP-plot.R:298``) from SCP by Hao Zhang (GPL-3),
+    https://github.com/zhanghao-njmu/SCP; the palettes themselves are SCP's
+    ``palette_list``.
+    """
     return [n for n, p in _load().items() if type is None or p.type == type]
 
 
@@ -273,7 +279,8 @@ def palette_scp(
     na_keep: bool = False,
     na_color: str = NA_COLOR_DEFAULT,
 ):
-    """Faithful entry point mirroring ``palette_scp()`` (SCP-plot.R:168).
+    """Faithful entry point mirroring ``palette_scp()`` (SCP-plot.R:168), from
+    SCP by Hao Zhang (GPL-3), https://github.com/zhanghao-njmu/SCP.
 
     Prefer :func:`discrete_palette` / :func:`continuous_palette` in new code —
     they have narrower, clearer contracts.  This function exists so that ported

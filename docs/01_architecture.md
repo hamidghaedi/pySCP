@@ -175,7 +175,8 @@ are rasterized. This is better than what R does with `panel_fix(raster=TRUE)`,
 which needs grob surgery to keep labels vector.
 
 `raster` auto-enables above 100,000 cells, matching SCP. For genuinely huge
-objects, `datashader` is the optional escalation (extra: `scp-plot[raster]`).
+objects, `datashader` would be the escalation; it is not wired in, so there is
+no extra for it yet.
 
 ## Dependencies
 

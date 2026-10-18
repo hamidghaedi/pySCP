@@ -20,9 +20,12 @@ pip install -e ".[dev]"
 ```
 
 Core deps are anndata, matplotlib, numpy, pandas, scipy. Everything heavier is an
-extra: `[gam]`, `[graph]`, `[enrich]`, `[velocity]`, `[interactive]`, `[raster]`,
-`[fuzzy]`, or `[all]`. A function that needs one imports it lazily and tells you
-which extra to install.
+extra: `[stats]` (scikit-learn and scikit-misc, for kmeans splits and LOESS
+curves), `[gam]`, `[graph]` (python-igraph, for network and enrichmap layouts),
+`[interactive]` (plotly, for the 3-D plots), `[fuzzy]` (scikit-fuzzy, for
+`split_method="mfuzz"`), or `[all]`. A function that needs one imports it lazily
+and tells you which extra to install. Python 3.10 or newer and matplotlib 3.10
+or newer are required.
 
 ## Quick start
 
