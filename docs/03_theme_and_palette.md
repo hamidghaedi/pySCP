@@ -124,9 +124,32 @@ expects `cell_dim_plot(adata, "CellType")` to use the same colours, and
   palette, so writing one call's colours would fix the palette of every
   later call.
 
-Wired so far into `cell_dim_plot` (groups, `stat_by`, the PAGA nodes),
-`cell_dim_plot_3d`, `paga_plot`, `velocity_plot(group_by=)` and
-`projection_plot`. The R parity fixtures build objects without stored
+* `uns_level_palcolor(adata, {key: levels}, palette=, palcolor=,
+  default_palette=, use_uns_colors=True, pooled=False)` is the same rule for
+  code that only takes a `palette` / `palcolor` pair — the DataFrame engines
+  `expression_stat_plot` and `stat_plot`, and the heatmap track builders.
+  When the stored colours apply it returns a *named* `palcolor` covering every
+  level (stored colour, else the palette's), which every engine honours
+  verbatim; otherwise it returns `palcolor` untouched, so the engine computes
+  what it always did. Several columns sharing one `palcolor` (several
+  `group_by`, a sankey's columns) are merged; if that would give one level
+  name two colours the stored lists are ignored with a warning. `pooled=True`
+  takes the palette over the union of the levels, as sankey and chord nodes
+  share one.
+
+Wired into `cell_dim_plot` (groups, `stat_by`, the PAGA nodes),
+`cell_dim_plot_3d`, `paga_plot`, `velocity_plot(group_by=)`,
+`projection_plot`, `feature_stat_plot` (the `fill_by="group"` fills by
+`split_by` or `group_by`, and the `bg_by` stripes), `cell_stat_plot` (the
+`stat_by` fills; sankey/chord nodes), `cell_density_plot`, `feature_cor_plot`
+and `dynamic_plot(group_by=)` (points), and the heatmaps' categorical tracks:
+`group_heatmap` (group and split blocks, `cell_annotation` pies and violins,
+`fill_by="group"` violins), `feature_heatmap` (group, split and
+`cell_annotation` tracks) and `dynamic_heatmap` (`cell_annotation` tracks,
+`separate_annotation` ridges). Not wired: `cell_stat_plot`'s `bg_by` stripes
+(the `stat_plot` engine has no palette argument for them), venn and upset
+(they colour sets, not levels), and `cell_cor_heatmap` (it draws no cell
+annotation tracks). The R parity fixtures build objects without stored
 colours, so every parity test runs on R's palette.
 
 ## 3. Color algebra

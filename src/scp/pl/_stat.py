@@ -29,7 +29,7 @@ from .._breaks import extended_breaks
 from ..fetch import as_ordered_categorical, fetch_data
 from ..fetch import calculate_coexp as calculate_coexp_fn
 from ..layout import LegendColumn, PanelGrid
-from ..palettes import continuous_palette, discrete_palette
+from ..palettes import continuous_palette, discrete_palette, level_colors, uns_level_palcolor
 from ..theme import apply_theme, halo, theme_scp
 from ._stat_feature import _PT, ExprPlotType, _Ax, expression_stat_plot
 
@@ -66,7 +66,7 @@ def feature_stat_plot(
     palcolor: Sequence[str] | dict[str, str] | None = None,
     alpha: float = 1.0,
     bg_palette: str = "Paired",
-    bg_palcolor: Sequence[str] | None = None,
+    bg_palcolor: Sequence[str] | dict[str, str] | None = None,
     bg_alpha: float = 0.2,
     # overlays
     add_box: bool = False,
@@ -109,6 +109,7 @@ def feature_stat_plot(
     byrow: bool = True,
     force: bool = False,
     seed: int = 11,
+    use_uns_colors: bool = True,
 ) -> Figure:
     """Per-cell distributions of features or numeric ``obs`` columns.
 
@@ -142,6 +143,13 @@ def feature_stat_plot(
     * ``stack=True`` — the stacked-violin figure: one shared-x GridSpec column
       per ``group_by``, one row per feature with its own y limits and exactly
       two y ticks, one y label and one legend.  R builds it by gtable surgery.
+
+    ``use_uns_colors=True`` (Python-only): with ``fill_by="group"`` and
+    ``palette`` / ``palcolor`` at their defaults, the fills take scanpy's
+    ``adata.uns[f"{key}_colors"]`` for ``split_by`` (or each ``group_by``),
+    and the ``bg_by`` stripes for ``bg_by`` with ``bg_palette`` /
+    ``bg_palcolor`` at theirs; see :func:`scp.palettes.level_colors`.
+    ``False`` gives R's palette colours exactly.
     """
     feats = [stat_by] if isinstance(stat_by, str) else list(stat_by)
     groups = [group_by] if isinstance(group_by, str) else (list(group_by) if group_by else [])
@@ -174,6 +182,20 @@ def feature_stat_plot(
             raise KeyError(f"{col} is not in adata.obs.")
         # keep the Categorical: its categories are the declared level order
         frame[col] = as_ordered_categorical(adata.obs[col]).set_axis(frame.index)
+
+    # the engine takes no AnnData: scanpy's stored colours go down as palcolor
+    def _levels(col: str) -> list[str]:
+        return [str(c) for c in frame[col].cat.categories]
+
+    if fill_by == "group" and (split_by or groups):
+        fill_cols = [split_by] if split_by else groups
+        palcolor = uns_level_palcolor(
+            adata, {c: _levels(c) for c in fill_cols}, palette=palette, palcolor=palcolor,
+            default_palette="Paired", use_uns_colors=use_uns_colors)
+    if bg_by is not None:
+        bg_palcolor = uns_level_palcolor(
+            adata, {bg_by: _levels(bg_by)}, palette=bg_palette, palcolor=bg_palcolor,
+            default_palette="Paired", use_uns_colors=use_uns_colors)
 
     return expression_stat_plot(
         frame, feats, group_by=groups or None, split_by=split_by, bg_by=bg_by,
@@ -228,6 +250,7 @@ def cell_stat_plot(
     byrow: bool = True,
     force: bool = False,
     seed: int = 11,
+    use_uns_colors: bool = True,
 ) -> Figure:
     """Composition of one categorical ``obs`` column across groups.
 
@@ -250,6 +273,13 @@ def cell_stat_plot(
     types (``sankey``, ``chord``, ``venn``, ``upset``) and forces
     ``stat_type="count"``.  ``individual=True`` gives every group level its
     own panel (see :func:`stat_plot`).
+
+    ``use_uns_colors=True`` (Python-only): with ``palette`` / ``palcolor`` at
+    their defaults, the ``stat_by`` fills take scanpy's
+    ``adata.uns[f"{stat_by}_colors"]`` (see
+    :func:`scp.palettes.level_colors`); sankey and chord pool the lists of
+    their columns over the shared node palette.  Venn and upset colour sets,
+    not levels, and are unaffected.  ``False`` gives R's colours exactly.
     """
     if isinstance(stat_by, str):
         stat_cols = [stat_by]
@@ -263,6 +293,21 @@ def cell_stat_plot(
     data = adata.obs.loc[:, cols].copy()
     if cells is not None:
         data = data.loc[data.index.intersection(pd.Index(cells))]
+    # the engine takes no AnnData: scanpy's stored colours go down as palcolor
+    if plot_type in ("sankey", "chord"):
+        from ._stat_flow import _categorical
+
+        palcolor = uns_level_palcolor(
+            adata, {c: [str(x) for x in _categorical(data[c], show_na=False).cat.categories]
+                    for c in stat_cols},
+            palette=palette, palcolor=palcolor, default_palette="Paired",
+            use_uns_colors=use_uns_colors, pooled=True)
+    elif plot_type not in ("venn", "upset") and len(stat_cols) == 1:
+        stat_cat = as_ordered_categorical(data[stat_cols[0]], show_na=na_stat)
+        palcolor = uns_level_palcolor(
+            adata, {stat_cols[0]: [str(x) for x in stat_cat.cat.categories]},
+            palette=palette, palcolor=palcolor, default_palette="Paired",
+            use_uns_colors=use_uns_colors)
     return stat_plot(
         data, stat_by=stat_cols, group_by=group_by, split_by=split_by, bg_by=bg_by,
         plot_type=plot_type, stat_type=stat_type, position=position, palette=palette,
@@ -917,6 +962,7 @@ def feature_cor_plot(
     byrow: bool = True,
     force: bool = False,
     seed: int = 11,
+    use_uns_colors: bool = True,
 ) -> Figure:
     """Pairwise scatter-plot matrix over features. Milestone 6.
 
@@ -951,6 +997,11 @@ def feature_cor_plot(
 
     ``pt_size`` is in ggplot millimetres; ``None`` is R's
     ``min(3000 / n_cells, 0.5)``.
+
+    ``use_uns_colors=True`` (Python-only): with ``palette`` / ``palcolor`` at
+    their defaults the ``group_by`` colours are scanpy's
+    ``adata.uns[f"{group_by}_colors"]`` (:func:`scp.palettes.level_colors`);
+    ``False`` gives R's palette colours exactly.
     """
     from ._stat_feature import _nrd0
 
@@ -995,7 +1046,10 @@ def feature_cor_plot(
     gvals, glevels = _levels(group_by)
     svals, slevels = _levels(split_by)
     slevels = [s for s in slevels if (svals == s).any()]
-    colors = discrete_palette(glevels, palette=palette, palcolor=palcolor)
+    colors = (level_colors(adata, group_by, glevels, palette=palette, palcolor=palcolor,
+                           default_palette="Paired", use_uns_colors=use_uns_colors)
+              if group_by is not None
+              else discrete_palette(glevels, palette=palette, palcolor=palcolor))
 
     n = len(feats)
     cor_ramp = continuous_palette(palette=cor_palette, n=200)
@@ -1168,6 +1222,7 @@ def cell_density_plot(
     ncol: int | None = None,
     byrow: bool = True,
     force: bool = False,
+    use_uns_colors: bool = True,
 ) -> Figure:
     """Ridgeline plot of a feature per group. Milestone 6.
 
@@ -1179,6 +1234,11 @@ def cell_density_plot(
     what makes pseudotime ridges spread evenly.  ``decreasing`` orders groups
     by their median of the feature; ``None`` keeps factor order but reversed,
     so level 1 lands on top.
+
+    ``use_uns_colors=True`` (Python-only): with ``palette`` / ``palcolor`` at
+    their defaults the ``group_by`` colours are scanpy's
+    ``adata.uns[f"{group_by}_colors"]`` (:func:`scp.palettes.level_colors`);
+    ``False`` gives R's palette colours exactly.
     """
     feats = [features] if isinstance(features, str) else list(features)
     if len(feats) > 50 and not force:
@@ -1197,7 +1257,10 @@ def cell_density_plot(
         cat = as_ordered_categorical(adata.obs[group_by])
         gcat = pd.Series(np.asarray(cat).astype(str), index=adata.obs_names)
         glevels = [str(c) for c in cat.cat.categories]
-    colors = discrete_palette(glevels, palette=palette, palcolor=palcolor)
+    colors = (level_colors(adata, group_by, glevels, palette=palette, palcolor=palcolor,
+                           default_palette="Paired", use_uns_colors=use_uns_colors)
+              if group_by is not None
+              else discrete_palette(glevels, palette=palette, palcolor=palcolor))
 
     split_levels: list[str | None] = [None]
     if split_by is not None:

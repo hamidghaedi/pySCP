@@ -1170,7 +1170,7 @@ def expression_stat_plot(
     palcolor: Sequence[str] | dict[str, str] | None = None,
     alpha: float = 1.0,
     bg_palette: str = "Paired",
-    bg_palcolor: Sequence[str] | None = None,
+    bg_palcolor: Sequence[str] | dict[str, str] | None = None,
     bg_alpha: float = 0.2,
     # overlays
     add_box: bool = False,

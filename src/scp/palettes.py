@@ -16,12 +16,13 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from importlib import resources
-from typing import Literal
+from typing import Literal, TypeVar
 
 import numpy as np
 import pandas as pd
 
 PaletteType = Literal["discrete", "continuous"]
+_PalColor = TypeVar("_PalColor")
 
 NA_COLOR_DEFAULT = "#CCCCCC"  # R's "grey80"
 
@@ -36,6 +37,7 @@ __all__ = [
     "continuous_palette",
     "uns_palcolor",
     "level_colors",
+    "uns_level_palcolor",
     "NA_COLOR_DEFAULT",
 ]
 
@@ -310,6 +312,75 @@ def level_colors(
         stored = uns_palcolor(adata, key, levels)
         if stored:
             out.update(stored)
+    return out
+
+
+def uns_level_palcolor(
+    adata,
+    columns: Mapping[str, Sequence[str] | None],
+    *,
+    palette: str,
+    palcolor: _PalColor,
+    default_palette: str,
+    use_uns_colors: bool = True,
+    pooled: bool = False,
+) -> _PalColor | dict[str, str]:
+    """The ``palcolor`` to hand an engine that takes no AnnData.
+
+    :func:`level_colors` for code that cannot call it itself: a DataFrame
+    engine (``expression_stat_plot``, ``stat_plot``) or a track builder that
+    receives a ``palette`` / ``palcolor`` pair.  ``columns`` maps each
+    ``obs`` key the engine colours with this one ``palcolor`` to its levels
+    (``None``: its categories).  When the same rules as :func:`level_colors`
+    let scanpy's stored colours in, the result is a *named* mapping covering
+    every level -- the stored colour where there is one, the palette's
+    colour otherwise -- which every engine honours verbatim; when they do
+    not, ``palcolor`` is returned untouched, so the engine computes exactly
+    what it did before.
+
+    The palette's colours are each column's own (``pooled=False``, as
+    ``expression_stat_plot`` colours every ``group_by`` separately) or one
+    palette over the union of the levels in column order (``pooled=True``,
+    sankey and chord nodes).  Two columns that would give one level name two
+    different colours cannot share a mapping; then the stored colours are
+    ignored with a warning.
+    """
+    if not use_uns_colors or palcolor is not None or palette != default_palette:
+        return palcolor
+    levels_of: dict[str, list[str]] = {}
+    stored_of: dict[str, dict[str, str]] = {}
+    for key, levels in columns.items():
+        if levels is None:
+            obs = getattr(adata, "obs", None)
+            if obs is None or key not in obs.columns:
+                continue
+            if not isinstance(obs[key].dtype, pd.CategoricalDtype):
+                continue
+            levels = [str(c) for c in obs[key].cat.categories]
+        levels_of[key] = [str(lv) for lv in levels]
+        stored = uns_palcolor(adata, key, levels_of[key])
+        if stored:
+            stored_of[key] = stored
+    if not stored_of:
+        return palcolor
+    if pooled:
+        union = list(dict.fromkeys(lv for lvs in levels_of.values() for lv in lvs))
+        base = discrete_palette(union, palette=palette)
+        per_key = {k: {lv: base[lv] for lv in lvs} for k, lvs in levels_of.items()}
+    else:
+        per_key = {k: discrete_palette(lvs, palette=palette) for k, lvs in levels_of.items()}
+    out: dict[str, str] = {}
+    for key, colors in per_key.items():
+        colors.update(stored_of.get(key, {}))
+        for lv, c in colors.items():
+            if lv in out and out[lv] != c:
+                warnings.warn(
+                    f"{', '.join(map(repr, levels_of))} share one palette and give level "
+                    f"{lv!r} two colours; the adata.uns['<key>_colors'] lists are ignored.",
+                    stacklevel=3,
+                )
+                return palcolor
+            out[lv] = c
     return out
 
 

@@ -775,6 +775,7 @@ def dynamic_plot(
     x_order: Literal["value", "rank"] = "value",
     legend_position: LegendPosition = "right",
     seed: int = 11,
+    use_uns_colors: bool = True,
     **kwargs,
 ) -> Figure:
     """Expression along pseudotime: cells, fitted trends and confidence ribbons.
@@ -800,6 +801,10 @@ def dynamic_plot(
       plotted lineages, coloured by ``group_by`` through ``point_palette``
       (black without it), with a matching rug.  Lines and ribbons sit at each
       lineage's own pseudotime, coloured by ``line_palette``.
+      ``use_uns_colors=True`` (Python-only): with ``point_palette`` /
+      ``point_palcolor`` at their defaults the points take scanpy's
+      ``adata.uns[f"{group_by}_colors"]`` (:func:`scp.palettes.level_colors`);
+      ``False`` gives R's palette colours exactly.
 
     Deliberate divergence: when the non-integer guard fires (the counts are
     not counts), R sets ``libsize`` to 1 but still multiplies by the median
@@ -867,7 +872,9 @@ def dynamic_plot(
     if group_by is not None:
         gcat = as_ordered_categorical(adata.obs[group_by])
         glevels = [str(x) for x in gcat.cat.categories]
-        gcolors = discrete_palette(glevels, palette=point_palette, palcolor=point_palcolor)
+        gcolors = level_colors(adata, group_by, glevels, palette=point_palette,
+                               palcolor=point_palcolor, default_palette="Paired",
+                               use_uns_colors=use_uns_colors)
         gvals = np.asarray(gcat).astype(object)
     lcolors = discrete_palette([str(x) for x in lins], palette=line_palette, palcolor=line_palcolor)
     fcolors = discrete_palette([str(x) for x in feats], palette=line_palette, palcolor=line_palcolor)

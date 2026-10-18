@@ -183,8 +183,8 @@ scanpy already persists `adata.uns[f"{key}_colors"]`, a list aligned to
 `obs[key].cat.categories`. It is read first when present — it is the
 AnnData-native equivalent of a named `palcolor` — so a figure here matches the
 `sc.pl` figure of the same object (`scp.palettes.uns_palcolor` /
-`level_colors`; the dim and trajectory plots so far, `use_uns_colors=False`
-to opt out). It is used only when the column is categorical and the list has
+`level_colors`; every plot that colours by a categorical `obs` column,
+`use_uns_colors=False` to opt out). It is used only when the column is categorical and the list has
 one colour per category, and only when the caller left `palette` at its
 default and `palcolor` unset. It is **not** written back: a stored list wins
 over the default palette, so writing one call's colours would silently fix

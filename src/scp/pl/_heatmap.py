@@ -62,7 +62,13 @@ from ..heatmap.spec import (
     PanelSpec,
     Track,
 )
-from ..palettes import continuous_palette, discrete_palette
+from ..palettes import (
+    NA_COLOR_DEFAULT,
+    continuous_palette,
+    discrete_palette,
+    level_colors,
+    uns_level_palcolor,
+)
 
 __all__ = [
     "group_heatmap",
@@ -502,11 +508,15 @@ def _fill_key(label: str, split: bool) -> str:
 def _glyph_annotation(key, ser: pd.Series, keep: np.ndarray, panels: list[PanelSpec],
                       groups: list[str], cell_lab: Mapping[str, np.ndarray], *, palette: str,
                       group_levels: Mapping[str, list[str]],
-                      split_levels: list[str]) -> LegendSpec | None:
+                      split_levels: list[str], adata=None, split_by: str | None = None,
+                      use_uns_colors: bool = False) -> LegendSpec | None:
     """GroupHeatmap's ``cell_annotation``: a pie or a violin per column (8363-8484).
 
     Appends a 10 mm custom lane to every panel and returns the legend (pies
-    only; R's violin legend is commented out).
+    only; R's violin legend is commented out).  With ``use_uns_colors`` the
+    pie wedges (by ``key``) and the violins (by ``split_by``, else the
+    panel's group) take scanpy's stored colours, as :func:`level_colors`
+    rules.
     """
     numeric = pd.api.types.is_numeric_dtype(ser) and not pd.api.types.is_bool_dtype(ser)
     split = bool(split_levels)
@@ -517,7 +527,10 @@ def _glyph_annotation(key, ser: pd.Series, keep: np.ndarray, panels: list[PanelS
             in_panel = np.array([not str(x).startswith("\0") for x in lab], dtype=bool)
             fin = vals[in_panel & np.isfinite(vals)]
             y_range = (float(fin.min()), float(fin.max())) if fin.size else (0.0, 1.0)
-            fills = discrete_palette(split_levels if split else group_levels[g], palette=palette)
+            fills = level_colors(adata, str(split_by) if split else g,
+                                 split_levels if split else group_levels[g], palette=palette,
+                                 palcolor=None, default_palette="Paired",
+                                 use_uns_colors=use_uns_colors)
             per_col = [vals[lab == str(c)] for c in p.col_labels]
             colors = [fills.get(_fill_key(c, split), "#B3B3B3") for c in p.col_labels]
 
@@ -537,7 +550,10 @@ def _glyph_annotation(key, ser: pd.Series, keep: np.ndarray, panels: list[PanelS
     levels = [str(c) for c in cat.cat.categories]
     codes = np.asarray(cat.cat.codes)[keep]
     has_na = bool((codes < 0).any())
-    colors_map = discrete_palette(levels, palette=palette, include_na=has_na)
+    colors_map = level_colors(adata, str(key), levels, palette=palette, palcolor=None,
+                              default_palette="Paired", use_uns_colors=use_uns_colors)
+    if has_na:
+        colors_map["NA"] = NA_COLOR_DEFAULT
     wedge_colors = [colors_map[lv] for lv in levels] + ([colors_map["NA"]] if has_na else [])
     for gi, (p, g) in enumerate(zip(panels, groups, strict=True)):
         lab = cell_lab[g]
@@ -568,8 +584,13 @@ def _violin_values(adata, feats: list[str], keep: np.ndarray) -> pd.DataFrame:
 def _violin_layer(values: pd.DataFrame, row_feats: list[str], cols: list[str],
                   cell_lab: np.ndarray, *, fill_by: str, fill_palette: str,
                   fill_palcolor, feature_order: list[str], group_levels: list[str],
-                  split_levels: list[str]) -> Layer:
-    """``add_violin``: a violin per body cell, one value range per panel (8768)."""
+                  split_levels: list[str], adata=None, group_by: str | None = None,
+                  split_by: str | None = None, use_uns_colors: bool = False) -> Layer:
+    """``add_violin``: a violin per body cell, one value range per panel (8768).
+
+    ``fill_by="group"`` with ``use_uns_colors`` takes scanpy's stored colours
+    of ``split_by`` (else ``group_by``), as :func:`level_colors` rules.
+    """
     split = bool(split_levels)
     in_panel = np.array([not str(x).startswith("\0") for x in cell_lab])
     V = values.to_numpy(dtype=float)
@@ -583,8 +604,10 @@ def _violin_layer(values: pd.DataFrame, row_feats: list[str], cols: list[str],
         def color(f, c):
             return fmap[f]
     elif fill_by == "group":
-        gmap = discrete_palette(split_levels if split else group_levels, palette=fill_palette,
-                                palcolor=fill_palcolor)
+        gmap = level_colors(adata, str(split_by if split else group_by),
+                            split_levels if split else group_levels, palette=fill_palette,
+                            palcolor=fill_palcolor, default_palette="Dark2",
+                            use_uns_colors=use_uns_colors)
 
         def color(f, c):
             return gmap.get(_fill_key(c, split), "#B3B3B3")
@@ -717,6 +740,7 @@ def group_heatmap(
     palette: str = "RdBu",
     palcolor: Sequence[str] | None = None,
     seed: int = 11,
+    use_uns_colors: bool = True,
 ) -> HeatmapResult:
     """Group-averaged expression heatmap.
 
@@ -802,6 +826,15 @@ def group_heatmap(
     pair) then name the *drawn* axes -- they are swapped on entry -- and the
     returned matrices are not transposed.  The enrichment boxes cannot be
     combined with ``flip``, as in R.
+
+    ``use_uns_colors=True`` (Python-only) colours every categorical ``obs``
+    track with scanpy's ``adata.uns[f"{key}_colors"]`` when its palette was
+    left at the default -- the group blocks (``group_palette="Paired"``),
+    the split blocks (``cell_split_palette="simspec"``), the
+    ``cell_annotation`` pies and violins (``"Paired"``) and the
+    ``fill_by="group"`` violins (``fill_palette="Dark2"``, no
+    ``fill_palcolor``); see :func:`scp.palettes.level_colors`.  ``False``
+    gives R's palette colours exactly.
     """
     if flip:
         # SCP-plot.R 8094: the flags name the drawn axes once flipped
@@ -948,7 +981,9 @@ def group_heatmap(
     # 8. panels ----------------------------------------------------------------
     cell_in = dot_size_mm * MM if add_dot else 0.16
     gpals = _per_item(group_palette, len(groups), "group_palette")
-    split_colors = (discrete_palette(split_levels, palette=cell_split_palette)
+    split_colors = (level_colors(adata, split_by, split_levels, palette=cell_split_palette,
+                                 palcolor=None, default_palette="simspec",
+                                 use_uns_colors=use_uns_colors)
                     if split_by is not None else None)
     # every kept cell's column label in each panel ("group" or "group : split")
     cell_lab: dict[str, np.ndarray] = {}
@@ -997,8 +1032,10 @@ def group_heatmap(
             layers.append(_violin_layer(
                 violin_data, [feats[i] for i in order], cols, cell_lab[g],
                 fill_by=fill_by, fill_palette=fill_palette, fill_palcolor=fill_palcolor,
-                feature_order=feats, group_levels=group_levels[g], split_levels=split_levels))
-        gcols = discrete_palette(group_levels[g], palette=gpals[gi])
+                feature_order=feats, group_levels=group_levels[g], split_levels=split_levels,
+                adata=adata, group_by=g, split_by=split_by, use_uns_colors=use_uns_colors))
+        gcols = level_colors(adata, g, group_levels[g], palette=gpals[gi], palcolor=None,
+                             default_palette="Paired", use_uns_colors=use_uns_colors)
         top = [Track(name=g, side="top", kind="simple",
                      values=np.array([c.split(" : ")[0] for c in cols]), colors=gcols,
                      size_in=4 * MM, show_name=True)]
@@ -1025,7 +1062,8 @@ def group_heatmap(
                    else fetch_data(adata, [key], layer=None)[key])  # genes: R reads @data
             lg = _glyph_annotation(key, ser, keep, panels, groups, cell_lab,
                                    palette=pal or "Paired", group_levels=group_levels,
-                                   split_levels=split_levels)
+                                   split_levels=split_levels, adata=adata, split_by=split_by,
+                                   use_uns_colors=use_uns_colors)
             if lg is not None:
                 legends.append(lg)
 
@@ -1157,6 +1195,7 @@ def feature_heatmap(
     palette: str = "RdBu",
     palcolor: Sequence[str] | None = None,
     seed: int = 11,
+    use_uns_colors: bool = True,
 ) -> HeatmapResult:
     """Per-cell (unaggregated) expression heatmap.
 
@@ -1187,6 +1226,11 @@ def feature_heatmap(
     defaulted body only while row names are hidden, and ``show_row_names``
     keeps the port's ``True`` default, so pass ``show_row_names=False`` for a
     long feature list.
+
+    ``use_uns_colors=True`` (Python-only) colours the group, split and
+    categorical ``cell_annotation`` tracks with scanpy's
+    ``adata.uns[f"{key}_colors"]`` when their palette was left at the
+    default, as in :func:`group_heatmap`; ``False`` gives R's colours.
     """
     if flip:
         cluster_rows, cluster_columns = cluster_columns, cluster_rows
@@ -1299,7 +1343,9 @@ def feature_heatmap(
     row_labels = pd.Index([feats[i] for i in order])
 
     gpals = _per_item(group_palette, len(groups), "group_palette")
-    split_colors = (discrete_palette(split_levels, palette=cell_split_palette)
+    split_colors = (level_colors(adata, str(split_by), split_levels,
+                                 palette=cell_split_palette, palcolor=None,
+                                 default_palette="simspec", use_uns_colors=use_uns_colors)
                     if split_levels else None)
     legends = [LegendSpec(title=scale_title, kind="continuous", cmap=cmap, vmin=vmin, vmax=vmax)]
     panels, matrices, col_dends = [], {}, {}
@@ -1311,6 +1357,11 @@ def feature_heatmap(
             ann_frames[key] = obs[key]
         else:  # a gene: SCP reads @data here regardless of `slot`
             ann_frames[key] = fetch_data(adata, [key], layer=None)[key]
+    # resolved once, so a misaligned uns list warns once rather than per panel
+    ann_palcolor = {key: uns_level_palcolor(adata, {key: None}, palette=pal or "Paired",
+                                            palcolor=None, default_palette="Paired",
+                                            use_uns_colors=use_uns_colors)
+                    for key, pal in zip(ann_frames, ann_pals, strict=True)}
     for gi, g in enumerate(groups):
         proc = processed[g][order, :]
         lv_order = _panel_levels(labels[g], group_levels[g], split_levels or [])
@@ -1324,7 +1375,8 @@ def feature_heatmap(
             col_dends[g] = cdend
         top: list[Track] = []
         if g != "All.groups":
-            gcols = discrete_palette(group_levels[g], palette=gpals[gi])
+            gcols = level_colors(adata, g, group_levels[g], palette=gpals[gi], palcolor=None,
+                                 default_palette="Paired", use_uns_colors=use_uns_colors)
             top.append(Track(name=g, side="top", kind="simple",
                              values=np.array([s.split(" : ")[0] for s in labs]), colors=gcols,
                              size_in=4 * MM, show_name=gi == 0))
@@ -1335,7 +1387,7 @@ def feature_heatmap(
                              colors=split_colors, size_in=4 * MM, show_name=gi == 0))
         for (key, ser), pal in zip(ann_frames.items(), ann_pals, strict=True):
             t, lg = _annotation_track(key, ser.iloc[cells_g], side="top", size_in=4 * MM,
-                                      palette=pal or "Paired", palcolor=None,
+                                      palette=pal or "Paired", palcolor=ann_palcolor[key],
                                       show_name=gi == 0, reference=ser.iloc[union])
             top.append(t)
             if gi == 0:
@@ -1615,6 +1667,7 @@ def dynamic_heatmap(
     palette: str = "viridis",
     palcolor: Sequence[str] | None = None,
     seed: int = 11,
+    use_uns_colors: bool = True,
 ) -> HeatmapResult:
     """Expression along pseudotime, one panel per lineage.
 
@@ -1664,6 +1717,13 @@ def dynamic_heatmap(
 
     ``separate_annotation_palette`` / ``_palcolor`` are recycled over the
     entries, as R does.
+
+    ``use_uns_colors=True`` (Python-only) colours the categorical
+    ``cell_annotation`` tracks and ``separate_annotation`` ridges with
+    scanpy's ``adata.uns[f"{key}_colors"]`` when their palette was left at
+    ``"Paired"`` (and, for the ridges, no ``separate_annotation_palcolor``
+    given); see :func:`scp.palettes.level_colors`.  ``False`` gives R's
+    colours exactly.
 
     ``flip=True`` transposes the panels and stacks them vertically; as in R,
     the ``cluster_*`` flags then name the drawn axes (they are swapped on
@@ -1836,6 +1896,11 @@ def dynamic_heatmap(
     for key in cell_annotation or []:
         ann_frames[key] = (obs[key] if key in obs.columns
                            else fetch_data(adata, [key], layer=None)[key])  # R: @data
+    # resolved once, so a misaligned uns list warns once rather than per panel
+    ann_palcolor = {key: uns_level_palcolor(adata, {key: None}, palette=pal or "Paired",
+                                            palcolor=None, default_palette="Paired",
+                                            use_uns_colors=use_uns_colors)
+                    for key, pal in zip(ann_frames, ann_pals, strict=True)}
     panels, matrices, col_dends = [], {}, {}
     separate: list[tuple[list[str], bool, str, Sequence[str] | None]] = []
     if separate_annotation is not None:
@@ -1851,6 +1916,10 @@ def dynamic_heatmap(
             missing = [k for k in keys if k not in obs.columns and k not in set(adata.var_names)]
             if missing:
                 raise KeyError(f"separate_annotation: {','.join(missing)} is not in adata")
+            if ridge:
+                pc = uns_level_palcolor(adata, {keys[0]: None}, palette=pal or "Paired",
+                                        palcolor=pc, default_palette="Paired",
+                                        use_uns_colors=use_uns_colors)
             separate.append((keys, ridge, pal or "Paired", pc))
     for li, lin in enumerate(lins):
         M = mat_list[lin][order]
@@ -1864,7 +1933,7 @@ def dynamic_heatmap(
                      cmap=pcmap, norm=pnorm, size_in=4 * MM, show_name=li == 0)]
         for (key, ser), pal in zip(ann_frames.items(), ann_pals, strict=True):
             t, lg = _annotation_track(key, ser.iloc[cells_l], side="top", size_in=4 * MM,
-                                      palette=pal or "Paired", palcolor=None,
+                                      palette=pal or "Paired", palcolor=ann_palcolor[key],
                                       show_name=li == 0, reference=ser.iloc[keep_cells])
             top.append(t)
             if li == 0:
