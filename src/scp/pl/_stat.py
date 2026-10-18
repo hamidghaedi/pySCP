@@ -31,7 +31,7 @@ from ..fetch import calculate_coexp as calculate_coexp_fn
 from ..layout import LegendColumn, PanelGrid
 from ..palettes import continuous_palette, discrete_palette
 from ..theme import apply_theme, halo, theme_scp
-from ._stat_feature import ExprPlotType, _Ax, expression_stat_plot
+from ._stat_feature import _PT, ExprPlotType, _Ax, expression_stat_plot
 
 __all__ = [
     "feature_stat_plot",
@@ -215,6 +215,10 @@ def cell_stat_plot(
     flip: bool = False,
     keep_empty: bool = False,
     individual: bool = False,
+    title: str | None = None,
+    subtitle: str | None = None,
+    xlab: str | None = None,
+    ylab: str | None = None,
     cells: Sequence[str] | None = None,
     panel_size: tuple[float, float] = (2.6, 2.2),
     aspect_ratio: float | None = None,
@@ -264,7 +268,8 @@ def cell_stat_plot(
         plot_type=plot_type, stat_type=stat_type, position=position, palette=palette,
         palcolor=palcolor, alpha=alpha, na_color=na_color, na_stat=na_stat,
         stat_level=stat_level, label=label, label_size=label_size, flip=flip,
-        keep_empty=keep_empty, individual=individual, panel_size=panel_size,
+        keep_empty=keep_empty, individual=individual, title=title, subtitle=subtitle,
+        xlab=xlab, ylab=ylab, panel_size=panel_size,
         aspect_ratio=aspect_ratio, legend_position=legend_position, nrow=nrow,
         ncol=ncol, byrow=byrow, force=force, seed=seed,
     )
@@ -291,6 +296,10 @@ def stat_plot(
     flip: bool = False,
     keep_empty: bool = False,
     individual: bool = False,
+    title: str | None = None,
+    subtitle: str | None = None,
+    xlab: str | None = None,
+    ylab: str | None = None,
     panel_size: tuple[float, float] = (2.6, 2.2),
     aspect_ratio: float | None = None,
     legend_position: str = "right",
@@ -424,6 +433,10 @@ def stat_plot(
         aspect_ratio = 1 / aspect_ratio if aspect_ratio else aspect_ratio
         panel_size = (panel_size[1], panel_size[0])
     th = theme_scp(aspect_ratio=aspect_ratio, legend_position=legend_position)
+    # R: xlab %||% group.by ("" when there is no group.by) and
+    # ylab %||% ifelse(stat_type == "count", "Count", "Percentage")
+    x_title = xlab if xlab is not None else ("" if group_by == "__all__" else str(group_by))
+    y_title = ylab if ylab is not None else ("Count" if stat_type == "count" else "Percentage")
     # One panel per split level, or -- individual=TRUE -- per (split, group)
     # pair with the group level varying fastest, named "group:element:split"
     # as R names them.
@@ -469,17 +482,14 @@ def stat_plot(
 
         if not levels_x:
             ax.set_xticks([])
-            if sp is not None:
-                ax.set_title(str(sp), fontsize=th.size("plot.title"))
+            _label_stat_panel(ax, sp, plot_type, flip, title, subtitle, x_title, y_title, th)
             continue
 
         _draw_stat_panel(ax, values[levels_x], stat_levels, levels_x, colors,
                          plot_type=plot_type, stat_type=stat_type, position=position,
                          alpha=alpha, label=label, label_size=label_size, flip=flip,
                          bg_by=bg_by, block=block, group_by=group_by, theme=th)
-
-        if sp is not None:
-            ax.set_title(str(sp), fontsize=th.size("plot.title"))
+        _label_stat_panel(ax, sp, plot_type, flip, title, subtitle, x_title, y_title, th)
 
     handles = [Patch(facecolor=colors[lv], edgecolor="black", label=lv) for lv in stat_levels]
     if legend_position != "none":
@@ -488,6 +498,28 @@ def stat_plot(
 
 
 _CARTESIAN = ("bar", "area", "trend", "dot")
+
+
+def _label_stat_panel(ax, sp, plot_type, flip, title, subtitle, x_title, y_title, th) -> None:
+    """``labs(title = title %||% sp, subtitle, x = xlab, y = ylab)`` (SCP-plot.R:4938).
+
+    ``x`` is the group axis and ``y`` the value axis, so under ``coord_flip``
+    they trade places, and under ``coord_polar(theta = "y")`` (pie, ring) the
+    value runs round the circle while the groups are the radius.
+    """
+    head = title if title is not None else (None if sp is None else str(sp))
+    if head is not None or subtitle:
+        text = "\n".join(t for t in (head, subtitle) if t)
+        ax.set_title(text, fontsize=th.size("plot.title"))
+    if plot_type in ("ring", "pie"):
+        ax.set_xlabel(y_title)
+        ax.set_ylabel(x_title)
+    elif plot_type in _CARTESIAN:
+        A = _Ax(ax, flip)
+        A.set_pos_label(x_title)
+        A.set_value_label(y_title)
+    elif plot_type == "rose":
+        ax.set_xlabel(x_title)
 
 
 def _draw_stat_panel(ax, values, stat_levels, levels_x, colors, *, plot_type, stat_type,
@@ -644,7 +676,7 @@ def _draw_stat_labels(A: _Ax, values: pd.DataFrame, stat_levels, *, plot_type, s
         if value <= 0:
             return
         txt = r_stat_label(value, stat_type)
-        kw = dict(ha="center", va="center", fontsize=label_size * 2, color="black")
+        kw = dict(ha="center", va="center", fontsize=label_size * _PT, color="black")
         t = A.ax.text(p, v, txt, **kw) if polar else A.text(p, v, txt, **kw)
         halo(t, foreground="white", radius=0.1)
 
@@ -777,7 +809,7 @@ def _draw_polar_stack(ax, values, stat_levels, levels_x, colors, *, ring, stat_t
                 continue
             t = ax.text(*xy(w["label_r"], w["label_theta"]),
                         r_stat_label(w["value"], stat_type), ha="center", va="center",
-                        fontsize=label_size * 2, color="black", zorder=4)
+                        fontsize=label_size * _PT, color="black", zorder=4)
             halo(t, foreground="white", radius=0.1)
 
     # the angle labels: the two ends of a closed circle share one label
@@ -920,7 +952,7 @@ def feature_cor_plot(
     ``pt_size`` is in ggplot millimetres; ``None`` is R's
     ``min(3000 / n_cells, 0.5)``.
     """
-    from ._stat_feature import _PT, _nrd0
+    from ._stat_feature import _nrd0
 
     feats = list(features)
     coexp = None
@@ -1139,6 +1171,9 @@ def cell_density_plot(
 ) -> Figure:
     """Ridgeline plot of a feature per group. Milestone 6.
 
+    R original: ``CellDensityPlot`` (``SCP-plot.R`` L5679), from SCP by Hao
+    Zhang (GPL-3), https://github.com/zhanghao-njmu/SCP.
+
     R uses ``ggridges::geom_density_ridges`` (Gaussian KDE, ``bw.nrd0``
     bandwidth).  ``x_order="rank"`` replaces values by their rank, which is
     what makes pseudotime ridges spread evenly.  ``decreasing`` orders groups
@@ -1349,6 +1384,9 @@ def volcano_plot(
     ncol: int | None = None,
 ) -> Figure:
     """Volcano plot from a differential-expression table.
+
+    R original: ``VolcanoPlot`` (``SCP-plot.R`` L7088), from SCP by Hao Zhang
+    (GPL-3), https://github.com/zhanghao-njmu/SCP.
 
     Takes a DataFrame, not an AnnData — use
     :func:`scp.io.de_from_rank_genes_groups` to build it from

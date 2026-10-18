@@ -730,7 +730,7 @@ def _draw_venn(ax: Axes, regions: pd.DataFrame, set_names, set_sizes, set_colors
                     zorder=1)
         cx, cy = X[mask].mean(), Y[mask].mean()
         t = ax.text(cx, cy, f"{int(reg.count)}\n{_fmt_r(reg.pct)}%", ha="center", va="center",
-                    fontsize=label_size * 2, color="black", zorder=4)
+                    fontsize=label_size * 72.27 / 25.4, color="black", zorder=4)
         halo(t, foreground="white", radius=0.1)
 
     for k, e in enumerate(edges):

@@ -118,3 +118,39 @@ def test_flow_and_set_types_draw_into_the_panel_grid(adata, plot_type):
                                 stat_level={"leiden": "A", "batch": "b1"})
     assert len(fig.axes) == 1
     assert fig.axes[0].patches or fig.axes[0].collections
+
+
+def _axis_titles(fig):
+    ax = fig.axes[0]
+    return ax.get_xlabel(), ax.get_ylabel(), ax.get_title()
+
+
+def test_cartesian_panels_carry_r_axis_titles(adata):
+    # labs(x = xlab %||% group.by, y = ylab %||% "Percentage"/"Count"), SCP-plot.R:4697
+    fig = scp.pl.cell_stat_plot(adata, "leiden", group_by="batch")
+    assert _axis_titles(fig)[:2] == ("batch", "Percentage")
+    fig = scp.pl.cell_stat_plot(adata, "leiden", group_by="batch", stat_type="count")
+    assert _axis_titles(fig)[:2] == ("batch", "Count")
+    fig = scp.pl.cell_stat_plot(adata, "leiden")
+    assert _axis_titles(fig)[:2] == ("", "Percentage")
+
+
+def test_axis_titles_trade_places_under_flip(adata):
+    fig = scp.pl.cell_stat_plot(adata, "leiden", group_by="batch", flip=True)
+    assert _axis_titles(fig)[:2] == ("Percentage", "batch")
+
+
+def test_title_subtitle_and_labels_override_the_defaults(adata):
+    fig = scp.pl.cell_stat_plot(adata, "leiden", group_by="batch", title="T", subtitle="S",
+                                xlab="Batch", ylab="Share")
+    assert _axis_titles(fig) == ("Batch", "Share", "T\nS")
+    # title %||% sp: without a title each split panel is named by its level
+    fig = scp.pl.cell_stat_plot(adata, "leiden", group_by="batch", split_by="batch")
+    assert [a.get_title() for a in fig.axes if a.get_title()][:2] == ["b1", "b2"]
+
+
+def test_labels_use_ggplot_text_size_in_points(adata):
+    # geom_text(size = 3.5) is 3.5 mm, i.e. 3.5 * 72.27 / 25.4 = 9.96 pt
+    fig = scp.pl.cell_stat_plot(adata, "leiden", group_by="batch", label=True)
+    sizes = {round(t.get_fontsize(), 2) for t in fig.axes[0].texts}
+    assert sizes == {round(3.5 * 72.27 / 25.4, 2)}
