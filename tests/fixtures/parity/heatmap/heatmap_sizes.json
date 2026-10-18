@@ -1,0 +1,38 @@
+{
+  "device_in": [7, 7],
+  "group_default": {
+    "width_sum": 7.05710848643919,
+    "height_sum": 6.65,
+    "fix": false,
+    "ht_width": null,
+    "ht_height": null
+  },
+  "group_fixed": {
+    "width_sum": 8.05710848643919,
+    "height_sum": 6.65,
+    "fix": true,
+    "ht_width": 4.76077874255444,
+    "ht_height": 3.63208653027961
+  },
+  "group_split30": {
+    "width_sum": 7.7922403247228,
+    "height_sum": 6.65,
+    "fix": true,
+    "ht_width": 6.65,
+    "ht_height": 6.65
+  },
+  "group_split200": {
+    "width_sum": 7.86182365805613,
+    "height_sum": 6.65,
+    "fix": true,
+    "ht_width": 6.65,
+    "ht_height": 6.65
+  },
+  "feature_split200": {
+    "width_sum": 7.81515699138946,
+    "height_sum": 6.65,
+    "fix": true,
+    "ht_width": 6.65,
+    "ht_height": 6.65
+  }
+}

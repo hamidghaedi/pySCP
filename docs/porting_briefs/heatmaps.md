@@ -382,6 +382,8 @@ fig_h = col_title_h + top_tracks + col_dend_h + body_h + col_names_h + bottom_tr
 
 and build a `GridSpec` with `width_ratios` / `height_ratios` in inches — i.e. `fig.add_gridspec(..., width_ratios=[...])` on a figure whose `figsize=(fig_w, fig_h)`. Because matplotlib ratios are relative, absolute-inch sizing is exact as long as `left=0, right=1, top=1, bottom=0` and all padding is folded into the ratios.
 
+**As implemented** (`scp/heatmap/render.py`): the figure is exactly the sum of the ratios, then `_fit_to_content` measures the union of every drawn extent (rotated column names, annotation names printed outside their lane, legend titles) and resizes the canvas to it plus `layout.MARGIN`, moving every axes, figure text and figure patch by the same offset — so nothing is clipped when saved without `bbox_inches="tight"`, and every inch size is kept. With no `height`, SCP returns 6.65 in (0.95 npc of the 7 in device) for 30 and 200 features alike (`tests/fixtures/parity/heatmap/heatmap_sizes.json`, traced from both helpers by `tools/parity/heatmap_fixtures.R`); the port keeps 0.16 in per row for short heatmaps and takes that viewport as the ceiling of the title + annotation + body + names stack (`HeatmapSpec.body_cap_in`), except when row names are printed.
+
 ---
 
 ## 8. `DynamicHeatmap` specifics

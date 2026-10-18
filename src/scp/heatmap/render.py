@@ -6,13 +6,16 @@ across every track, multi-panel concatenation, and an automatic legend column.
 ``seaborn.clustermap`` is a dead end (one body, four fixed slots, no splits), so
 this is built directly on :class:`matplotlib.gridspec.GridSpec`.
 
-The whole engine rests on one trick: the figure is created at exactly the size
-:meth:`HeatmapSpec.figsize` computes, with no margins, so **every GridSpec ratio
-is an inch value and maps 1:1 onto the page**.  That is what makes a 5 mm
-annotation lane actually 5 mm, and what lets two heatmaps line up when placed
-side by side in a manuscript.
+The whole engine rests on one trick: the figure is created at exactly the sum
+of its GridSpec ratios, with no margins, so **every GridSpec ratio is an inch
+value and maps 1:1 onto the page**.  That is what makes a 5 mm annotation lane
+actually 5 mm, and what lets two heatmaps line up when placed side by side in a
+manuscript.  Once everything is drawn, :func:`_fit_to_content` measures every
+artist and grows the figure so none of them -- rotated names, annotation names
+printed outside their lane, legend titles -- falls outside it, keeping
+``layout.MARGIN`` clear on every side; the inch sizes are kept.
 
-Spec: ``docs/porting_briefs/heatmaps.md`` §11.
+Spec: ``docs/porting_briefs/heatmaps.md`` §7 and §11.
 """
 
 from __future__ import annotations
@@ -21,12 +24,15 @@ from typing import Any, cast
 
 import numpy as np
 import pandas as pd
+from matplotlib.artist import Artist
 from matplotlib.cm import ScalarMappable
 from matplotlib.figure import Figure
 from matplotlib.gridspec import GridSpecFromSubplotSpec
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch, Rectangle
+from matplotlib.transforms import Affine2D
 
+from ..layout import MARGIN, _renderer
 from .spec import HeatmapSpec, LegendSpec, PanelSpec, Track
 
 __all__ = ["render"]
@@ -73,6 +79,65 @@ def _measure_text(fig: Figure, labels, fontsize: float, *, horizontal: bool) -> 
         longest = max(longest, (bb.width if horizontal else bb.height) / fig.dpi)
         t.remove()
     return longest + 0.06  # a little breathing room, as ComplexHeatmap pads too
+
+
+#: gap between a body edge and the names beside it, in points
+NAME_GAP_PT = 2.0
+
+
+def _capped(body: float, fixed: float, cap: float | None) -> float:
+    """``heatmap_fixsize``'s default body: whatever ``cap`` leaves, at least 1 in.
+
+    Only ever shrinks: a body shorter than what the viewport would leave keeps
+    its declared size.
+    """
+    if cap is None:
+        return body
+    return min(body, max(cap - fixed, 1.0))
+
+
+def _fit_to_content(fig: Figure, margin: float = MARGIN) -> None:
+    """Resize the figure to everything drawn on it, ``margin`` inches clear all round.
+
+    The grid reserves measured room for names, titles and legends, but a
+    rotated label, an annotation name printed outside its lane or a legend
+    title wider than the legend column can still reach past the edge, and a
+    figure saved without ``bbox_inches="tight"`` then clips it.  So once
+    everything is drawn the union of every artist's extent is measured, the
+    figure is resized to it plus ``margin``, and every axes, figure text and
+    figure patch is moved by the same offset -- the draw/measure/place contract
+    of :class:`scp.layout.PanelGrid`.  Every inch size is kept: only the canvas
+    around them changes.
+    """
+    renderer = _renderer(fig)
+    bb = fig.get_tightbbox(renderer)  # inches
+    if bb is None or not (np.isfinite(bb.width) and np.isfinite(bb.height)):
+        return
+    W0, H0 = (float(v) for v in fig.get_size_inches())
+    dx, dy = margin - bb.x0, margin - bb.y0
+    W1, H1 = bb.width + 2 * margin, bb.height + 2 * margin
+    if max(abs(dx), abs(dy), abs(W1 - W0), abs(H1 - H0)) < 1e-4:
+        return
+    boxes = []
+    for ax in fig.axes:
+        if ax.get_axes_locator() is not None:
+            continue  # inset axes (colourbars) are placed relative to their parent
+        pos = ax.get_position(original=True)
+        boxes.append((ax, pos.x0 * W0, pos.y0 * H0, pos.width * W0, pos.height * H0))
+    texts = []
+    for t in fig.texts:
+        x, y = t.get_transform().transform(t.get_position()) / fig.dpi
+        texts.append((t, x, y))
+    for patch in fig.patches:
+        old = Artist.get_transform(patch)
+        base = Affine2D().scale(W0, H0) if old is fig.transFigure else Affine2D()
+        patch.set_transform(base.translate(dx, dy) + fig.dpi_scale_trans)
+    fig.set_size_inches(W1, H1)
+    for ax, x, y, w, h in boxes:
+        ax.set_position(((x + dx) / W1, (y + dy) / H1, w / W1, h / H1))
+    for t, x, y in texts:
+        t.set_transform(fig.dpi_scale_trans)
+        t.set_position((x + dx, y + dy))
 
 
 def _draw_simple_track(ax, values, *, vertical: bool, colors=None, cmap=None, norm=None,
@@ -478,13 +543,16 @@ def render(spec: HeatmapSpec, *, dpi: float = 110.0) -> Figure:
             probe, spec.panels[0].row_labels, 7.0, horizontal=True)
     if spec.show_column_names:
         spec.measured["column_names_h"] = max(
-            _measure_text(probe, p.col_labels, 7.0, horizontal=True) for p in spec.panels) * 0.8
+            _measure_text(probe, p.col_labels, 7.0, horizontal=True) for p in spec.panels
+        ) + NAME_GAP_PT / 72
     mark_w = max(
         (_measure_text(probe, t.labels or [], 7.0, horizontal=True) + 0.25
          for t in spec.left_tracks if t.kind == "mark"), default=0.0)
-    # top-track names print left of the first panel; make sure that margin exists
+    # top-track names print left of the first panel, 3 pt clear of it; make
+    # sure that margin exists
     anno_names = [t.name for t in spec.panels[0].top_tracks if t.show_name]
-    need = _measure_text(probe, anno_names, 6.5, horizontal=True) if anno_names else 0.0
+    need = (_measure_text(probe, anno_names, 6.5, horizontal=True) + 3 / 72
+            if anno_names else 0.0)
     have = (mark_w + (spec.row_dend.size_in if spec.row_dend else 0.0)
             + sum(t.size_in for t in spec.left_tracks if t.kind != "mark"))
     mark_w += max(need - have, 0.0)
@@ -492,21 +560,17 @@ def render(spec: HeatmapSpec, *, dpi: float = 110.0) -> Figure:
     if spec.legends:
         spec.measured.setdefault("legend_w", 1.5)
 
-    fig_w, fig_h = spec.figsize()
-    fig_w += mark_w
-    # a short heatmap still gets room for its legends: the extra goes below
-    extra_h = max(_legend_height_in(spec.legends, spec.measured.get("legend_w", 0.0), dpi)
-                  + 0.1 - fig_h, 0.0)
-    fig_h += extra_h
-    fig = plt.figure(figsize=(fig_w, fig_h), dpi=dpi)
-    fig.subplots_adjust(left=0, right=1, top=1, bottom=0, wspace=0, hspace=0)
-
     # --- top-level grid, in inches ----------------------------------------
     title_h = spec.measured.get("titles_h", 0.25)
     top_h = max((sum(t.size_in for t in p.top_tracks) for p in spec.panels), default=0.0)
     coldend_h = max((d.size_in for d in spec.col_dends.values()), default=0.0)
-    body_h = spec.body_height_in if spec.body_height_in is not None else 1.0
     names_h = spec.measured.get("column_names_h", 0.0) if spec.show_column_names else 0.0
+    body_h = _capped(spec.body_height_in if spec.body_height_in is not None else 1.0,
+                     title_h + top_h + coldend_h + names_h, spec.body_cap_in)
+    # a short heatmap still gets room for its legends: the extra goes below
+    stack_h = title_h + top_h + coldend_h + body_h + names_h
+    extra_h = max(_legend_height_in(spec.legends, spec.measured.get("legend_w", 0.0), dpi)
+                  + 0.1 - stack_h, 0.0)
     height_ratios = [title_h, top_h, coldend_h, body_h, names_h + extra_h]
 
     left_w = sum(t.size_in for t in spec.left_tracks if t.kind != "mark")
@@ -517,6 +581,10 @@ def render(spec: HeatmapSpec, *, dpi: float = 110.0) -> Figure:
     bodies = [p.body_size_in if p.body_size_in is not None else 1.0 for p in spec.panels]
     width_ratios = [rowdend_w, mark_w, left_w] + bodies + [right_w, names_w, legend_w]
 
+    # the figure is exactly the sum of its ratios, so every ratio is an inch
+    fig_w, fig_h = sum(width_ratios), sum(height_ratios)
+    fig = plt.figure(figsize=(fig_w, fig_h), dpi=dpi)
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0, wspace=0, hspace=0)
     gs = fig.add_gridspec(
         len(height_ratios), len(width_ratios),
         height_ratios=[max(r, 1e-6) for r in height_ratios],
@@ -566,8 +634,9 @@ def render(spec: HeatmapSpec, *, dpi: float = 110.0) -> Figure:
                     nax.set_xlim(0, panel.matrix.shape[1])
                     nax.set_ylim(0, 1)
                     for x, lab in enumerate(panel.col_labels):
-                        nax.text(x + 0.5, 0.92, str(lab), rotation=90, ha="center",
-                                 va="top", fontsize=7)
+                        nax.annotate(str(lab), xy=(x + 0.5, 1.0), xytext=(0, -NAME_GAP_PT),
+                                     textcoords="offset points", rotation=90, ha="center",
+                                     va="top", fontsize=7)
         if panel.title:
             tax = fig.add_subplot(gs[0, col])
             _blank(tax)
@@ -699,6 +768,7 @@ def render(spec: HeatmapSpec, *, dpi: float = 110.0) -> Figure:
         lax = fig.add_subplot(gs[:, len(width_ratios) - 1])
         _draw_legends(fig, lax, spec.legends)
 
+    _fit_to_content(fig)
     return fig
 
 
@@ -780,6 +850,10 @@ def _render_flipped(spec: HeatmapSpec, *, dpi: float) -> Figure:
     # the lane names stand above the first panel, beside the top annotations
     mark_h += max(lane_names_h - (mark_h + fdend_h + toplanes_h), 0.0)
     left_w = max(title_w + 0.08, bottom_names_w + 0.06)
+    # flipped, the features run across: heatmap_fixsize caps the width, and
+    # counts the legend column in it
+    body_w = _capped(body_w, left_w + pdend_w + lanes_w + obs_names_w + legend_w,
+                     spec.body_cap_in)
 
     width_ratios = [left_w, pdend_w, lanes_w, body_w, obs_names_w, legend_w]
     TITLE, PDEND, LANES, BODY, NAMES = 0, 1, 2, 3, 4
@@ -955,6 +1029,7 @@ def _render_flipped(spec: HeatmapSpec, *, dpi: float) -> Figure:
     if spec.legends:
         lax = fig.add_subplot(gs[:, len(width_ratios) - 1])
         _draw_legends(fig, lax, spec.legends)
+    _fit_to_content(fig)
     return fig
 
 

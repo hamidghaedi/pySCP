@@ -39,7 +39,14 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 
-__all__ = ["Track", "Layer", "LegendSpec", "Dendrogram", "PanelSpec", "HeatmapSpec", "HeatmapResult"]
+__all__ = ["Track", "Layer", "LegendSpec", "Dendrogram", "PanelSpec", "HeatmapSpec", "HeatmapResult",
+           "VIEWPORT_IN"]
+
+#: The length SCP's size engine fills when no ``height`` is given: 0.95 npc of
+#: the current viewport (``heatmap_rendersize`` / ``heatmap_fixsize``,
+#: ``SCP-plot.R`` 7543-7672), here R's default 7-inch device -- the 6.65 in
+#: ``tools/parity/heatmap_fixtures.R`` reads back from SCP.
+VIEWPORT_IN = 0.95 * 7.0
 
 Side = Literal["top", "bottom", "left", "right"]
 
@@ -170,6 +177,13 @@ class HeatmapSpec:
     show_column_names: bool = True
     row_names_side: Side | None = None
     column_names_side: Side | None = None
+    #: ``heatmap_fixsize``'s default: with no ``height`` (``width`` when
+    #: flipped) SCP gives the body whatever the 0.95-npc viewport leaves once
+    #: the titles, annotations and names are placed, so the figure never grows
+    #: with the number of features.  When set, :func:`render` shrinks a body
+    #: that would make that stack longer than this many inches (never below
+    #: R's 1-inch minimum body).  ``None`` leaves the body as declared.
+    body_cap_in: float | None = None
     #: measured lazily by render(); populated here so figsize() is testable
     measured: dict[str, float] = field(default_factory=dict)
 
@@ -179,6 +193,10 @@ class HeatmapSpec:
         ``width`` is a per-panel quantity that is **summed** along the
         concatenation axis; ``height`` is scalar and shared.  ``flip`` swaps
         the two roles.  Defaults to a 1-inch body, as R does.
+
+        This is the declared estimate; :func:`scp.heatmap.render.render` sizes
+        the figure from the measured grid and then from every drawn extent
+        plus ``layout.MARGIN``, so the rendered figure can differ.
         """
         m = self.measured
         bodies = [p.body_size_in if p.body_size_in is not None else 1.0 for p in self.panels]

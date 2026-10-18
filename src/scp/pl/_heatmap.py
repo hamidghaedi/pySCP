@@ -53,6 +53,7 @@ from ..heatmap.matrix import ExpMethod, clean_nonfinite, color_limits, matrix_pr
 from ..heatmap.render import MM, render
 from ..heatmap.similarity import cell_similarity
 from ..heatmap.spec import (
+    VIEWPORT_IN,
     Dendrogram,
     HeatmapResult,
     HeatmapSpec,
@@ -371,6 +372,23 @@ def _feature_annotation_tracks(adata, keys, order_features, palettes, palcolors)
     return tracks, legends
 
 
+def _check_enrichment_args(*, flip: bool, anno_terms: bool, anno_keys: bool,
+                           anno_features: bool, enrichment, enrichment_fn) -> None:
+    """Fail on bad enrichment arguments before any clustering is run.
+
+    The same errors :func:`_enrichment_tracks` raises, checked up front so a
+    caller's mistake does not wait for (or need the optional backend of) the
+    feature split.
+    """
+    if not (anno_terms or anno_keys or anno_features):
+        return
+    if flip:
+        raise ValueError(
+            "anno_keys, anno_features and anno_terms can only be used when flip is FALSE.")
+    if enrichment is None and enrichment_fn is None:
+        resolve_enrichment([], pd.Series(dtype="category"))  # raises with the how-to
+
+
 def _enrichment_tracks(
     *, features: list[str], feature_split: pd.Series | None, row_values: np.ndarray,
     split_colors: dict[str, str] | None, flip: bool,
@@ -417,10 +435,23 @@ def _enrichment_tracks(
     short = {}
     for f, s in zip(features, groups.astype(str), strict=True):
         short[f] = s
+    expected = [str(c) for c in groups.cat.categories]
     tracks: list[Track] = []
     for db_name, per_kind in boxes.items():
         for kind in kinds:
             if kind not in per_kind:
+                continue
+            if not set(per_kind[kind]) & set(expected):
+                # heatmap_enrichment builds a box track only when
+                # intersect(geneID_groups, names(<kind>_list)) is non-empty
+                # (SCP-plot.R 7385/7462/7506) and drops it silently otherwise;
+                # SCP's own RunEnrichment cannot miss, a table passed in can
+                found = sorted({str(g) for g in per_kind[kind]})
+                warnings.warn(
+                    f"anno_{kind}: no {db_name} enrichment group matches a feature cluster, "
+                    f"so no {kind} box is drawn (as in SCP). enrichment['Groups'] holds "
+                    f"{found[:6]}{'...' if len(found) > 6 else ''}; the clusters are "
+                    f"{expected}.", stacklevel=3)
                 continue
             tracks.append(Track(name=f"{kind}_empty_{db_name}", side="right", kind="custom",
                                 size_in=0.05))
@@ -583,6 +614,19 @@ def _violin_layer(values: pd.DataFrame, row_feats: list[str], cols: list[str],
     return Layer(kind="violin", draw=draw)
 
 
+def _body_cap(height, show_row_names: bool) -> float | None:
+    """``heatmap_fixsize``'s ceiling for a defaulted body (``SCP-plot.R`` 7608).
+
+    With no ``height`` SCP fills 0.95 npc of the viewport whatever the number
+    of features, so a 200-feature heatmap is exactly as tall as a 30-feature
+    one: 6.65 in on R's 7-inch device (``heatmap_sizes.json``, read back from
+    SCP).  The port keeps its 0.16 in per row for short heatmaps and takes that
+    viewport as the ceiling instead.  Printed row names keep their rows -- a
+    deliberate divergence: R squeezes them into the viewport and overprints.
+    """
+    return VIEWPORT_IN if height is None and not show_row_names else None
+
+
 def _enrich_kwargs(local: dict) -> dict:
     keys = ("anno_terms", "anno_keys", "anno_features", "enrichment", "enrichment_fn", "db",
             "padjust_cutoff", "pvalue_cutoff", "top_term", "show_termid", "top_word",
@@ -706,7 +750,19 @@ def group_heatmap(
     ``feature_split_by`` (default all).  ``feature_split`` takes explicit labels
     instead.  Enrichment boxes take a precomputed ``enrichment`` table or an
     ``enrichment_fn`` (:func:`scp.heatmap.enrichment.ora` builds one); see
-    :mod:`scp.heatmap.enrichment`.
+    :mod:`scp.heatmap.enrichment`.  An enrichment database whose ``Groups``
+    match none of the clusters gets no box, as in R, and a warning naming the
+    expected cluster names (R's own ``RunEnrichment`` cannot miss).
+
+    Sizing (``heatmap_rendersize`` / ``heatmap_fixsize``, 7543-7672): an
+    explicit ``width`` / ``height`` is the body size in inches.  Without one,
+    rows are 0.16 in (the dot size with ``add_dot``) rather than R's
+    viewport-filling body, but R's viewport is the ceiling: with row names
+    hidden, a defaulted body never makes the titles + annotations + body +
+    names stack longer than 6.65 in, the 0.95 npc of R's 7-inch device SCP
+    fills for 30 and 200 features alike.  The figure is then grown to every
+    drawn extent plus ``scp.layout.MARGIN``, so nothing is clipped without
+    ``bbox_inches="tight"``.
 
     Deliberate divergences from R, all bugs or R-only machinery:
 
@@ -873,6 +929,9 @@ def group_heatmap(
     level_union = list(dict.fromkeys(
         lv for g in feature_split_by for lv in _panel_levels(columns[g], group_levels[g],
                                                              split_levels)))
+    _check_enrichment_args(flip=flip, anno_terms=anno_terms, anno_keys=anno_keys,
+                           anno_features=anno_features, enrichment=enrichment,
+                           enrichment_fn=enrichment_fn)
     rows = _rows(
         feats, mat_main=processed[groups[0]], mat_split=mat_split, mat_list=processed,
         feature_split=feature_split, all_features=all_features or feats, n_split=n_split,
@@ -995,6 +1054,7 @@ def group_heatmap(
         panels=panels, row_split=rows.row_split, row_dend=rows.dend, col_dends=col_dends,
         left_tracks=left_tracks, right_tracks=right_tracks, legends=legends,
         body_height_in=(height if height is not None else max(cell_in * len(row_labels), 1.0)),
+        body_cap_in=_body_cap(height, show_row_names),
         flip=flip, show_row_names=show_row_names, show_column_names=show_column_names,
     )
     fig = render(spec)
@@ -1122,6 +1182,11 @@ def feature_heatmap(
     ``flip=True`` transposes the panels and stacks them vertically; as in R,
     the ``cluster_*`` flags then name the drawn axes (they are swapped on
     entry, ``SCP-plot.R`` 9261).
+
+    Sizing follows :func:`group_heatmap`: R's 6.65 in viewport caps a
+    defaulted body only while row names are hidden, and ``show_row_names``
+    keeps the port's ``True`` default, so pass ``show_row_names=False`` for a
+    long feature list.
     """
     if flip:
         cluster_rows, cluster_columns = cluster_columns, cluster_rows
@@ -1216,6 +1281,9 @@ def feature_heatmap(
     level_union = list(dict.fromkeys(
         lv for g in feature_split_by
         for lv in _panel_levels(labels[g], group_levels[g], split_levels or [])))
+    _check_enrichment_args(flip=flip, anno_terms=anno_terms, anno_keys=anno_keys,
+                           anno_features=anno_features, enrichment=enrichment,
+                           enrichment_fn=enrichment_fn)
     rows = _rows(
         feats, mat_main=processed[groups[0]], mat_split=mat_split, mat_list=processed,
         feature_split=feature_split, all_features=all_features, n_split=n_split,
@@ -1308,6 +1376,7 @@ def feature_heatmap(
         panels=panels, row_split=rows.row_split, row_dend=rows.dend, col_dends=col_dends,
         left_tracks=left_tracks, right_tracks=right_tracks, legends=legends,
         body_height_in=height if height is not None else max(0.16 * len(feats), 1.0),
+        body_cap_in=_body_cap(height, show_row_names),
         flip=flip, show_row_names=show_row_names,
         show_column_names=show_column_names,  # one column per cell: names are noise
     )
@@ -1600,6 +1669,13 @@ def dynamic_heatmap(
     the ``cluster_*`` flags then name the drawn axes (they are swapped on
     entry).
 
+    With several lineages each gets a 5 mm lane right of the bodies
+    (``SCP-plot.R`` 11721): ``#181830`` where the feature is dynamic on that
+    lineage (its peak/valley time is known), transparent where it is not,
+    named on top and without a legend, as R draws it.  Features passed
+    explicitly are fitted on every lineage, so their lanes are solid.  Sizing
+    follows :func:`group_heatmap`.
+
     Deliberate divergences: a lineage whose name is contained in a cell
     barcode no longer corrupts the cell ids (R strips the suffix with
     ``gsub``); with non-integer counts no median scaling is applied (R still
@@ -1730,6 +1806,9 @@ def dynamic_heatmap(
 
     mat_split = np.hstack([mat_list[lin] for lin in feature_split_by])
     peak = meta[order_by].to_numpy(dtype=float)
+    _check_enrichment_args(flip=flip, anno_terms=anno_terms, anno_keys=anno_keys,
+                           anno_features=anno_features, enrichment=enrichment,
+                           enrichment_fn=enrichment_fn)
     rows = _rows(
         feats, mat_main=mat_list[lins[0]], mat_split=mat_split, mat_list=mat_list,
         feature_split=feature_split, all_features=feats, n_split=n_split,
@@ -1871,6 +1950,7 @@ def dynamic_heatmap(
         panels=panels, row_split=rows.row_split, row_dend=rows.dend, col_dends=col_dends,
         left_tracks=left_tracks, right_tracks=right_tracks, legends=legends,
         body_height_in=height if height is not None else max(0.16 * len(feats), 1.0),
+        body_cap_in=_body_cap(height, show_row_names),
         flip=flip, show_row_names=show_row_names, show_column_names=show_column_names,
     )
     fig = render(spec)

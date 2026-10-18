@@ -514,4 +514,45 @@ num <- vapply(curves, is.numeric, logical(1))
 curves[num] <- lapply(curves[num], signif, 10)
 wcsv(curves, "separate_curves_Lineage1.csv", row.names = FALSE)
 
+# --- the size engine: heatmap_rendersize / heatmap_fixsize -------------------
+# The figure sizes SCP computes, read back by tracing the two internal helpers.
+# rendersize's height has a floor of 0.95 npc of the current viewport -- here
+# the 7 x 7 in null PDF device every Rscript session opens -- and fixsize's
+# default (height = NULL) body is whatever that viewport leaves: neither grows
+# with the number of features.
+.sizes <- new.env()
+trace("heatmap_rendersize", where = asNamespace("SCP"), print = FALSE,
+      exit = quote(assign("rs", returnValue(), envir = .GlobalEnv$.sizes)))
+trace("heatmap_fixsize", where = asNamespace("SCP"), print = FALSE,
+      exit = quote(assign("fs", returnValue(), envir = .GlobalEnv$.sizes)))
+sized <- function(call) {
+  rm(list = ls(.sizes), envir = .sizes)
+  suppressMessages(suppressWarnings(force(call)))
+  fs <- if (exists("fs", envir = .sizes)) .sizes$fs else NULL
+  list(
+    width_sum = .sizes$rs$width_sum, height_sum = .sizes$rs$height_sum,
+    fix = !is.null(fs),
+    ht_width = if (is.null(fs)) NULL else as.numeric(fs$ht_width),
+    ht_height = if (is.null(fs)) NULL else as.numeric(fs$ht_height)
+  )
+}
+cnt <- GetAssayData(srt, assay = "RNA", layer = "counts")
+many <- head(rownames(cnt)[order(-Matrix::rowSums(cnt > 0))], 200)
+sizes <- list(
+  device_in = as.numeric(grDevices::dev.size("in")),
+  group_default = sized(GroupHeatmap(srt, features = features[1:12], group.by = "CellType")),
+  group_fixed = sized(GroupHeatmap(srt, features = features[1:12], group.by = "CellType",
+                                   width = 2, height = 3)),
+  group_split30 = sized(GroupHeatmap(srt, features = features, group.by = "CellType",
+                                     n_split = 4, split_method = "hclust")),
+  group_split200 = sized(GroupHeatmap(srt, features = many, group.by = "CellType",
+                                      n_split = 4, split_method = "hclust")),
+  feature_split200 = sized(FeatureHeatmap(srt, features = many, group.by = "CellType",
+                                          n_split = 4, split_method = "hclust"))
+)
+untrace("heatmap_rendersize", where = asNamespace("SCP"))
+untrace("heatmap_fixsize", where = asNamespace("SCP"))
+writeLines(toJSON(sizes, digits = NA, auto_unbox = TRUE, null = "null", pretty = TRUE),
+           file.path(out, "heatmap_sizes.json"))
+
 message("done: ", out)

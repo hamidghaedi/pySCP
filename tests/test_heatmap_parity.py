@@ -193,6 +193,7 @@ def test_zscore_cluster_rows_is_the_same_tree(panc, feats, name, kw):
 
 
 def test_kmeans_partition_agrees_with_r(panc, feats):
+    pytest.importorskip("sklearn")
     from sklearn.metrics import adjusted_rand_score
 
     res = scp.pl.group_heatmap(panc, feats, GB, n_split=4, split_method="kmeans", **KW)
@@ -275,6 +276,7 @@ def test_kmeans_peaktime_reaches_rs_optimum(panc, feats, dyn_tables):
     """1-D kmeans is solved exactly, which is the optimum R's 20 Hartigan-Wong
     starts reach: same within-cluster sum of squares, same partition (Lloyd
     with 20 starts stopped at 45.27 against R's 44.52 here)."""
+    pytest.importorskip("sklearn")
     res = _dyn(panc, feats, dyn_tables, n_split=4, split_method="kmeans-peaktime")
     r = _meta("dynamic_kmeans_peaktime.csv")
     vm = res.var_meta.loc[r.index]

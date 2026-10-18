@@ -100,6 +100,7 @@ def test_feature_heatmap_cluster_columns_keeps_slices(adata):
 # dynamic_heatmap
 # --------------------------------------------------------------------------- #
 def test_dynamic_heatmap_orders_cells_by_pseudotime(lin):
+    pytest.importorskip("sklearn")
     r = scp.pl.dynamic_heatmap(lin, ["L1", "L2"], _genes(lin), layer=None, n_split=2,
                                split_method="kmeans-peaktime")
     for name in ("L1", "L2"):
