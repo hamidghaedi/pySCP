@@ -223,12 +223,12 @@ scp.pl.feature_cor_plot(adata, ["Ins1", "Gcg", "Sst"], group_by="CellType")
 
 <img src="docs/images/cor-1.png" width="60%" />
 
-Query-versus-reference similarity, collapsed to group centroids:
+Similarity between group centroids. With no `reference`, the query is
+compared with itself, as in R; pass `reference=` (another AnnData) and
+`ref_group=` to project one dataset onto another:
 
 ```python
-scp.pl.cell_cor_heatmap(
-    adata, query_group="SubCellType", ref_group="CellType", nfeatures=1000,
-)
+scp.pl.cell_cor_heatmap(adata, query_group="SubCellType", nfeatures=1000)
 ```
 
 <img src="docs/images/cor-2.png" width="55%" />
@@ -270,8 +270,10 @@ scp.pl.cell_density_plot(adata, "Lineage", group_by="SubCellType")
 > `mgcv` selects its smoothing parameter by GCV/REML and `pygam` does not
 > implement that criterion. The trend, the peak position and the ordering of
 > features by peak time are stable; the fitted values are not.
-> `dynamic_heatmap(use_fitted=True)` raises rather than imply otherwise — the
-> binned form shown above needs no fit.
+> `dynamic_heatmap(use_fitted=True)` raises rather than imply otherwise. The
+> form shown above needs no fit: like R's `use_fitted = FALSE`, it draws every
+> cell in pseudotime order, z-scored jointly across lineages, and matches
+> SCP's matrix to 1.8e-9.
 
 ### Enrichment
 

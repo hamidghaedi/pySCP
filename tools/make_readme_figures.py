@@ -95,7 +95,7 @@ def main() -> int:
     save(scp.pl.feature_cor_plot(adata, ["Ins1", "Gcg", "Sst"], group_by="CellType"),
          "cor-1")
     save(scp.pl.cell_cor_heatmap(adata, query_group="SubCellType",
-                                 ref_group="CellType", nfeatures=1000).fig, "cor-2")
+                                 nfeatures=1000).fig, "cor-2")
 
     print("trajectory")
     sc.pp.neighbors(adata, use_rep="X_pca")
