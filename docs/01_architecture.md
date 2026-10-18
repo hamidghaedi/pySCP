@@ -112,6 +112,14 @@ and sits beside it on the legend side; with no `ax`, or axes spread over
 several panels, it is a figure-level guide in the legend column. Either way it
 is ggplot's default colourbar: one legend key (10 pt) thick and five long.
 
+A panel's own *legend* goes through `pg.legend_beside(ax, title, handles)` and
+joins that panel's colourbars in one stack beside it, in registration order;
+a stack taller than the panel wraps into another column. This is how SCP's
+multi-panel figures look: `wrap_plots(plotlist)` without `guides = "collect"`
+leaves every panel's guides next to it. The enrichment and GSEA plots draw
+their guides this way, except that a guide identical in every panel is drawn
+once in the legend column.
+
 Borrowed axes (`ax=`) are untouched: the caller owns that figure's size.
 
 For heatmaps the same principle applies with more terms; see

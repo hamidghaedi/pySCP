@@ -337,6 +337,107 @@ def _draw_comparison_panels(
     return pg.finish()
 
 
+def _handle_signature(h) -> tuple:
+    """What a legend key shows, so two panels' keys can be compared."""
+    label = str(h.get_label())
+    if isinstance(h, Line2D):
+        return ("line", label, str(h.get_marker()), round(float(h.get_markersize()), 6),
+                to_hex(h.get_markerfacecolor(), keep_alpha=True),
+                to_hex(h.get_color(), keep_alpha=True), round(float(h.get_linewidth()), 6))
+    if isinstance(h, Patch):
+        return ("patch", label, to_hex(h.get_facecolor(), keep_alpha=True),
+                to_hex(h.get_edgecolor(), keep_alpha=True))
+    if isinstance(h, draw.GlyphKey):
+        return ("glyph", label, h.glyph, round(h.size_pt, 6), h.color)
+    if isinstance(h, draw.NumberedKey):
+        return ("numbered", label, h.number, h.color)
+    return ("other", id(h))
+
+
+def _colorbar_signature(sm: ScalarMappable, label: str) -> tuple:
+    norm = sm.norm
+    ramp = np.asarray(sm.get_cmap()(np.linspace(0, 1, 16))).round(6)
+    return (label, float(norm.vmin), float(norm.vmax), ramp.tobytes())  # type: ignore[arg-type]
+
+
+class _LegendSink:
+    """One panel's view of a :class:`_PanelLegends`, for the drawing helpers."""
+
+    def __init__(self, owner: _PanelLegends, key: str) -> None:
+        self.owner, self.key = owner, key
+
+    def add(self, title: str, handles: Sequence) -> None:
+        self.owner.legend(self.key, title, handles)
+
+
+class _PanelLegends:
+    """The guides of a multi-panel enrichment / GSEA figure, laid out as SCP's
+    are.
+
+    Every panel is its own ggplot in SCP, combined with
+    ``patchwork::wrap_plots(plotlist = plist)`` -- with no
+    ``guides = "collect"`` (``SCP-plot.R:13430``, ``14535``) -- so each panel
+    keeps its own legends and colourbars, beside it, titled as in R (no panel
+    suffix: the legend sits next to the panel it describes).  The one
+    departure: a guide that is *identical* in every panel (the same title,
+    keys and scale) is drawn once, in the figure's legend column, as patchwork
+    would when collecting -- repeating it N times adds width and no
+    information.  Within a panel the guides keep their registration order
+    (SCP puts the size legend first, ``order = 1``).
+    """
+
+    def __init__(self, pg: PanelGrid) -> None:
+        self.pg = pg
+        # (kind, title) -> [(panel key, payload)], in first-registration order
+        self.items: dict[tuple[str, str], list[tuple[str, object]]] = {}
+
+    def sink(self, key: str) -> _LegendSink:
+        return _LegendSink(self, key)
+
+    def legend(self, key: str, title: str, handles: Sequence) -> None:
+        self.items.setdefault(("legend", title), []).append((key, list(handles)))
+
+    def colorbar(self, key: str, mappable: ScalarMappable, label: str) -> None:
+        self.items.setdefault(("colorbar", label), []).append((key, mappable))
+
+    @staticmethod
+    def _signature(kind: str, title: str, payload) -> tuple:
+        if kind == "colorbar":
+            return _colorbar_signature(payload, title)
+        return tuple(_handle_signature(h) for h in payload)
+
+    def _colorbar(self, mappable: ScalarMappable, label: str, ax=None) -> None:
+        cb = self.pg.colorbar(mappable, ax=ax)
+        cb.set_label(label, fontsize=self.pg.theme.size("legend.title"))
+        cb.outline.set_edgecolor("black")
+
+    def finish(self) -> None:
+        n = len(self.pg.keys)
+        shared = set()
+        for (kind, title), entries in self.items.items():
+            if len(entries) == n and len({self._signature(kind, title, p)
+                                          for _, p in entries}) == 1:
+                shared.add((kind, title))
+                if kind == "colorbar":
+                    self._colorbar(entries[0][1], title)  # type: ignore[arg-type]
+                else:
+                    self.pg.legend.add(title, entries[0][1])  # type: ignore[arg-type]
+        per_key: dict[str, list[tuple[str, str, object]]] = {}
+        for (kind, title), entries in self.items.items():
+            if (kind, title) in shared:
+                continue
+            for key, payload in entries:
+                per_key.setdefault(key, []).append((kind, title, payload))
+        for key in self.pg.keys:
+            ax = self.pg.axes[key]
+            for kind, title, payload in per_key.get(key, []):
+                if kind == "colorbar":
+                    self._colorbar(payload, title, ax=ax)  # type: ignore[arg-type]
+                else:
+                    self.pg.legend_beside(ax, title, payload)  # type: ignore[arg-type]
+        self.items.clear()
+
+
 def _layout_for(n: int, edges, weights, layout: str) -> np.ndarray:
     return eg.graph_layout(n, edges, weights, layout)
 
@@ -408,6 +509,9 @@ def enrichment_plot(
     metric is constant is drawn in the palette's middle colour, as
     ``scales::rescale`` maps a zero-width range to 0.5.  Sizes follow
     ``scale_size(range = c(3, 6))``: diameter ``3 + 3 * sqrt(rescaled)`` mm.
+    SCP combines the panels with ``wrap_plots`` without collecting guides, so
+    each panel's legends and colourbar sit beside it; a guide identical in
+    every panel is drawn once, in the legend column.
 
     ``bar``
         ``-log10(metric)``, filled by ``color_by`` (``palette_scp`` over that
@@ -520,7 +624,7 @@ def enrichment_plot(
     # colourbar) and grows the figure around them
     pg = PanelGrid(len(panels), panel_size=psize, nrow=nrow, ncol=ncol, keys=keys, theme=th,
                    legend=LegendColumn(position="right"))
-    multi = len(panels) > 1
+    legs = _PanelLegends(pg)
     for (key, _dg, _g), (frame, levels) in zip(panels, frames, strict=True):
         ax = pg.axes[key]
         ax.set_title(str(key), fontsize=th.size("strip.text"))
@@ -536,12 +640,11 @@ def enrichment_plot(
         sizes = draw._area_size(sv, float(np.nanmin(sv)), float(np.nanmax(sv)), (3.0, 6.0))
         draw.draw_enrichment_points(ax, frame, levels, plot_type=plot_type, fill=fill,
                                     sizes=sizes, fontsize=fs)
-        # every panel is its own ggplot in R, so each has its own scales
-        cb = pg.colorbar(ScalarMappable(cmap=cmap, norm=norm), ax=ax)
-        cb.set_label(f"-log10({metric})", fontsize=th.size("legend.title"))
-        cb.outline.set_edgecolor("black")
-        pg.legend.add(f"{size_col} ({key})" if multi else size_col,
-                      draw.size_range_handles(sv))
+        # every panel is its own ggplot in R, so each has its own scales;
+        # the size guide comes first (order = 1)
+        legs.legend(key, size_col, draw.size_range_handles(sv))
+        legs.colorbar(key, ScalarMappable(cmap=cmap, norm=norm), f"-log10({metric})")
+    legs.finish()
     return pg.finish()
 
 
@@ -589,7 +692,7 @@ def _draw_graph_family(
     """Draw ``network`` / ``enrichmap`` / ``wordcloud`` panels, shared by
     :func:`enrichment_plot` and :func:`gsea_plot` exactly as R shares the code."""
     th = pg.theme
-    multi = len(panels) > 1
+    legs = _PanelLegends(pg)
     if plot_type in _GRAPH_TYPES:
         eg._igraph()
     if plot_type == "wordcloud":
@@ -618,25 +721,22 @@ def _draw_graph_family(
             sc = tab["score"].to_numpy(dtype=float)
             sm = ScalarMappable(cmap=LinearSegmentedColormap.from_list("wc", ramp, N=256),
                                 norm=Normalize(float(sc.min()), float(sc.max())))
-            cb = pg.colorbar(sm, ax=ax)
-            cb.set_label("Score", fontsize=th.size("legend.title"))
-            cb.outline.set_edgecolor("black")
             cnt = tab["count"].to_numpy(dtype=float)
             br = sorted(set(int(math.ceil(v)) for v in np.linspace(cnt.min(), cnt.max(), 3)))
             sizes = draw._area_size(br, float(cnt.min()), float(cnt.max()), word_size)
-            pg.legend.add(f"Count ({key})" if multi else "Count", [
-                Line2D([], [], marker="$G$", linestyle="none", color="black",
-                       markersize=float(s) * draw.PT, label=str(b))
-                for b, s in zip(br, sizes, strict=True)])
+            # guides(size = guide_legend(override.aes = list(label = "G"), order = 1))
+            legs.legend(key, "Count", [draw.GlyphKey("G", float(s) * draw.PT, str(b))
+                                       for b, s in zip(br, sizes, strict=True)])
+            legs.colorbar(key, sm, "Score")
         for (key, _dg, _df), tab in zip(panels, tables, strict=True):
             draw.draw_wordcloud(pg.axes[key], tab, ramp, word_size=word_size)
+        legs.finish()
         return
 
     with eg._seeded_igraph(seed):
         for key, _dg, df in panels:
             ax = pg.axes[key]
             ax.set_title(str(key), fontsize=th.size("strip.text"))
-            suffix = f" ({key})" if multi else ""
             if plot_type == "network":
                 desc = (descriptions[key] if descriptions is not None
                         else _wrap_desc(df["Description"], character_width))
@@ -651,8 +751,8 @@ def _draw_graph_family(
                                      nt.nodes["name"].str.len()).astype(float)
                     lay = adjust_layout(lay, width, edges, height=2.0, scale=network_adjscale,
                                         iterations=network_adjiter, seed=seed)
-                draw.draw_network(ax, nt, lay, labelsize=network_labelsize, legend=pg.legend,
-                                  legend_title=f"Term{suffix}")
+                draw.draw_network(ax, nt, lay, labelsize=network_labelsize, legend=legs.sink(key),
+                                  legend_title="Term")
             else:
                 edesc = descriptions[key] if descriptions is not None else None
                 et = eg.enrichmap_tables(
@@ -667,8 +767,8 @@ def _draw_graph_family(
                 colors = discrete_palette(et.cluster_levels, palette=palette, palcolor=palcolor)
                 draw.draw_enrichmap(ax, et, lay, colors, mark=enrichmap_mark,
                                     labelsize=enrichmap_labelsize, expand=enrichmap_expand,
-                                    panel_mm=_panel_mm(pg, key), legend=pg.legend,
-                                    legend_suffix=suffix)
+                                    panel_mm=_panel_mm(pg, key), legend=legs.sink(key))
+    legs.finish()
 
 
 # --------------------------------------------------------------------------- #
@@ -963,7 +1063,10 @@ def gsea_plot(
        "Negatively correlated", with a dashed line and label at the zero
        cross ``median(x[y == y[which.min(abs(y))]])``.
 
-    The key is written down the right of its block.  ``line`` needs the
+    The rank axis carries ggplot's default breaks (``scales::extended_breaks``,
+    about five), and the core-gene labels are kept inside the panel, as
+    ggrepel keeps them.  The key is written down the right of its block, with
+    the block's "Term" legend beside it.  ``line`` needs the
     running scores: pass ``geneList`` (a ranked :class:`pandas.Series`),
     ``geneSets`` (``{ID: genes}``) and ``exponent`` per key, or precomputed
     :func:`gsea_scores` frames as ``curves`` (see *Input* below).
@@ -1050,7 +1153,6 @@ def gsea_plot(
     if not selected:
         raise ValueError("no gene sets survive the cutoffs")
     keys = [k for k, _, _ in selected]
-    multi = len(selected) > 1
 
     if plot_type in ("network", "enrichmap", "wordcloud"):
         panels = []
@@ -1102,16 +1204,17 @@ def gsea_plot(
         pal = list(reversed(palcolor)) if isinstance(palcolor, Sequence) and \
             not isinstance(palcolor, str) else palcolor
         colors = discrete_palette(["Neg", "Pos"], palette=palette, palcolor=pal)
+        legs = _PanelLegends(pg)
         for (k, _res, _ids), frame in zip(selected, frames, strict=True):
             ax = pg.axes[k]
             draw.draw_gsea_bar(ax, frame, colors=colors, fontsize=fs)
             group, db = _key_parts(k)
             _facet_strips(ax, group, db, th)
-            suffix = f" ({k})" if multi else ""
             if direction == "both":
-                pg.legend.add(f"Direction{suffix}", [
+                legs.legend(k, "Direction", [
                     Patch(facecolor=colors[d], edgecolor="black", label=d) for d in ("Pos", "Neg")])
-            pg.legend.add(f"-log10({metric}){suffix}", _alpha_handles(frame["alpha_raw"]))
+            legs.legend(k, f"-log10({metric})", _alpha_handles(frame["alpha_raw"]))
+        legs.finish()
         return pg.finish()
 
     # plot_type == "line"
@@ -1119,6 +1222,7 @@ def gsea_plot(
     rng = np.random.default_rng(seed)
     pg = PanelGrid(len(selected), panel_size=panel_size or (4.5, 4.5), nrow=nrow, ncol=ncol,
                    keys=keys, theme=th, legend=LegendColumn(position="right"))
+    legs = _PanelLegends(pg)
     for k, res, ids in selected:
         rows = res.set_index(res["ID"].astype(str), drop=False).loc[ids].reset_index(drop=True)
         labels = gsea_network_descriptions(rows, metric, character_width)
@@ -1164,16 +1268,18 @@ def gsea_plot(
         axes = _split_block(pg, k)
         draw.draw_gsea_line(axes, sets, colors=color_use, gene_list=gene_list,
                             line_width=line_width, single=single, heat_strip=strip,
-                            zero_cross=cross, xlim=(lo - pad, hi + pad), fontsize=fs)
+                            zero_cross=cross, xlim=(lo - pad, hi + pad), x_limits=(lo, hi),
+                            fontsize=fs)
         # R centres the key on the whole block; on the top panel's centre it
         # cannot reach into the zero-gap stack and push the sub-panels apart
         axes[0].text(1.02, 0.5, k, transform=axes[0].transAxes, rotation=-90, ha="left",
                      va="center", fontsize=th.size("strip.text"))
+        pg.axes[k] = axes[0]
         if len(set(color_use)) > 1:
-            pg.legend.add(f"Term{f' ({k})' if multi else ''}", [
+            legs.legend(k, "Term", [
                 Line2D([], [], color=c, linewidth=line_width * draw.LWD, label=lab)
                 for lab, c in dict(zip(labels, color_use, strict=True)).items()])
-        pg.axes[k] = axes[0]
+    legs.finish()
     return pg.finish()
 
 
@@ -1495,20 +1601,27 @@ def adjust_layout(
                     pos[nb, 1] = ny - (y - ny) * k
                 adjusted.add(nb)
 
+    wl = w.tolist()
     for _ in range(iterations):
-        d = np.sqrt(((pos[:, None, :] - pos[None, :, :]) ** 2).sum(-1))
-        nearest = []
-        for v in range(n):
-            col = d[:, v]
-            pos_d = col[col > 0]
-            nearest.append(np.flatnonzero(col == pos_d.min()) if len(pos_d) else np.array([], int))
-        for vi in rng.permutation(n):
-            v = int(vi)
-            x, y = pos[v]
-            r = w[v]
-            for nb in dict.fromkeys(int(i) for i in nearest[v]):
-                nx, ny = pos[nb]
-                rr = r + w[nb]
+        ddx = pos[:, None, 0] - pos[None, :, 0]
+        ddy = pos[:, None, 1] - pos[None, :, 1]
+        d = np.sqrt(ddx * ddx + ddy * ddy)  # symmetric, bit for bit
+        # each vertex's nearest neighbour(s) at a positive distance, all at
+        # once: an O(n^2) array pass instead of n Python-level scans
+        closest = np.where(d > 0, d, np.inf).min(axis=1)
+        vs, nbs = np.nonzero((d == closest[:, None]) & np.isfinite(closest)[:, None])
+        bounds = np.searchsorted(vs, np.arange(n + 1)).tolist()
+        nbl = nbs.tolist()
+        # the sweep is sequential (each move is seen by the next vertex), so
+        # it runs on Python floats: the same IEEE arithmetic, without numpy's
+        # per-scalar overhead
+        px, py = pos[:, 0].tolist(), pos[:, 1].tolist()
+        for vi in rng.permutation(n).tolist():
+            x, y = px[vi], py[vi]
+            r = wl[vi]
+            for nb in nbl[bounds[vi]:bounds[vi + 1]]:
+                nx, ny = px[nb], py[nb]
+                rr = r + wl[nb]
                 if abs(nx - x) < rr and abs(ny - y) < height:
                     dx = rr - (x - nx)
                     dy = height - (y - ny)
@@ -1516,6 +1629,7 @@ def adjust_layout(
                         dx = 0.0
                     else:
                         dy = 0.0
-                    pos[nb, 0] = nx - dx
-                    pos[nb, 1] = ny - dy
+                    px[nb] = nx - dx
+                    py[nb] = ny - dy
+        pos = np.column_stack([px, py])
     return pos

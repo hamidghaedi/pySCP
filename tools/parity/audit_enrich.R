@@ -313,6 +313,18 @@ for (dirn in c("pos", "both")) {
 }
 wcsv(do.call(rbind, edge_sel), "gsea_edge_expected.csv")
 
+# ggplot2's default continuous breaks, scales::extended_breaks() ->
+# labeling::extended(): the rank axis of GSEAPlot's line plot uses them.
+set.seed(1)
+ext <- lapply(1:300, function(i) {
+  a <- signif(rnorm(1, 0, 10^sample(-3:5, 1)), 4)
+  b <- a + signif(abs(rnorm(1, 0, 10^sample(-3:5, 1))), 4)
+  m <- sample(3:8, 1)
+  data.frame(dmin = sprintf("%.17g", a), dmax = sprintf("%.17g", b), m = m,
+             breaks = paste(sprintf("%.17g", labeling::extended(a, b, m)), collapse = " "))
+})
+wcsv(do.call(rbind, ext), "extended_breaks.csv")
+
 write_json(list(scp = as.character(packageVersion("SCP")),
                 clusterProfiler = as.character(packageVersion("clusterProfiler")),
                 stringr_wrap_examples = setNames(

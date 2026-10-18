@@ -346,7 +346,8 @@ class PanelGrid:
         self.byrow = byrow
         self.margin, self.wspace, self.hspace = margin, wspace, hspace
         self.panel_w, self.panel_h = self._panel_dims(panel_size, self.theme.aspect_ratio)
-        self._slot_bars: dict[tuple[int, int], list[_ColorbarBox]] = {}
+        self._slot_bars: dict[tuple[int, int], list[_Box]] = {}
+        self._slot_groups: dict[tuple[int, int], tuple[list[list[int]], list[float], list[float]]] = {}
         self._cbar_axes: set[Axes] = set()
         self._finished = False
         self._own: dict[tuple[int, int], list[float]] = {}
@@ -455,6 +456,24 @@ class PanelGrid:
             self._slot_bars.setdefault(slot, []).append(box)
         return cb
 
+    def legend_beside(self, ax: Axes, title: str, handles: Sequence) -> Legend:
+        """A legend that belongs to one panel, stacked with that panel's
+        colourbars on the legend side and centred on it.
+
+        SCP draws a panel as its own ggplot and joins them with
+        ``patchwork::wrap_plots`` *without* ``guides = "collect"``, so each
+        panel keeps its own guides next to it; this is that guide.  A stack
+        taller than the panel wraps into another column beside it.
+        """
+        slot = self.slot_of(ax)
+        if slot is None:
+            raise ValueError("legend_beside needs an axes on this grid")
+        handles = list(handles)
+        ncols = max(len(handles), 1) if self._bar_side in ("top", "bottom") else 1
+        leg = LegendColumn._legend(self.fig, self.theme, title, handles, ncols)
+        self._slot_bars.setdefault(slot, []).append(_LegendBox(leg))
+        return leg
+
     # ------------------------------------------------------------------ #
     def _decorations(self, renderer) -> dict[tuple[int, int], list[float]]:
         """Per cell: how far its drawing reaches past the panel box (l, r, b, t)."""
@@ -481,12 +500,18 @@ class PanelGrid:
         k = {"left": 0, "right": 1, "bottom": 2, "top": 3}[side]
         for s, bars in self._slot_bars.items():
             sizes = [b.measure(fig, renderer) for b in bars]
-            if side in ("left", "right"):
-                extra = max(w for w, _h in sizes)
-            else:
-                extra = max(h for _w, h in sizes)
+            vertical = side in ("left", "right")
+            # a stack longer than the panel wraps into another column (row)
+            panel = self.panel_h if vertical else self.panel_w
+            avail = max(panel, *(sz[1] if vertical else sz[0] for sz in sizes))
+            groups, along, across = _pack(sizes, avail, SPACING, vertical=vertical)
+            self._slot_groups[s] = (groups, along, across)
             deco = out.setdefault(s, [0.0, 0.0, 0.0, 0.0])
-            deco[k] += SPACING + extra
+            deco[k] += SPACING + sum(across) + SPACING * (len(groups) - 1)
+            # a single key taller than the panel spills evenly past both ends
+            spill = max(max(along) - panel, 0.0) / 2
+            for e in ((2, 3) if vertical else (0, 1)):
+                deco[e] = max(deco[e], spill)
         return out
 
     def _suplabels(self) -> dict[str, Text]:
@@ -596,18 +621,26 @@ class PanelGrid:
             cx0, cx1 = cell.x0 * W, cell.x1 * W
             ct, cbot = H - cell.y1 * H, H - cell.y0 * H  # top / bottom, from the top edge
             own = self._own.get((r, c), zero)
-            if side in ("left", "right"):
-                top = (ct + cbot) / 2 - (sum(b.h for b in bars) + SPACING * (len(bars) - 1)) / 2
-                for b in bars:
-                    x = cx1 + own[1] + SPACING if side == "right" else cx0 - own[0] - SPACING - b.w
-                    b.place(fig, x, H - top)
-                    top += b.h + SPACING
-            else:
-                x = (cx0 + cx1) / 2 - (sum(b.w for b in bars) + SPACING * (len(bars) - 1)) / 2
-                for b in bars:
-                    top = cbot + own[2] + SPACING if side == "bottom" else ct - own[3] - SPACING - b.h
-                    b.place(fig, x, H - top)
-                    x += b.w + SPACING
+            s_groups, s_along, s_across = self._slot_groups[(r, c)]
+            off = 0.0
+            for grp, al, ac in zip(s_groups, s_along, s_across, strict=True):
+                if side in ("left", "right"):
+                    top = (ct + cbot) / 2 - al / 2
+                    for i in grp:
+                        b = bars[i]
+                        x = (cx1 + own[1] + SPACING + off if side == "right"
+                             else cx0 - own[0] - SPACING - off - b.w)
+                        b.place(fig, x, H - top)
+                        top += b.h + SPACING
+                else:
+                    x = (cx0 + cx1) / 2 - al / 2
+                    for i in grp:
+                        b = bars[i]
+                        top = (cbot + own[2] + SPACING + off if side == "bottom"
+                               else ct - own[3] - SPACING - off - b.h)
+                        b.place(fig, x, H - top)
+                        x += b.w + SPACING
+                off += ac + SPACING
 
         # the legend column, group by group
         offset = 0.0

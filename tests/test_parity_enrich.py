@@ -402,8 +402,16 @@ def test_gsea_line_is_one_block_per_key_with_a_term_legend(gsea_lists):
         assert [ln.get_gid() for ln in top.lines if ln.get_gid()] == \
             list(sel[sel["key"] == key].sort_values("rank")["ID"])
         assert key in [t.get_text() for t in top.texts]
+    # SCP wraps the blocks without collecting guides: each block keeps its
+    # own "Term:" legend, beside it
     titles = [lg.get_title().get_text() for lg in fig.legends]
-    assert titles == [f"Term ({k}):" for k in keys]
+    assert titles == ["Term:"] * len(keys)
+    fig.canvas.draw()
+    r = fig.canvas.get_renderer()
+    for i, leg in enumerate(fig.legends):
+        top, bot = fig.axes[3 * i].get_window_extent(r), fig.axes[3 * i + 2].get_window_extent(r)
+        lb = leg.get_window_extent(r)
+        assert lb.x0 >= top.x1 and bot.y0 <= (lb.y0 + lb.y1) / 2 <= top.y1
 
 
 def test_gsea_line_computes_curves_from_the_documented_input(gsea_lists):
@@ -577,3 +585,18 @@ def test_gsea_line_draws_the_heat_strip(gsea_lists):
     assert len(strip) == 1
     xs = [(p.vertices[:, 0].min(), p.vertices[:, 0].max()) for p in strip[0].get_paths()]
     assert xs == list(zip(r["xmin"], r["xmax"], strict=True))
+
+
+def test_extended_breaks_match_labeling_extended():
+    """ggplot's default continuous breaks, ``scales::extended_breaks()`` ->
+    ``labeling::extended(dmin, dmax, m)``, on 300 random ranges R drew
+    (``tools/parity/audit_enrich.R``); GSEAPlot's rank axis uses them."""
+    from scp._breaks import extended_breaks
+
+    ext = pd.read_csv(FIX / "extended_breaks.csv", dtype=str)
+    assert len(ext) == 300
+    for row in ext.itertuples(index=False):
+        want = np.array([float(v) for v in row.breaks.split()])
+        got = extended_breaks(float(row.dmin), float(row.dmax), int(row.m))
+        assert len(got) == len(want), row
+        np.testing.assert_allclose(got, want, rtol=1e-12, atol=0)

@@ -17,7 +17,18 @@ from matplotlib.patches import Polygon
 
 import scp
 from scp.pl import _enrich as en
+from scp.pl import _enrich_draw as dr
 from scp.pl import _enrich_graph as eg
+
+
+def _beside(fig, artist, ax) -> bool:
+    """``artist`` (a legend or colourbar axes) sits right of ``ax``'s panel
+    and level with it, as a patchwork panel's own guide does."""
+    fig.canvas.draw()
+    r = fig.canvas.get_renderer()
+    a, b = artist.get_window_extent(r), ax.get_window_extent(r)
+    mid = (a.y0 + a.y1) / 2
+    return a.x0 >= b.x1 and b.y0 <= mid <= b.y1
 
 
 def toy_enrichment() -> pd.DataFrame:
@@ -169,6 +180,8 @@ def test_gsea_select_ids_both_takes_half_of_each_direction():
 def test_network_figure_structure():
     pytest.importorskip("igraph")
     df = toy_enrichment()
+    # distinct term names per group, so the two "Term" legends differ
+    df["Description"] = df["Description"] + " in " + df["Groups"]
     fig = scp.pl.enrichment_plot(df, plot_type="network", top_term=3)
     assert len(fig.axes) == 2
     ax = fig.axes[0]
@@ -180,10 +193,13 @@ def test_network_figure_structure():
     texts = [t.get_text() for t in ax.texts]
     assert {"1", "2", "3"} <= set(texts)
     assert set(nt.nodes.loc[nt.nodes["class"] == "gene", "name"]) <= set(texts)
-    # one "Term" legend per panel, in term order, registered once on the figure
+    # one "Term" legend per panel, in term order, registered once on the
+    # figure and drawn beside its own panel (wrap_plots without collect)
     titles = [lg.get_title().get_text() for lg in fig.legends]
-    assert titles == ["Term (GO_BP | Beta):", "Term (GO_BP | Alpha):"]
+    assert titles == ["Term:", "Term:"]
     assert [t.get_text() for t in fig.legends[0].get_texts()] == nt.term_levels
+    assert _beside(fig, fig.legends[0], fig.axes[0])
+    assert _beside(fig, fig.legends[1], fig.axes[1])
     assert not any(a.get_legend() for a in fig.axes)
     matplotlib.pyplot.close(fig)
 
@@ -313,10 +329,139 @@ def test_dot_and_lollipop_need_their_ratio_columns():
 
 
 def test_dot_panels_carry_their_own_colourbar_and_size_legend():
+    """Each panel is its own ggplot and SCP wraps them without collecting
+    guides: distinct scales give every panel its own size legend (first,
+    order = 1) and colourbar, stacked beside it."""
+    df = toy_enrichment()
+    alpha = df["Groups"] == "Alpha"
+    df.loc[alpha, "p.adjust"] *= 1e-3
+    df.loc[alpha, "Count"] = np.arange(alpha.sum()) + 2
+    fig = scp.pl.enrichment_plot(df, plot_type="dot", top_term=3)
+    panels = [a for a in fig.axes if a.get_label() != "<colorbar>"]
+    bars = [a for a in fig.axes if a.get_label() == "<colorbar>"]
+    assert len(bars) == 2
+    assert [lg.get_title().get_text() for lg in fig.legends] == ["Count:", "Count:"]
+    for ax, leg, cb in zip(panels, fig.legends, bars, strict=True):
+        assert _beside(fig, leg, ax) and _beside(fig, cb, ax)
+        r = fig.canvas.get_renderer()
+        lb, bb = leg.get_window_extent(r), cb.get_window_extent(r)
+        # the size legend first: above the colourbar, or in the column before
+        # it when the stack is taller than the panel and wraps
+        assert lb.y0 > bb.y1 or lb.x1 < bb.x0
+    matplotlib.pyplot.close(fig)
+
+
+def test_guides_identical_in_every_panel_are_drawn_once():
+    """A guide that is the same in every panel (same title, keys and scale) is
+    drawn once in the legend column -- patchwork's collect behaviour --
+    instead of N times; the toy groups share their counts and p-values."""
     fig = scp.pl.enrichment_plot(toy_enrichment(), plot_type="dot", top_term=3)
-    assert len([a for a in fig.axes if a.get_label() == "<colorbar>"]) == 2
-    assert [lg.get_title().get_text() for lg in fig.legends] == \
-        ["Count (GO_BP | Beta):", "Count (GO_BP | Alpha):"]
+    panels = [a for a in fig.axes if a.get_label() != "<colorbar>"]
+    bars = [a for a in fig.axes if a.get_label() == "<colorbar>"]
+    assert len(panels) == 2 and len(bars) == 1
+    assert [lg.get_title().get_text() for lg in fig.legends] == ["Count:"]
+    fig.canvas.draw()
+    r = fig.canvas.get_renderer()
+    right = max(a.get_window_extent(r).x1 for a in panels)
+    assert fig.legends[0].get_window_extent(r).x0 > right
+    matplotlib.pyplot.close(fig)
+
+
+def test_wordcloud_size_keys_do_not_overlap():
+    """SCP's size key is a black "G" at each break's text size; each key's row
+    grows to hold its glyph, as ggplot's legend keys do."""
+    fig = scp.pl.enrichment_plot(toy_enrichment(), plot_type="wordcloud", group_use=["Beta"],
+                                 word_type="feature")
+    (leg,) = [lg for lg in fig.legends if lg.get_title().get_text() == "Count:"]
+    fig.canvas.draw()
+    r = fig.canvas.get_renderer()
+    glyphs = [t for t in leg.findobj(matplotlib.text.Text) if t.get_text() == "G"]
+    assert len(glyphs) == len(leg.get_texts()) >= 2
+    boxes = sorted((g.get_window_extent(r) for g in glyphs), key=lambda b: -b.y1)
+    for upper, lower in zip(boxes[:-1], boxes[1:], strict=True):
+        assert lower.y1 <= upper.y0 + 0.5
+    # each glyph is level with its own label
+    for g, t in zip(glyphs, leg.get_texts(), strict=True):
+        gb, tb = g.get_window_extent(r), t.get_window_extent(r)
+        assert gb.y0 <= (tb.y0 + tb.y1) / 2 <= gb.y1
+    matplotlib.pyplot.close(fig)
+
+
+def test_wordcloud_grid_search_equals_the_exhaustive_one():
+    """The pixel grid only settles candidates the exact box test would settle
+    the same way, so the first free candidate never changes."""
+    rng = np.random.default_rng(7)
+    W, H = 300.0, 240.0
+    cand = dr._square_spiral(2.0, max(W, H) / 2)
+    placed = np.zeros((0, 4))
+    n_placed = 0
+    for _ in range(150):
+        w, h = rng.uniform(4, 90), rng.uniform(4, 30)
+        x0, y0 = cand[:, 0] - w / 2, cand[:, 1] - h / 2
+        inside = np.flatnonzero((x0 >= -W / 2) & (x0 + w <= W / 2)
+                                & (y0 >= -H / 2) & (y0 + h <= H / 2))
+        a = dr._first_free(x0[inside], y0[inside], w, h, placed)
+        b = dr._first_free_grid(x0[inside], y0[inside], w, h, placed, W, H)
+        assert a == b
+        if a is not None:
+            ox, oy = x0[inside[a]], y0[inside[a]]
+            placed = np.vstack([placed, [ox, oy, ox + w, oy + h]])
+            n_placed += 1
+    assert 20 < n_placed < 150  # the panel fills up: both outcomes exercised
+
+
+GOLDEN_ADJUST = np.array([[-10.862479090720004, -23.237920947404298],
+                          [-3.3641566373263205, 6.9625262051326935],
+                          [15.388200682313464, 1.8167257254791562]])
+GOLDEN_ADJUST_SUM = -269.70731569609296
+
+
+def test_adjust_layout_sweep_is_unchanged_by_vectorising():
+    """Golden: the label-decollision sweep on a fixed graph (pinned before the
+    nearest-neighbour search was vectorised)."""
+    rng = np.random.default_rng(5)
+    lay = rng.normal(size=(40, 2))
+    lay[3] = lay[4]
+    widths = rng.integers(3, 12, 40).astype(float)
+    edges = [(int(a), int(b)) for a, b in rng.integers(0, 40, (60, 2)) if a != b]
+    out = en.adjust_layout(lay, widths, edges, seed=2)
+    assert out.shape == (40, 2)
+    np.testing.assert_allclose(out[:3], GOLDEN_ADJUST, rtol=0, atol=1e-12)
+    assert float(out.sum()) == pytest.approx(GOLDEN_ADJUST_SUM, abs=1e-9)
+
+
+def test_gsea_line_rank_axis_uses_ggplot_breaks_and_labels_stay_inside():
+    """ggplot's extended breaks on the rank axis (0, 4000, ... for ~16k
+    genes), so five-digit labels never touch; the core-gene labels stay inside
+    the panel, as ggrepel keeps them, clear of the key strip on the right."""
+    rng = np.random.default_rng(1)
+    n = 15836
+    genes = [f"g{i}" for i in range(n)]
+    gl = pd.Series(np.sort(rng.normal(size=n))[::-1] * 8, index=genes)
+    core = genes[-12:]  # hits at the far right, where labels would overflow
+    gs = core + list(rng.choice(genes[:-12], 40, replace=False))
+    res = pd.DataFrame(dict(ID=["S1"], Description=["set one"], NES=[-1.5], pvalue=[1e-3],
+                            **{"p.adjust": [1e-2]}, setSize=[len(gs)],
+                            core_enrichment=["/".join(core)], Groups=["G"], Database=["DB"]))
+    fig = scp.pl.gsea_plot({"G-DB": {"result": res, "geneList": gl, "geneSets": {"S1": gs}}},
+                           direction="neg")
+    top, mid, bot = fig.axes[:3]
+    assert list(bot.get_xticks()) == [0, 4000, 8000, 12000]
+    assert list(top.get_xticks()) == list(bot.get_xticks())
+    fig.canvas.draw()
+    r = fig.canvas.get_renderer()
+    labels = [t for t in bot.get_xticklabels() if t.get_visible() and t.get_text()]
+    boxes = sorted((t.get_window_extent(r) for t in labels), key=lambda b: b.x0)
+    assert len(boxes) == 4
+    for a, b in zip(boxes[:-1], boxes[1:], strict=True):
+        assert b.x0 - a.x1 > 5  # clear gaps, in pixels
+    panel = top.get_window_extent(r)
+    names = [t for t in top.texts if t.get_text() in core]
+    assert len(names) >= 9
+    for t in names:
+        bb = t.get_window_extent(r)
+        assert panel.x0 <= bb.x0 and bb.x1 <= panel.x1
+        assert panel.y0 <= bb.y0 and bb.y1 <= panel.y1
     matplotlib.pyplot.close(fig)
 
 

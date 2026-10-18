@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from typing import cast
+from typing import Protocol, cast
 
 import numpy as np
 import pandas as pd
@@ -29,16 +29,23 @@ from matplotlib.offsetbox import AnnotationBbox, TextArea, VPacker
 from matplotlib.patches import Circle, Patch, Polygon
 from matplotlib.text import Text
 from matplotlib.textpath import TextToPath
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import FixedLocator, MaxNLocator
 from matplotlib.transforms import offset_copy
 
-from ..layout import LegendColumn
+from .._breaks import breaks_within
 from ..theme import halo
 from ._enrich_graph import EnrichmapTables, NetworkTables
 
 PT = 72.27 / 25.4          # ggplot2's .pt: points per millimetre
 DOT = 0.75 * PT           # ggplot point size (mm) -> drawn circle diameter in points
 LWD = PT * 72 / 96         # ggplot linewidth (mm) -> matplotlib points
+
+
+class LegendSink(Protocol):
+    """Where a drawing function registers a legend: a
+    :class:`~scp.layout.LegendColumn` or one panel's own legend stack."""
+
+    def add(self, title: str, handles: Sequence) -> None: ...
 
 
 # --------------------------------------------------------------------------- #
@@ -104,7 +111,7 @@ def draw_network(
     layout: np.ndarray,
     *,
     labelsize: float = 5.0,
-    legend: LegendColumn | None = None,
+    legend: LegendSink | None = None,
     legend_title: str = "Term",
 ) -> None:
     """Edges coloured by term, gene labels on blended fills, numbered term
@@ -220,7 +227,7 @@ def draw_enrichmap(
     labelsize: float = 5.0,
     expand: tuple[float, float] = (0.5, 0.5),
     panel_mm: tuple[float, float] = (80.0, 80.0),
-    legend: LegendColumn | None = None,
+    legend: LegendSink | None = None,
     legend_suffix: str = "",
 ) -> None:
     """Cluster marks with labels, overlap edges scaled by weight, and term nodes
@@ -322,10 +329,10 @@ def _label_marks(ax: Axes, marks, descriptions: dict[str, str], labelsize: float
 # --------------------------------------------------------------------------- #
 # wordcloud
 # --------------------------------------------------------------------------- #
-def _square_spiral(step: float, max_r: float):
+def _square_spiral(step: float, max_r: float) -> np.ndarray:
     """Candidate offsets on concentric squares, centre outwards (ggwordcloud's
-    ``shape = "square"``)."""
-    yield np.zeros((1, 2))
+    ``shape = "square"``), as one ``(n, 2)`` array in visiting order."""
+    rings = [np.zeros((1, 2))]
     k = step
     while k <= max_r:
         n = max(int(8 * k / step), 8)
@@ -334,8 +341,80 @@ def _square_spiral(step: float, max_r: float):
         f = f - 1  # -1..1 along the side
         x = np.select([side == 0, side == 1, side == 2, side == 3], [np.ones_like(f), -f, -np.ones_like(f), f])
         y = np.select([side == 0, side == 1, side == 2, side == 3], [f, np.ones_like(f), -f, -np.ones_like(f)])
-        yield np.column_stack([x, y]) * k
+        rings.append(np.column_stack([x, y]) * k)
         k += step
+    return np.concatenate(rings)
+
+
+#: candidates tested against the placed words at once; the first free one
+#: wins, so the chunking changes the cost, never the placement
+_CHUNK = 2048
+
+
+def _first_free(x0: np.ndarray, y0: np.ndarray, w: float, h: float, rects: np.ndarray) -> int | None:
+    """Index of the first candidate box ``(x0, y0, w, h)`` overlapping none of
+    ``rects`` (rows ``x0, y0, x1, y1``), or ``None``."""
+    if not len(rects):
+        return 0 if len(x0) else None
+    for s in range(0, len(x0), _CHUNK):
+        cx, cy = x0[s:s + _CHUNK], y0[s:s + _CHUNK]
+        # only the placed words that reach into this chunk's span can collide
+        near = rects[(rects[:, 0] < cx.max() + w) & (rects[:, 2] > cx.min())
+                     & (rects[:, 1] < cy.max() + h) & (rects[:, 3] > cy.min())]
+        if not len(near):
+            return s
+        hit = ((cx[:, None] < near[None, :, 2]) & (cx[:, None] + w > near[None, :, 0])
+               & (cy[:, None] < near[None, :, 3]) & (cy[:, None] + h > near[None, :, 1]))
+        free = np.flatnonzero(~hit.any(axis=1))
+        if len(free):
+            return s + int(free[0])
+    return None
+
+
+def _first_free_grid(x0: np.ndarray, y0: np.ndarray, w: float, h: float, rects: np.ndarray,
+                     W: float, H: float) -> int | None:
+    """:func:`_first_free`, with a one-pixel grid settling most candidates.
+
+    A candidate box ``(x0, y0, w, h)`` collides with a placed box exactly when
+    its corner ``(x0, y0)`` lies in the open rectangle ``(rx0 - w, rx1) x
+    (ry0 - h, ry1)``.  Those rectangles are rasterised twice over the panel:
+    every pixel cell they *touch* (grown a cell) and every cell they *cover*
+    (shrunk a cell).  A corner in an untouched cell is certainly free, one in
+    a covered cell certainly collides; only the corners on the rectangles'
+    edges go to the exact test, so the first free candidate is exactly the
+    one an exhaustive test in visiting order finds.
+    """
+    if not len(x0) or not len(rects):
+        return _first_free(x0, y0, w, h, rects)
+    gx, gy = -W / 2 - 2.0, -H / 2 - 2.0
+    nx, ny = int(math.ceil(W)) + 6, int(math.ceil(H)) + 6
+    touched = np.zeros((ny, nx), dtype=bool)
+    covered = np.zeros((ny, nx), dtype=bool)
+    lo_x, hi_x = rects[:, 0] - w - gx, rects[:, 2] - gx
+    lo_y, hi_y = rects[:, 1] - h - gy, rects[:, 3] - gy
+    tx0 = np.clip(np.floor(lo_x) - 1, 0, nx).astype(int).tolist()
+    tx1 = np.clip(np.ceil(hi_x) + 1, 0, nx).astype(int).tolist()
+    ty0 = np.clip(np.floor(lo_y) - 1, 0, ny).astype(int).tolist()
+    ty1 = np.clip(np.ceil(hi_y) + 1, 0, ny).astype(int).tolist()
+    cx0 = np.clip(np.ceil(lo_x) + 1, 0, nx).astype(int).tolist()
+    cx1 = np.clip(np.floor(hi_x) - 1, 0, nx).astype(int).tolist()
+    cy0 = np.clip(np.ceil(lo_y) + 1, 0, ny).astype(int).tolist()
+    cy1 = np.clip(np.floor(hi_y) - 1, 0, ny).astype(int).tolist()
+    for k in range(len(rects)):
+        touched[ty0[k]:ty1[k], tx0[k]:tx1[k]] = True
+        if cx1[k] > cx0[k] and cy1[k] > cy0[k]:
+            covered[cy0[k]:cy1[k], cx0[k]:cx1[k]] = True
+    ix = np.clip(np.floor(x0 - gx), 0, nx - 1).astype(int)
+    iy = np.clip(np.floor(y0 - gy), 0, ny - 1).astype(int)
+    free = ~touched[iy, ix]
+    hits = np.flatnonzero(free)
+    stop = int(hits[0]) if len(hits) else len(x0)
+    unsure = np.flatnonzero(~covered[iy[:stop], ix[:stop]])
+    if len(unsure):
+        j = _first_free(x0[unsure], y0[unsure], w, h, rects)
+        if j is not None:
+            return int(unsure[j])
+    return stop if stop < len(x0) else None
 
 
 def draw_wordcloud(
@@ -366,39 +445,63 @@ def draw_wordcloud(
     score = words["score"].to_numpy(dtype=float)
     cmap = LinearSegmentedColormap.from_list("wc", list(colors), N=256)
     norm = Normalize(float(np.nanmin(score)), float(np.nanmax(score)))
-    placed: list[np.ndarray] = []
+    cand = _square_spiral(2.0, max(W, H) / 2)
+    placed = np.zeros((0, 4))
     kept: list[str] = []
     for word, size_mm, sc, ang in zip(words["keyword"], sizes, score, words["angle"], strict=True):
         t = ax.text(0.5, 0.5, str(word), transform=ax.transAxes, ha="center", va="center",
                     fontsize=float(size_mm) * PT, rotation=float(ang), color=cmap(norm(sc)))
         bb = t.get_window_extent(renderer)
         w, h = bb.width + 2 * margin_px, bb.height + 2 * margin_px
-        ok = None
-        rects = np.array(placed) if placed else np.zeros((0, 4))
-        for cand in _square_spiral(2.0, max(W, H) / 2):
-            # candidate centres in panel pixels, origin at the centre
-            x0 = cand[:, 0] - w / 2
-            y0 = cand[:, 1] - h / 2
-            inside = (x0 >= -W / 2) & (x0 + w <= W / 2) & (y0 >= -H / 2) & (y0 + h <= H / 2)
-            if not inside.any():
-                continue
-            if len(rects):
-                hit = ((x0[:, None] < rects[None, :, 2]) & (x0[:, None] + w > rects[None, :, 0])
-                       & (y0[:, None] < rects[None, :, 3]) & (y0[:, None] + h > rects[None, :, 1]))
-                free = inside & ~hit.any(axis=1)
-            else:
-                free = inside
-            if free.any():
-                j = int(np.flatnonzero(free)[0])
-                ok = (x0[j], y0[j])
-                break
-        if ok is None:
+        # candidate boxes in panel pixels, origin at the centre
+        x0 = cand[:, 0] - w / 2
+        y0 = cand[:, 1] - h / 2
+        inside = np.flatnonzero((x0 >= -W / 2) & (x0 + w <= W / 2)
+                                & (y0 >= -H / 2) & (y0 + h <= H / 2))
+        j = _first_free_grid(x0[inside], y0[inside], w, h, placed, W, H)
+        if j is None:
             t.remove()
             continue
-        placed.append(np.array([ok[0], ok[1], ok[0] + w, ok[1] + h]))
-        t.set_position((0.5 + (ok[0] + w / 2) / W, 0.5 + (ok[1] + h / 2) / H))
+        ox, oy = float(x0[inside[j]]), float(y0[inside[j]])
+        placed = np.vstack([placed, [ox, oy, ox + w, oy + h]])
+        t.set_position((0.5 + (ox + w / 2) / W, 0.5 + (oy + h / 2) / H))
         kept.append(str(word))
     return kept
+
+
+class GlyphKey:
+    """Legend handle drawing a text glyph at a given size: ggwordcloud's size
+    key, which SCP overrides to a black "G" (``SCP-plot.R:13414``)."""
+
+    def __init__(self, glyph: str, size_pt: float, label: str, color: str = "black") -> None:
+        self.glyph, self.size_pt, self.color, self._label = glyph, size_pt, color, label
+
+    def get_label(self) -> str:
+        return self._label
+
+
+class _GlyphKeyHandler(HandlerBase):
+    """Draws a :class:`GlyphKey` and grows its key to hold the glyph, as
+    ggplot's legend keys grow with the key's size, so successive keys never
+    overlap; the glyph stays centred on its label."""
+
+    def legend_artist(self, legend, orig_handle, fontsize, handlebox):
+        size = float(orig_handle.size_pt)
+        need = 0.8 * size + 2.0  # cap height plus a hairline either side, points
+        handlebox.width = max(handlebox.width, need)
+        if need > handlebox.height:
+            handlebox.height = need
+            # rows align on the label's baseline; centre the key on its x-height
+            handlebox.ydescent = need / 2 - 0.35 * fontsize
+        x0, y0 = -handlebox.xdescent, -handlebox.ydescent
+        txt = Text(x0 + handlebox.width / 2, y0 + handlebox.height / 2, orig_handle.glyph,
+                   ha="center", va="center", fontsize=size, color=orig_handle.color,
+                   transform=handlebox.get_transform())
+        handlebox.add_artist(txt)
+        return txt
+
+
+Legend.update_default_handler_map({GlyphKey: _GlyphKeyHandler()})
 
 
 # --------------------------------------------------------------------------- #
@@ -632,21 +735,60 @@ def _classic(ax: Axes) -> None:
 
 
 def _spread(y: np.ndarray, ax: Axes, fontsize: float, ylim: tuple[float, float]) -> np.ndarray:
-    """Push label rows apart vertically so no two overlap: a one-dimensional
-    stand-in for ggrepel, which SCP uses for the core-gene labels."""
+    """Push label rows apart vertically so no two overlap and every row stays
+    inside ``ylim``: a one-dimensional stand-in for ggrepel, which SCP uses for
+    the core-gene labels and which keeps its labels inside the panel."""
     y = np.asarray(y, dtype=float).copy()
-    if len(y) < 2:
+    if len(y) == 0:
         return y
     fig = cast(Figure, ax.figure)
     h_in = ax.get_position().height * fig.get_size_inches()[1]
     gap = (fontsize * 1.25 / 72.0) / max(h_in, 1e-6) * (ylim[1] - ylim[0])
     order = np.argsort(-y, kind="stable")
+    y[order[0]] = min(y[order[0]], ylim[1] - gap / 2)
     for a, b in zip(order[:-1], order[1:], strict=True):
         y[b] = min(y[b], y[a] - gap)
     low = ylim[0] + gap / 2 - y[order[-1]]
     if low > 0:
         y += low
     return y
+
+
+def _keep_inside(ax: Axes, texts: Sequence[Text], pad_px: float = 2.0) -> None:
+    """Slide each label horizontally until it lies inside the panel, as
+    ggrepel's default ``xlim`` (the panel) does; the leader line follows."""
+    renderer = ax.figure.canvas.get_renderer()  # type: ignore[attr-defined]
+    box = ax.get_window_extent(renderer)
+    inv = ax.transData.inverted()
+    for t in texts:
+        bb = t.get_window_extent(renderer)
+        dx = 0.0
+        if bb.x1 > box.x1 - pad_px:
+            dx = box.x1 - pad_px - bb.x1
+        if bb.x0 + dx < box.x0 + pad_px:
+            dx = box.x0 + pad_px - bb.x0
+        if dx:
+            px, py = ax.transData.transform(t.xyann)  # type: ignore[attr-defined]
+            t.xyann = tuple(inv.transform((px + dx, py)))  # type: ignore[attr-defined]
+
+
+def rank_axis(axes: Sequence[Axes], limits: tuple[float, float]) -> None:
+    """ggplot2's default breaks on the shared rank axis: ``extended_breaks``
+    over the scale limits (about five, so five-digit ranks never touch) and
+    the minor grid half-way between them (``regular_minor_breaks``)."""
+    lo, hi = limits
+    major = breaks_within(lo, hi)
+    if len(major) >= 2:
+        step = float(major[1] - major[0])
+        first = major[0] - step / 2 * math.floor((major[0] - lo) / (step / 2))
+        minor = np.arange(first, hi + step * 1e-9, step / 2)
+        minor = minor[~np.isclose(minor[:, None], major[None, :], rtol=0,
+                                  atol=step * 1e-9).any(axis=1)]
+    else:
+        minor = np.array([])
+    for ax in axes:
+        ax.xaxis.set_major_locator(FixedLocator(major.tolist()))
+        ax.xaxis.set_minor_locator(FixedLocator(minor.tolist()))
 
 
 def draw_gsea_line(
@@ -662,9 +804,14 @@ def draw_gsea_line(
     zero_cross: float | None = None,
     xlim: tuple[float, float],
     fontsize: float,
+    x_limits: tuple[float, float] | None = None,
 ) -> None:
     """GSEAPlot's three stacked panels for one result key
     (``SCP-plot.R:13792-13970``).
+
+    ``xlim`` is the drawn range; ``x_limits`` the scale limits before
+    ggplot's 1% expansion, which the rank-axis breaks are computed over
+    (``xlim`` less that expansion when not given).
 
     ``sets`` holds, per gene set, ``x``, ``running_score``, ``hits`` (the x of
     every hit), ``label`` and ``id``; every set is overlaid in the top panel
@@ -677,6 +824,10 @@ def draw_gsea_line(
     for ax in axes:
         _classic(ax)
         ax.set_xlim(*xlim)
+    if x_limits is None:
+        span = (xlim[1] - xlim[0]) / 1.02
+        x_limits = (xlim[0] + 0.01 * span, xlim[1] - 0.01 * span)
+    rank_axis(axes, x_limits)
 
     # p1: running score over red/blue half planes
     lo = min(0.0, *(float(np.min(s["running_score"])) for s in sets))
@@ -711,6 +862,7 @@ def draw_gsea_line(
             ny = 0.05 * span
             tx = gx + np.where(gy >= 0, nx, -nx)
             ty = _spread(gy + np.where(gy > 0, -ny, ny), top, label_fs, (ylo, yhi))
+            labels = []
             for xi, yi, lx, ly, g in zip(gx, gy, tx, ty, genes["gene"], strict=True):
                 t = top.annotate(str(g), (xi, yi), xytext=(lx, ly), fontsize=label_fs,
                                  ha="left" if yi >= 0 else "right", va="center",
@@ -718,6 +870,8 @@ def draw_gsea_line(
                                  arrowprops=dict(arrowstyle="-", color="#666666",
                                                  linewidth=0.5 * LWD, shrinkA=0, shrinkB=2))
                 halo(t, "white", 0.1)
+                labels.append(t)
+            _keep_inside(top, labels)
         top.set_title(f"{single['title']}\n", loc="left", fontsize=fontsize * 1.2)
         top.text(0.0, 1.01, single["subtitle"], transform=top.transAxes, ha="left",
                  va="bottom", fontstyle="italic", fontsize=fontsize)

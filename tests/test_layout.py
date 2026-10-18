@@ -286,3 +286,28 @@ def test_borrowed_ax_is_left_alone(adata):
     assert ax.get_position().bounds == before
     assert tuple(fig.get_size_inches()) == (4.0, 4.0)
     assert np.isclose(fig.get_size_inches(), (4, 4)).all()
+
+
+def test_legend_beside_stacks_with_the_panel_and_wraps_when_taller():
+    """A panel's own legends sit right of it, level with it, and a stack
+    taller than the panel wraps into a second column instead of spilling
+    over the neighbouring rows."""
+    pg = PanelGrid(2, panel_size=(1.5, 1.0), ncol=1, legend=LegendColumn(position="right"))
+    handles = [Line2D([], [], marker="o", linestyle="none", label=f"k{i}") for i in range(5)]
+    a, b = pg.axes["0"], pg.axes["1"]
+    first = pg.legend_beside(a, "One", handles)
+    second = pg.legend_beside(a, "Two", handles)
+    third = pg.legend_beside(b, "Three", handles[:2])
+    fig = pg.finish()
+    fig.canvas.draw()
+    r = fig.canvas.get_renderer()
+    pa, pb = a.get_window_extent(r), b.get_window_extent(r)
+    l1, l2, l3 = (lg.get_window_extent(r) for lg in (first, second, third))
+    assert l1.x0 >= pa.x1 and l3.x0 >= pb.x1
+    assert l2.x0 >= l1.x1  # wrapped into a second column
+    for lb, pb_ in ((l1, pa), (l3, pb)):
+        assert pb_.y0 <= (lb.y0 + lb.y1) / 2 <= pb_.y1
+    W, H = fig.get_size_inches() * fig.dpi
+    assert max(l1.x1, l2.x1, l3.x1) <= W and min(l1.y0, l2.y0) >= 0 and max(l1.y1, l2.y1) <= H
+    assert min(l1.y0, l2.y0) >= l3.y1
+    plt.close(fig)
