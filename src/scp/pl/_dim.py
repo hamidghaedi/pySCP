@@ -32,6 +32,7 @@ from matplotlib.patches import Patch
 
 from ..colors import adjcolors, blendcolors
 from ..fetch import (
+    as_level_labels,
     as_ordered_categorical,
     default_reduction,
     fetch_data,
@@ -41,9 +42,10 @@ from ..fetch import (
     calculate_coexp as _coexp,
 )
 from ..layout import LegendColumn, PanelGrid
-from ..palettes import NA_COLOR_DEFAULT, continuous_palette, discrete_palette
+from ..palettes import NA_COLOR_DEFAULT, continuous_palette, discrete_palette, level_colors
 from ..theme import Theme, halo, theme_scp
 from . import _dim_layers as layers
+from ._dim_geom import expand_range
 from ._stat import INSET_TYPES
 
 __all__ = ["cell_dim_plot", "feature_dim_plot", "cell_dim_plot_3d", "feature_dim_plot_3d"]
@@ -108,7 +110,8 @@ def _read_paga_arg(adata, paga, type_: str):
     return (_dense(src[type_]), str(src["groups"]), _dense(src.get("transitions_confidence")))
 
 
-def _draw_paga(ax: Axes, adata, frame: pd.DataFrame, *, paga, palette, palcolor, type_: str,
+def _draw_paga(ax: Axes, adata, frame: pd.DataFrame, *, paga, palette, palcolor,
+               use_uns_colors: bool, type_: str,
                node_size: float, edge_threshold: float, edge_size, edge_color: str,
                edge_alpha: float, transition_threshold: float, transition_size,
                transition_color: str, transition_alpha: float, show_transition: bool):
@@ -127,28 +130,30 @@ def _draw_paga(ax: Axes, adata, frame: pd.DataFrame, *, paga, palette, palcolor,
     from ._traj import _paga_nodes, graph_plot
 
     conn, groups_key, trans = _read_paga_arg(adata, paga, type_)
-    cat = as_ordered_categorical(adata.obs[groups_key])
-    levels = [str(x) for x in cat.cat.categories]
+    lab, levels = as_level_labels(adata.obs[groups_key])
     if conn.shape[0] != len(levels):
         raise ValueError(f"nlevels in {groups_key!r} is not identical with the group in paga")
-    vals = np.asarray(cat).astype(str)[_positions(adata, frame.index)]
+    vals = lab.to_numpy()[_positions(adata, frame.index)]
     node, idx = _paga_nodes(vals, frame["x"].to_numpy(dtype=float),
                             frame["y"].to_numpy(dtype=float), levels, groups_key,
                             categories=levels)
     present = [str(x) for x in node.index]
-    colors = discrete_palette(levels, palette=palette, palcolor=palcolor)
+    colors = level_colors(adata, groups_key, levels, palette=palette, palcolor=palcolor,
+                          default_palette="Paired", use_uns_colors=use_uns_colors)
     E = conn[np.ix_(idx, idx)]
     T = None
     if show_transition:
         if trans is None:
-            warnings.warn("transitions_confidence need to be calculated first.", stacklevel=3)
+            warnings.warn("transitions_confidence need to be calculated first: it comes "
+                          "from velocity-based PAGA (scvelo's scv.tl.paga). Drawing no "
+                          "transitions.", stacklevel=3)
         else:
             T = trans[np.ix_(idx, idx)]
     tree = type_ == "connectivities_tree"
 
     before = set(ax.get_children())
     graph_plot(node, E, transition=T, node_group=groups_key, node_palette=palette,
-               node_palcolor=palcolor, node_size=float(node_size),
+               node_palcolor=colors, node_size=float(node_size),
                edge_threshold=0.0 if tree else edge_threshold,
                use_triangular="both" if tree else "upper", edge_color=edge_color,
                edge_size=(layers.mm_lw(edge_size[0]), layers.mm_lw(edge_size[1])),
@@ -216,7 +221,7 @@ def _draw_labels(ax: Axes, xy: np.ndarray, texts: Sequence[str], *, size: float,
                  bg_r: float, repel: bool, repulsion: float, point_size: float,
                  point_color: str, segment_color: str) -> None:
     """``geom_text_repel`` as SCP calls it: bold halo text; with repel, a dot and a leader."""
-    fontsize = size * 2.5
+    fontsize = size * 72.27 / 25.4  # ggplot text size is mm; .pt converts
     fgs = [fg] * len(texts) if isinstance(fg, str) else list(fg)
     if repel:
         ax.scatter(xy[:, 0], xy[:, 1], s=_mm_area(point_size), c=point_color, linewidths=0,
@@ -236,6 +241,7 @@ def _draw_labels(ax: Axes, xy: np.ndarray, texts: Sequence[str], *, size: float,
         halo(t, foreground=bg, radius=bg_r)
 
 
+
 def _limits_of(frame: pd.DataFrame) -> tuple[float, float, float, float]:
     x, y = frame["x"].to_numpy(dtype=float), frame["y"].to_numpy(dtype=float)
     return (float(np.nanmin(x)), float(np.nanmax(x)), float(np.nanmin(y)), float(np.nanmax(y)))
@@ -252,6 +258,7 @@ def cell_dim_plot(
     # aesthetics
     palette: str = "Paired",
     palcolor: Sequence[str] | dict[str, str] | None = None,
+    use_uns_colors: bool = True,
     bg_color: str = NA_COLOR_DEFAULT,
     pt_size: float | None = None,
     pt_alpha: float = 1.0,
@@ -374,7 +381,16 @@ def cell_dim_plot(
       split are drawn in ``bg_color``, not dropped (contrast with
       :func:`feature_dim_plot`, which genuinely partitions);
     * axis limits come from the *global* embedding range, so panels are
-      directly comparable;
+      directly comparable, with ggplot's default 5 % expansion on each side
+      (``scale_x_continuous(limits = ...)`` keeps it; pinned to R's
+      ``panel_params``);
+    * ``reduction`` is a pattern, resolved as ``DefaultReduction(srt,
+      pattern = reduction)`` resolves it (``SCP-plot.R:1394``): ``"umap"``,
+      ``"UMAP"`` and ``"X_umap"`` all work (:func:`scp.fetch.default_reduction`);
+    * group levels are the categories rendered with ``str``, so integer,
+      boolean, float and mixed columns get their legend, labels and marks;
+    * with several panels, the grid is ``wrap_plots``' default
+      (:func:`scp.layout.grid_shape`);
     * draw order is background cells first, then a **seeded shuffle** of the
       rest, so no group systematically overplots another;
     * labels sit at the per-group *marginal* median of x and y (median of x and
@@ -390,6 +406,11 @@ def cell_dim_plot(
 
     Deliberate divergences, each a fix or a matplotlib-native replacement:
 
+    * ``use_uns_colors=True``: with ``palette`` / ``stat_plot_palette`` at
+      their defaults and no ``palcolor`` / ``stat_palcolor``, scanpy's
+      ``adata.uns[f"{key}_colors"]`` colours the levels it covers, so the
+      figure matches ``sc.pl``'s (R knows no ``uns``; ``False`` restores R's
+      colours; see :func:`scp.palettes.level_colors`).
     * ``graph`` reads ``adata.obsp[graph]`` and works on its sparse triplets;
       R densifies the whole adjacency (O(n^2) memory).
     * ``hex`` takes precedence over ``raster``: rasterisation here is only a
@@ -453,7 +474,7 @@ def cell_dim_plot(
     cells_highlight = _check_highlight(adata, cells_highlight)
     graph_mat = _resolve_graph(adata, graph)
 
-    reduction = reduction or default_reduction(adata)
+    reduction = default_reduction(adata, pattern=reduction)
     key = reduction_key(reduction)
     emb = np.asarray(adata.obsm[reduction])
     xi, yi = dims[0] - 1, dims[1] - 1
@@ -462,28 +483,29 @@ def cell_dim_plot(
     frame = pd.DataFrame(
         {"x": emb[:, xi], "y": emb[:, yi]}, index=pd.Index(adata.obs_names)
     )
-    # Capture the level order HERE, while the Categorical still exists.
-    # Storing `.to_numpy()` flattens it to an object array, and re-deriving the
-    # levels from those values later yields first-appearance-in-data order
-    # rather than the column's declared order -- which silently shifts every
-    # palette index and legend position.
+    # Capture the level order HERE, while the Categorical still exists, and
+    # store string labels: re-deriving levels from raw values later yields
+    # first-appearance order, and raw ints / bools never compare equal to
+    # their string levels -- either silently drops legend, labels and marks.
     group_levels: dict[str, list[str]] = {}
     for g in groups:
-        cat = as_ordered_categorical(obs[g], show_na=show_na)
-        group_levels[g] = [str(lv) for lv in cat.cat.categories]
-        frame[g] = cat.to_numpy()
+        lab, group_levels[g] = as_level_labels(obs[g], show_na=show_na)
+        frame[g] = lab.to_numpy()
     split_levels: list[str | None]
     if split_by is None:
         split_levels = [None]
         frame["__split__"] = ""
     else:
-        sp_cat = as_ordered_categorical(obs[split_by])
-        frame["__split__"] = sp_cat.to_numpy()
-        split_levels = list(sp_cat.cat.categories)
+        sp_lab, sp_levels = as_level_labels(obs[split_by])
+        frame["__split__"] = sp_lab.to_numpy()
+        split_levels = list(sp_levels)
 
-    # Global limits, computed before any `cells` subsetting -- panels stay aligned.
+    # Global limits, computed before any `cells` subsetting -- panels stay
+    # aligned.  `xlim`/`ylim` are the data range the layers bin and smooth
+    # over; the axes get ggplot's 5 % expansion of it.
     xlim = (float(np.nanmin(emb[:, xi])), float(np.nanmax(emb[:, xi])))
     ylim = (float(np.nanmin(emb[:, yi])), float(np.nanmax(emb[:, yi])))
+    ax_xlim, ax_ylim = expand_range(*xlim), expand_range(*ylim)
 
     if cells is not None:
         frame = frame.loc[frame.index.intersection(pd.Index(cells))]
@@ -518,7 +540,9 @@ def cell_dim_plot(
         st = as_ordered_categorical(obs[stat_by], show_na=True)
         stat_levels = [str(x) for x in st.cat.categories]
         real = stat_levels[:-1] if has_na else stat_levels
-        stat_colors = discrete_palette(real, palette=stat_plot_palette, palcolor=stat_palcolor)
+        stat_colors = level_colors(adata, stat_by, real, palette=stat_plot_palette,
+                                   palcolor=stat_palcolor, default_palette="Set1",
+                                   use_uns_colors=use_uns_colors)
         if has_na:
             stat_colors["NA"] = "#BEBEBE"
         stat_values = pd.Series(np.asarray(st).astype(str), index=adata.obs_names).loc[frame.index]
@@ -535,12 +559,13 @@ def cell_dim_plot(
     extra_legends: dict[str, list] = {}
     for g in groups:
         levels = group_levels[g]
-        colors = discrete_palette(levels, palette=palette, palcolor=palcolor)
+        colors = level_colors(adata, g, levels, palette=palette, palcolor=palcolor,
+                              default_palette="Paired", use_uns_colors=use_uns_colors)
 
         for s in split_levels:
             panel = pg.axes[f"{s or ''}:{g}"]
-            panel.set_xlim(*xlim)
-            panel.set_ylim(*ylim)
+            panel.set_xlim(*ax_xlim)
+            panel.set_ylim(*ax_ylim)
             panel.set_xlabel(xlab if xlab is not None else f"{key}{dims[0]}")
             panel.set_ylabel(ylab if ylab is not None else f"{key}{dims[1]}")
             dat = frame.copy()
@@ -631,7 +656,7 @@ def cell_dim_plot(
             if paga:
                 pkey, plev, pcol = _draw_paga(
                     panel, adata, dat, paga=paga, palette=palette, palcolor=palcolor,
-                    type_=paga_type, node_size=paga_node_size,
+                    use_uns_colors=use_uns_colors, type_=paga_type, node_size=paga_node_size,
                     edge_threshold=paga_edge_threshold, edge_size=paga_edge_size,
                     edge_color=paga_edge_color, edge_alpha=paga_edge_alpha,
                     transition_threshold=paga_transition_threshold,
@@ -677,8 +702,8 @@ def cell_dim_plot(
                              segment_color=label_segment_color)
 
             # overlays may autoscale; the global limits are the contract
-            panel.set_xlim(*xlim)
-            panel.set_ylim(*ylim)
+            panel.set_xlim(*ax_xlim)
+            panel.set_ylim(*ax_ylim)
             # title and subtitle are separate slots -- ggplot stacks them, and
             # so must we, or show_stat silently eats a user-supplied title.
             if title:
@@ -827,6 +852,12 @@ def feature_dim_plot(
     (``stat_summary_hex``) over flat background hexagons, and the blend path
     has none, as in R.
 
+    As in :func:`cell_dim_plot`: ``reduction`` is resolved as SCP's
+    ``DefaultReduction`` resolves it, the axes carry ggplot's 5 % expansion
+    of the global range, and the panels -- every split level x feature, as
+    one flat list -- wrap into ``wrap_plots``' default grid (12 features:
+    3 x 4) unless ``nrow`` / ``ncol`` say otherwise.
+
     Deliberate divergences: ``keep_scale="all"`` keeps the ``is.finite``
     filter R's upper quantile drops (an R bug); ``hex`` takes precedence over
     ``raster`` (see :func:`cell_dim_plot`).
@@ -854,7 +885,7 @@ def feature_dim_plot(
             "Pass force=True to proceed anyway."
         )
 
-    reduction = reduction or default_reduction(adata)
+    reduction = default_reduction(adata, pattern=reduction)
     key = reduction_key(reduction)
     emb = np.asarray(adata.obsm[reduction])
     xi, yi = dims[0] - 1, dims[1] - 1
@@ -888,13 +919,15 @@ def feature_dim_plot(
         split_levels: list[str | None] = [None]
         frame["__split__"] = ""
     else:
-        sp_cat = as_ordered_categorical(adata.obs[split_by])
-        frame["__split__"] = sp_cat.to_numpy()
-        split_levels = list(sp_cat.cat.categories)
+        sp_lab, sp_levels = as_level_labels(adata.obs[split_by])
+        frame["__split__"] = sp_lab.to_numpy()
+        split_levels = list(sp_levels)
 
-    # Global limits, from every cell, so split panels stay comparable.
+    # Global limits, from every cell, so split panels stay comparable; the
+    # axes get ggplot's 5 % expansion of the data range (see cell_dim_plot).
     xlim = (float(np.nanmin(emb[:, xi])), float(np.nanmax(emb[:, xi])))
     ylim = (float(np.nanmin(emb[:, yi])), float(np.nanmax(emb[:, yi])))
+    ax_xlim, ax_ylim = expand_range(*xlim), expand_range(*ylim)
 
     # bg_cutoff is applied globally and destructively BEFORE plotting: every
     # value <= it becomes NaN and renders in bg_color.  The comparison is <=,
@@ -927,10 +960,10 @@ def feature_dim_plot(
     panel_feats = ["|".join(resolved)] if blend_path else resolved
     keys = [f"{s or ''}:{f}" for s in split_levels for f in panel_feats]
     legend = LegendColumn(position=legend_position)
+    # R hands the flat panel list to wrap_plots(nrow, ncol), so the default
+    # grid is patchwork's (grid_shape), not one row per split level.
     pg = PanelGrid(
-        len(keys), panel_size=panel_size,
-        nrow=nrow if nrow is not None else (None if ncol else len(split_levels)),
-        ncol=ncol if ncol is not None else (None if nrow else len(panel_feats)),
+        len(keys), panel_size=panel_size, nrow=nrow, ncol=ncol,
         byrow=byrow, keys=keys, theme=th, legend=legend,
     )
 
@@ -979,8 +1012,8 @@ def feature_dim_plot(
         part = frame if s is None else frame[frame["__split__"] == s]
         for f in panel_feats:
             ax_p = pg.axes[f"{s or ''}:{f}"]
-            ax_p.set_xlim(*xlim)
-            ax_p.set_ylim(*ylim)
+            ax_p.set_xlim(*ax_xlim)
+            ax_p.set_ylim(*ax_ylim)
             ax_p.set_xlabel(xlab if xlab is not None else f"{key}{dims[0]}")
             ax_p.set_ylabel(ylab if ylab is not None else f"{key}{dims[1]}")
 
@@ -1140,8 +1173,8 @@ def feature_dim_plot(
                     whiskers_linewidth=lineages_whiskers_linewidth,
                     whiskers_alpha=lineages_whiskers_alpha)
 
-            ax_p.set_xlim(*xlim)
-            ax_p.set_ylim(*ylim)
+            ax_p.set_xlim(*ax_xlim)
+            ax_p.set_ylim(*ax_ylim)
             strip = "|".join(resolved) if blend_path else f
             head = title if title else strip
             if show_stat:
@@ -1176,7 +1209,8 @@ def _plotly():
 
 
 def _embedding_3d(adata, reduction: str | None, dims):
-    reduction = reduction or default_reduction(adata)
+    """R's ``DefaultReduction(srt, pattern = reduction, min_dim = 3)`` (``SCP-plot.R:2865``)."""
+    reduction = default_reduction(adata, pattern=reduction, min_dim=3)
     emb = np.asarray(adata.obsm[reduction], dtype=float)
     if emb.shape[1] < 3:
         raise ValueError(f"{reduction!r} has {emb.shape[1]} dimensions; 3 are needed")
@@ -1252,6 +1286,7 @@ def cell_dim_plot_3d(
     axis_labs: Sequence[str] | None = None,
     palette: str = "Paired",
     palcolor: Sequence[str] | dict[str, str] | None = None,
+    use_uns_colors: bool = True,
     bg_color: str = NA_COLOR_DEFAULT,
     pt_size: float = 1.5,
     cells_highlight: Sequence[str] | bool | None = None,
@@ -1271,7 +1306,11 @@ def cell_dim_plot_3d(
     Port of ``CellDimPlot3D`` (``SCP-plot.R:2843``) by Hao Zhang,
     https://github.com/zhanghao-njmu/SCP.  One trace per level, so plotly's
     own legend does the grouping and levels can be toggled.  Level order is
-    the column's declared order, as everywhere else.
+    the column's declared order, as everywhere else.  ``reduction`` resolves
+    as ``DefaultReduction(srt, pattern = reduction, min_dim = 3)``
+    (``SCP-plot.R:2865``), so the default is never a 2-D embedding.
+    ``use_uns_colors`` reads scanpy's stored colours as in
+    :func:`cell_dim_plot`.
 
     As in R, cells with a missing ``group_by`` are always drawn, as a last
     ``"NA"`` trace coloured ``bg_color`` (``palette_scp(..., NA_color =
@@ -1314,7 +1353,8 @@ def cell_dim_plot_3d(
             f"`{group_by}` has {len(levels)} levels, which will produce an unreadable legend. "
             "Pass force=True to proceed anyway."
         )
-    colors = discrete_palette(levels, palette=palette, palcolor=palcolor)
+    colors = level_colors(adata, group_by, levels, palette=palette, palcolor=palcolor,
+                          default_palette="Paired", use_uns_colors=use_uns_colors)
     na = np.asarray(cat.isna())
     values = np.asarray(cat).astype(str)
     if show_na and na.any():
@@ -1409,6 +1449,8 @@ def feature_dim_plot_3d(
     trace and swaps its marker; here each feature is its own trace and the
     dropdown toggles visibility -- the same values per feature, and each
     trace keeps its own colourbar.
+
+    ``reduction`` resolves with ``min_dim = 3``, as in R (``SCP-plot.R:3094``).
 
     As in R: the title is ``"All_cells (nCells:N)"``, each scene axis is
     pinned to the data's range in a cube, ``axis_labs`` replaces the axis

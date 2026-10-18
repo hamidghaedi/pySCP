@@ -99,6 +99,36 @@ Two R edge cases are deliberately not reproduced: a constant `x` makes
 `matched = TRUE` reverses the per-element vector, so colours no longer line
 up with their elements (here the scale is reversed).
 
+### scanpy's stored colours (`uns[f"{key}_colors"]`)
+
+R knows nothing of `uns`, so reading it is a **deliberate divergence**, and it
+is on by default: a user who has drawn `sc.pl.umap(adata, color="CellType")`
+expects `cell_dim_plot(adata, "CellType")` to use the same colours, and
+`docs/02_data_contract.md` §6 settles that the stored list is read first.
+
+* `uns_palcolor(adata, key, levels)` returns `{level: colour}` from the list,
+  or `None`. It is used only when `obs[key]` is categorical and the list has
+  exactly one colour per category (a misaligned list warns and is ignored;
+  a non-categorical column has no defined alignment, so it is skipped).
+* `level_colors(adata, key, levels, palette=, palcolor=, default_palette=,
+  use_uns_colors=True)` is what a plot calls: `discrete_palette` as R does,
+  then the stored colours on top for the levels they cover — *only* when the
+  caller left `palette` at the function's default and `palcolor` unset.
+  Levels the list does not cover (`show_na`'s `"NA"`) keep the palette's
+  colour.
+* Every plot that reads it has `use_uns_colors=True`; `False` gives R's
+  colours exactly. Passing the default palette's name explicitly cannot be
+  told apart from leaving it alone, so `palette="Paired"` still yields the
+  stored colours — use `use_uns_colors=False`.
+* Nothing is written back to `uns`: the stored list wins over the default
+  palette, so writing one call's colours would fix the palette of every
+  later call.
+
+Wired so far into `cell_dim_plot` (groups, `stat_by`, the PAGA nodes),
+`cell_dim_plot_3d`, `paga_plot`, `velocity_plot(group_by=)` and
+`projection_plot`. The R parity fixtures build objects without stored
+colours, so every parity test runs on R's palette.
+
 ## 3. Color algebra
 
 Four functions, ported verbatim, that make multi-feature blending work:

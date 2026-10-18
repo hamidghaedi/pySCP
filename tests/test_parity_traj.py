@@ -24,7 +24,6 @@ import pytest
 from matplotlib.collections import LineCollection, PathCollection
 from matplotlib.colors import to_hex
 from matplotlib.patches import FancyArrowPatch
-from matplotlib.quiver import Quiver
 from matplotlib.text import Annotation
 
 import scp
@@ -357,16 +356,18 @@ def test_segments_df_is_reproduced_exactly():
 # --------------------------------------------------------------------------- #
 # VelocityPlot  (SCP-plot.R:6745)
 # --------------------------------------------------------------------------- #
-def _quiver(ax) -> Quiver:
-    return [c for c in ax.collections if isinstance(c, Quiver)][0]
+def _arrows(ax) -> layers._ArrowField:
+    """The one arrow layer velocity_plot draws: R's geom_segment + closed head."""
+    found = [a for a in ax.artists if isinstance(a, layers._ArrowField)]
+    assert len(found) == 1
+    return found[0]
 
 
 @pytest.mark.parametrize(("name", "scale"), [("raw", 1.0), ("raw_scale2", 2.0)])
 def test_velocity_raw_arrow_endpoints_match_r(r_adata, name, scale):
     R = _csv(f"velocity_{name}_layers.csv")
-    q = _quiver(scp.pl.velocity_plot(r_adata, basis="umap", scale=scale))
-    X = q.get_offsets()
-    end = X + np.c_[q.U, q.V] / q.scale
+    q = _arrows(scp.pl.velocity_plot(r_adata, basis="umap", scale=scale))
+    X, end = q._seg[:, :2], q._seg[:, 2:]
     if "x" in R:
         np.testing.assert_allclose(X, R[["x", "y"]].to_numpy(), atol=ATOL)
     np.testing.assert_allclose(end, R[["xend", "yend"]].to_numpy(), atol=ATOL)
@@ -374,8 +375,8 @@ def test_velocity_raw_arrow_endpoints_match_r(r_adata, name, scale):
 
 def test_velocity_group_by_colours_the_arrows(r_adata):
     R = _csv("velocity_raw_group_layers.csv")
-    q = _quiver(scp.pl.velocity_plot(r_adata, basis="umap", group_by="SubCellType"))
-    assert _hexes(q.get_facecolors()) == _r_hex(R.colour)
+    q = _arrows(scp.pl.velocity_plot(r_adata, basis="umap", group_by="SubCellType"))
+    assert _hexes(q._colors) == _r_hex(R.colour)
 
 
 def test_velocity_raw_draws_only_arrows(r_adata):
@@ -386,10 +387,9 @@ def test_velocity_raw_draws_only_arrows(r_adata):
 def test_velocity_grid_matches_r(r_adata):
     """VelocityPlot's default grid: R's compute_velocity_on_grid, ported to numpy."""
     R = _csv("velocity_grid_layers.csv")
-    q = _quiver(scp.pl.velocity_plot(r_adata, basis="umap", plot_type="grid"))
-    X = q.get_offsets()
+    q = _arrows(scp.pl.velocity_plot(r_adata, basis="umap", plot_type="grid"))
+    X, end = q._seg[:, :2], q._seg[:, 2:]
     np.testing.assert_allclose(X, R[["x", "y"]].to_numpy(), atol=ATOL)
-    end = X + np.c_[q.U, q.V] / q.scale
     np.testing.assert_allclose(end, R[["xend", "yend"]].to_numpy(), atol=ATOL)
 
 
@@ -699,3 +699,22 @@ def test_projection_keeps_query_cells_outside_the_reference_range(projection):
     cols = [c for c in ax.collections if isinstance(c, PathCollection)]
     assert cols[2].get_offsets().shape[0] == qry.n_obs
     assert ax.get_xlim()[1] >= qry.obsm["X_umap"][:, 0].max()
+
+
+def test_projection_limits_carry_ggplots_expansion(projection):
+    """R's panel range is the reference range plus 5 % a side; Python applies the
+    same expansion to the union of both ranges (the bug fix above)."""
+    from scp.pl._dim_geom import expand_range
+
+    ref, qry, _R = projection
+    rng = _csv("projection_ranges.csv").set_index("axis")
+    for i, axis in enumerate("xy"):
+        r = ref.obsm["X_umap"][:, i]
+        np.testing.assert_allclose(expand_range(r.min(), r.max()), rng.loc[axis, ["lo", "hi"]],
+                                   atol=1e-8)
+    ax = scp.pl.projection_plot(qry, ref, query_group="SubCellType", ref_group="CellType")
+    both = np.r_[ref.obsm["X_umap"], qry.obsm["X_umap"]]
+    np.testing.assert_allclose(ax.get_xlim(), expand_range(both[:, 0].min(), both[:, 0].max()))
+    np.testing.assert_allclose(ax.get_ylim(), expand_range(both[:, 1].min(), both[:, 1].max()))
+    titles = [lg.get_title().get_text() for lg in ax.figure.legends]
+    assert titles == ["Ref: CellType:", "Query: SubCellType:"]

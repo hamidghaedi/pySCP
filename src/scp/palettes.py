@@ -11,6 +11,7 @@ Reference: ``SCP/R/SCP-plot.R`` lines 168--297.
 from __future__ import annotations
 
 import json
+import warnings
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
@@ -33,6 +34,8 @@ __all__ = [
     "palette_scp",
     "discrete_palette",
     "continuous_palette",
+    "uns_palcolor",
+    "level_colors",
     "NA_COLOR_DEFAULT",
 ]
 
@@ -242,6 +245,71 @@ def discrete_palette(
     if reverse:
         keys = list(out)
         out = dict(zip(keys, list(out.values())[::-1], strict=True))
+    return out
+
+
+def uns_palcolor(adata, key: str, levels: Sequence[str] | None = None) -> dict[str, str] | None:
+    """scanpy's ``adata.uns[f"{key}_colors"]`` as a level -> colour mapping.
+
+    scanpy stores one colour per category of ``obs[key]``, in category order.
+    The list is used only when it is aligned: ``obs[key]`` is categorical and
+    the list has exactly one colour per category (otherwise it is ignored
+    with a warning -- positions would pair the wrong colours).  Categories
+    are keyed by ``str``, as every plot labels them.  ``levels`` narrows the
+    mapping to those levels.  Returns ``None`` when there is nothing usable.
+
+    Nothing is written back to ``adata.uns``: that would make the palette of
+    one call stick to every later one, since a stored list takes precedence.
+    """
+    uns = getattr(adata, "uns", None)
+    obs = getattr(adata, "obs", None)
+    if uns is None or obs is None or key not in getattr(obs, "columns", ()):
+        return None
+    stored = uns.get(f"{key}_colors")
+    if stored is None:
+        return None
+    col = obs[key]
+    if not isinstance(col.dtype, pd.CategoricalDtype):
+        return None
+    cats = [str(c) for c in col.cat.categories]
+    stored = [str(c) for c in np.atleast_1d(np.asarray(stored, dtype=object))]
+    if len(stored) != len(cats):
+        warnings.warn(
+            f"adata.uns['{key}_colors'] has {len(stored)} colours for {len(cats)} "
+            f"categories of obs['{key}']; it is ignored.",
+            stacklevel=3,
+        )
+        return None
+    out = dict(zip(cats, stored, strict=True))
+    if levels is not None:
+        out = {str(lv): out[str(lv)] for lv in levels if str(lv) in out}
+    return out or None
+
+
+def level_colors(
+    adata,
+    key: str,
+    levels: Sequence[str],
+    *,
+    palette: str,
+    palcolor: Sequence[str] | Mapping[str, str] | None,
+    default_palette: str,
+    use_uns_colors: bool = True,
+) -> dict[str, str]:
+    """The colours a plot gives the levels of ``obs[key]``.
+
+    SCP's ``palette_scp(levels, palette, palcolor)`` -- unless the caller
+    left both ``palette`` (at ``default_palette``) and ``palcolor`` alone and
+    scanpy has stored colours for ``key``, in which case those win for the
+    levels they cover (:func:`uns_palcolor`).  Levels they do not cover,
+    such as ``show_na``'s ``"NA"``, keep the palette's colour.
+    ``use_uns_colors=False`` restores R's colours exactly.
+    """
+    out = discrete_palette(levels, palette=palette, palcolor=palcolor)
+    if use_uns_colors and palcolor is None and palette == default_palette:
+        stored = uns_palcolor(adata, key, levels)
+        if stored:
+            out.update(stored)
     return out
 
 

@@ -432,3 +432,94 @@ def test_coexp_panel_matches_r(panc):
     assert np.allclose(co.loc[r.index].to_numpy(), r["CoExp"].to_numpy(), rtol=1e-8)
     drawn = np.sort(np.asarray(panels[-1].collections[-1].get_array(), dtype=float))
     assert np.allclose(drawn, np.sort(r["value"].dropna().to_numpy()), rtol=1e-8)
+
+
+# --------------------------------------------------------------------------- #
+# axis ranges, reduction resolution, grid shape, arrowheads
+# --------------------------------------------------------------------------- #
+def _panel_axes(fig):
+    return [a for a in fig.axes if a.get_label() != "<colorbar>" and a.get_xlabel()]
+
+
+@pytest.mark.parametrize("case", ["cell_umap", "cell_subset", "cell_split_last", "feature_umap"])
+def test_panel_ranges_keep_ggplots_five_percent_expansion(panc, case):
+    """``scale_x_continuous(limits = range)`` keeps expansion(mult = 0.05): pinned to
+    ``ggplot_build(p)$layout$panel_params`` so edge points are not half-clipped."""
+    want = _csv("panel_ranges.csv").set_index("case").loc[case]
+    if case == "cell_umap":
+        fig = scp.pl.cell_dim_plot(panc, "CellType", reduction="UMAP")
+    elif case == "cell_subset":
+        cells = panc.obs_names[panc.obs["CellType"].isin(["Ductal", "Endocrine"])]
+        fig = scp.pl.cell_dim_plot(panc, "CellType", reduction="UMAP", cells=list(cells))
+    elif case == "cell_split_last":
+        fig = scp.pl.cell_dim_plot(panc, "CellType", split_by="Phase", reduction="UMAP")
+    else:
+        fig = scp.pl.feature_dim_plot(panc, "Ins1", reduction="UMAP")
+    ax = _panel_axes(fig)[-1]
+    np.testing.assert_allclose(ax.get_xlim(), (want.x_lo, want.x_hi), rtol=0, atol=1e-6)
+    np.testing.assert_allclose(ax.get_ylim(), (want.y_lo, want.y_hi), rtol=0, atol=1e-6)
+
+
+def test_default_reduction_resolves_every_pattern_as_r_does():
+    """DefaultReduction(srt, pattern, min_dim) on a set of names built to hit each
+    step: exact, case-insensitive grep, agrep, the tie-break and min_dim."""
+    anndata = pytest.importorskip("anndata")
+    inp = _csv("default_reduction_inputs.csv")
+    ad = anndata.AnnData(X=np.zeros((5, 1)))
+    for name, k in zip(inp.name, inp.ncol, strict=True):
+        ad.obsm[name] = np.zeros((5, int(k)))
+    for row in _csv("default_reduction.csv").itertuples():
+        pattern = None if row.pattern == "<default>" else row.pattern
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            got = scp.default_reduction(ad, pattern=pattern, min_dim=int(row.min_dim))
+        assert got == row.result, (row.pattern, row.min_dim)
+
+
+def test_grid_shape_is_patchworks_wrap_dims():
+    want = _csv("wrap_dims.csv")
+    for row in want.itertuples():
+        assert scp.layout.grid_shape(int(row.n)) == (row.nrow, row.ncol), row.n
+
+
+def test_arrow_npc_length_is_taken_on_the_shorter_side():
+    """grid converts arrow(length = unit(f, "npc")) on min(width, height), and the
+    length is each side of the head: measured from SCP's device output."""
+    import matplotlib.pyplot as plt
+
+    for row in _csv("arrow_npc.csv").itertuples():
+        fig = plt.figure(figsize=(row.w_in + 2, row.h_in + 2), dpi=100)
+        ax = fig.add_axes((1 / (row.w_in + 2), 1 / (row.h_in + 2),
+                           row.w_in / (row.w_in + 2), row.h_in / (row.h_in + 2)))
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        art = layers._ArrowField([0.1], [0.5], [0.9], [0.5], [row.npc], colors="black",
+                                 linewidth=0.1, angle=20.0, zorder=1)
+        ax.add_artist(art)
+        fig.canvas.draw()
+        _p0, _p1, heads, _ok = art.geometry()
+        tip, corner = heads[0, 0], heads[0, 1]
+        side = np.hypot(*(tip - corner)) / fig.dpi
+        back = abs(tip[0] - corner[0]) / fig.dpi
+        assert np.isclose(side, row.head_side_in, atol=1e-3)
+        assert np.isclose(back, row.head_back_in, atol=1e-3)
+        plt.close(fig)
+
+
+def test_raw_velocity_head_lengths_match_r(panc):
+    """Each head is unit(length / global_size, "npc"), per arrow, as VelocityPlot sets it."""
+    x, y = _xy(panc)
+    X = np.column_stack([x, y])
+    V = 0.1 * np.column_stack([-(y - y.mean()), x - x.mean()])
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots()
+    field, _ = layers.draw_velocity(
+        ax, X, V, plot_type="raw", cell_colors=None, arrow_color="black", arrow_angle=20,
+        density=1, smooth=0.5, n_neighbors=20, scale=1, min_mass=1, cutoff_perc=5,
+        streamline_width=(0, 0.8), streamline_alpha=1, streamline_color=None,
+        streamline_palette="RdYlBu", streamline_palcolor=None, streamline_bg_color="white",
+        streamline_bg_stroke=0.5, rng=np.random.default_rng(0))
+    plt.close(fig)
+    np.testing.assert_allclose(field["head_npc"], _csv("velocity_raw_heads.csv")["head_npc"],
+                               rtol=1e-7)

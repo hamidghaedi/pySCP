@@ -502,10 +502,18 @@ class _ArrowField(Artist):
         self._angle = math.radians(angle)
         self.set_zorder(zorder)
 
-    def draw(self, renderer):
+    def geometry(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """``(start, end, heads, ok)`` in display pixels, from the live axes.
+
+        grid converts an npc arrow length on ``min(viewport width, height)``
+        and uses it as the length of each side of the head, at ``angle`` to
+        the shaft (pinned against R in ``tests/fixtures/parity/dim/
+        arrow_npc.csv``).  ``heads`` holds a ``(tip, corner, corner)``
+        triangle for each non-degenerate segment (``ok``).
+        """
         ax = self.axes
-        if ax is None or not self.get_visible():
-            return
+        if ax is None:
+            raise RuntimeError("the arrow layer is not on an axes yet")
         p0 = ax.transData.transform(self._seg[:, :2])
         p1 = ax.transData.transform(self._seg[:, 2:])
         size = min(ax.bbox.width, ax.bbox.height)
@@ -518,6 +526,13 @@ class _ArrowField(Artist):
         back = p1 - u * (hl * math.cos(self._angle))[:, None]
         perp = np.column_stack([-u[:, 1], u[:, 0]]) * (hl * math.sin(self._angle))[:, None]
         heads = np.stack([p1, back + perp, back - perp], axis=1)[ok]
+        return p0, p1, heads, ok
+
+    def draw(self, renderer):
+        ax = self.axes
+        if ax is None or not self.get_visible():
+            return
+        p0, p1, heads, ok = self.geometry()
         lc = LineCollection(np.stack([p0, p1], axis=1), colors=self._colors,
                             linewidths=self._lw, transform=IdentityTransform(),
                             capstyle="round")
@@ -592,12 +607,14 @@ def draw_velocity(ax: Axes, X: np.ndarray, V: np.ndarray, *, plot_type: str,
         u, v = V[keep, 0] * scale, V[keep, 1] * scale
         cols = (np.asarray(cell_colors, dtype=object)[keep].tolist()
                 if cell_colors is not None else arrow_color)
+        rows = keep
     elif plot_type == "grid":
         gx, gv = grid_fn(X, V, density=density, smooth=smooth, n_neighbors=n_neighbors,
                          min_mass=min_mass, cutoff_perc=cutoff_perc, adjust_for_stream=False)
         gx, gv = np.asarray(gx), np.asarray(gv) * scale
         x, y, u, v = gx[:, 0], gx[:, 1], gv[:, 0], gv[:, 1]
         cols = arrow_color
+        rows = np.full(len(x), -1)
     elif plot_type == "stream":
         gx, gv = grid_fn(X, V, density=density, smooth=smooth, n_neighbors=n_neighbors,
                          min_mass=min_mass, cutoff_perc=cutoff_perc, adjust_for_stream=True)
@@ -638,12 +655,19 @@ def draw_velocity(ax: Axes, X: np.ndarray, V: np.ndarray, *, plot_type: str,
     else:
         raise ValueError(f"velocity_plot_type must be 'raw', 'grid' or 'stream', not {plot_type!r}")
 
+    # R: arrow(length = unit(length / global_size, "npc")) per segment.  grid
+    # turns an npc arrow length into min(viewport width, height) times it
+    # (pinned in tests/fixtures/parity/dim/arrow_npc.csv), and that is what
+    # _ArrowField does at draw time.  global_size is taken on the signed
+    # maxima, so with an embedding centred near 0 every head comes out
+    # longer than its shaft (~ range / global_size times) and long arrows
+    # read as solid triangles -- in R as here.
     length = np.hypot(u, v)
     global_size = math.sqrt(np.nanmax(x) ** 2 + np.nanmax(y) ** 2) or 1.0
     head = length / global_size
     ax.add_artist(_ArrowField(x, y, x + u, y + v, head, colors=cols,
                               linewidth=mm_lw(0.5), angle=arrow_angle, zorder=Z_VELOCITY))
-    return pd.DataFrame({"x": x, "y": y, "u": u, "v": v, "head_npc": head}), None
+    return pd.DataFrame({"x": x, "y": y, "u": u, "v": v, "head_npc": head, "row": rows}), None
 
 
 # --------------------------------------------------------------------------- #
@@ -707,7 +731,7 @@ def draw_stat_insets(ax: Axes, centres: pd.DataFrame, table: pd.DataFrame,
                 if value <= 0:  # R prints the zeros too, piled at 12 o'clock
                     continue
                 t = iax.text(r * np.cos(a), r * np.sin(a), r_stat_label(value, stat_type),
-                             ha="center", va="center", fontsize=label_size * 2,
+                             ha="center", va="center", fontsize=label_size * 72.27 / 25.4,
                              color="black")
                 halo(t, foreground="white", radius=0.1)
     return insets

@@ -47,6 +47,7 @@ __all__ = [
     "offset_shape",
     "graph_segments",
     "rescale",
+    "expand_range",
     "compute_velocity_on_grid",
 ]
 
@@ -594,6 +595,25 @@ def offset_shape(poly: np.ndarray, expand: float, radius: float, *, convex: bool
     if convex:
         return _minkowski_convex(poly, radius)
     return _round_offset_any(poly, radius)
+
+
+# --------------------------------------------------------------------------- #
+# axis limits
+# --------------------------------------------------------------------------- #
+def expand_range(lo: float, hi: float, mult: float = 0.05) -> tuple[float, float]:
+    """ggplot's default continuous expansion: ``mult`` of the range on each side.
+
+    SCP sets ``scale_x_continuous(limits = range(...))`` (``SCP-plot.R:1636``),
+    which keeps the default ``expansion(mult = 0.05)``, so its panels reach
+    5 % past the data and no edge point is cut in half.  A zero-width range
+    widens by 0.5 each way, as ``scales::expand_range4`` does.
+    """
+    if not (np.isfinite(lo) and np.isfinite(hi)):
+        return lo, hi
+    if hi == lo:
+        return lo - 0.5, hi + 0.5
+    d = (hi - lo) * mult
+    return lo - d, hi + d
 
 
 # --------------------------------------------------------------------------- #

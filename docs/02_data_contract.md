@@ -101,8 +101,25 @@ draw_graph_fr, pca, svd, ica, nmf, mds, glmpca`, each probed bare and with an
 `X_` prefix. Override with `adata.uns["default_reduction"]` (the analogue of
 `srt@misc[["Default_reduction"]]`, which already round-trips through `uns`).
 
-R's fuzzy `agrep` step is dropped; exact then case-insensitive substring is
-enough, and `difflib` fuzziness in a plotting API is a footgun.
+**Every plot resolves a named reduction through it too**, as SCP does
+(`DefaultReduction(srt, pattern = reduction)`, `SCP-plot.R:1394`): a
+`reduction=` (`basis=` for `velocity_plot`, `ref_reduction=` /
+`query_reduction=` for `projection_plot`) is a *pattern*, so `"umap"`,
+`"UMAP"` and `"X_umap"` all name `obsm["X_umap"]`. The 3-D plots pass
+`min_dim=3` (`SCP-plot.R:2865`, `:3094`), so they never pick a 2-D embedding.
+The steps after the single-candidate short-circuit: exact key (bare or
+`X_`-prefixed, case-sensitive) in pattern order, then a case-insensitive
+substring, then R's `agrep(max.distance = 0.1)` approximate substring match
+(`ceil(0.1 * len(pattern))` edits), then every candidate; several hits are
+re-ordered by the default patterns and `2D` / `3D` and the fewest columns win.
+`tests/fixtures/parity/dim/default_reduction.csv` pins 24 pattern × `min_dim`
+cases against SCP. Two consequences worth knowing: `pattern="pca"` with keys
+`PCA` (50 columns) and `pcaX` (10) gives `pcaX`, and with scanpy's keys
+`X_pca` and `X_umap3d`, `min_dim=3` gives `X_pca` (R's exact `pca` outranks
+`umap3D`) — name the reduction when that matters.
+
+One divergence: an explicit pattern that matches nothing warns before falling
+back the way R does; R silently plots some other reduction.
 
 ## 5. assay / slot → layer
 
@@ -163,9 +180,21 @@ q.obs["CellType"] = q.obs["CellType"].cat.set_categories(
 ```
 
 scanpy already persists `adata.uns[f"{key}_colors"]`, a list aligned to
-`obs[key].cat.categories`. Read it first when present — it is the AnnData-native
-equivalent of a named `palcolor` — and write it back, so scanpy and this
-package agree.
+`obs[key].cat.categories`. It is read first when present — it is the
+AnnData-native equivalent of a named `palcolor` — so a figure here matches the
+`sc.pl` figure of the same object (`scp.palettes.uns_palcolor` /
+`level_colors`; the dim and trajectory plots so far, `use_uns_colors=False`
+to opt out). It is used only when the column is categorical and the list has
+one colour per category, and only when the caller left `palette` at its
+default and `palcolor` unset. It is **not** written back: a stored list wins
+over the default palette, so writing one call's colours would silently fix
+the palette of every later call. See `docs/03_theme_and_palette.md` §2.
+
+Group labels are the categories rendered with `str` (`scp.fetch.as_level_labels`):
+an integer, boolean, float or mixed column is labelled `"1"`, `"True"`,
+`"0.5"`, in its declared (or first-appearance) order, the way the stat plots
+label it. Comparing raw values with those string levels is what used to drop
+the legend, labels and marks of a non-string `group_by`.
 
 ## 7. Where computed results live
 

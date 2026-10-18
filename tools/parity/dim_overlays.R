@@ -14,7 +14,7 @@
 # so the Python test can rebuild them identically rather than read them.
 
 suppressPackageStartupMessages({
-  library(SCP); library(Seurat); library(ggplot2); library(jsonlite)
+  library(SCP); library(Seurat); library(ggplot2); library(jsonlite); library(grid)
 })
 args <- commandArgs(trailingOnly = TRUE)
 out <- if (length(args) > 0) args[[1]] else "tests/fixtures/parity/dim"
@@ -46,6 +46,71 @@ w(data.frame(cell = colnames(srt), UMAP_1 = emb[, 1], UMAP_2 = emb[, 2],
   "inputs.csv")
 write_json(list(CellType = levels(srt$CellType), SubCellType = levels(srt$SubCellType),
                 Phase = levels(srt$Phase)), file.path(out, "levels.json"))
+
+# ---- panel ranges: scale limits plus ggplot's default 5 % expansion ---------
+pr_row <- function(p, case) {
+  pp <- ggplot_build(p)$layout$panel_params[[1]]
+  data.frame(case = case, x_lo = pp$x.range[1], x_hi = pp$x.range[2],
+             y_lo = pp$y.range[1], y_hi = pp$y.range[2])
+}
+sub_cells <- colnames(srt)[srt$CellType %in% c("Ductal", "Endocrine")]
+cdp_split <- CellDimPlot(srt, "CellType", split.by = "Phase", reduction = "UMAP", combine = FALSE)
+w(rbind(pr_row(CellDimPlot(srt, "CellType", reduction = "UMAP"), "cell_umap"),
+        pr_row(CellDimPlot(srt, "CellType", reduction = "UMAP", cells = sub_cells), "cell_subset"),
+        pr_row(cdp_split[[length(cdp_split)]], "cell_split_last"),
+        pr_row(FeatureDimPlot(srt, "Ins1", reduction = "UMAP"), "feature_umap")),
+  "panel_ranges.csv")
+
+# ---- DefaultReduction: how a reduction name or pattern resolves ------------
+# a throwaway object carrying reductions named to exercise every step:
+# exact names, case-insensitive grep, agrep's one-edit match, the
+# fewest-columns tie-break and min_dim
+red <- srt
+set.seed(1)
+for (nm in c("umap_harmony", "tsne", "UMAP3D", "pcaX", "lrgvis")) {
+  k <- c(umap_harmony = 2, tsne = 2, UMAP3D = 3, pcaX = 10, lrgvis = 2)[[nm]]
+  m <- matrix(rnorm(ncol(red) * k), ncol = k, dimnames = list(colnames(red), paste0(nm, "_", 1:k)))
+  red[[nm]] <- CreateDimReducObject(m, key = paste0(gsub("[^A-Za-z]", "", nm), "_"), assay = "RNA")
+}
+cases <- expand.grid(pattern = c("<default>", "umap", "UMAP", "Umap", "pca", "PCA", "tsne",
+                                 "TSNE", "harmony", "largevis", "3D", "umap3d"),
+                     min_dim = c(2, 3), stringsAsFactors = FALSE)
+cases$result <- mapply(function(p, d) {
+  DefaultReduction(red, pattern = if (p == "<default>") NULL else p, min_dim = d)
+}, cases$pattern, cases$min_dim)
+w(cases, "default_reduction.csv")
+w(data.frame(name = names(red@reductions),
+             ncol = vapply(red@reductions, function(r) ncol(r@cell.embeddings), numeric(1))),
+  "default_reduction_inputs.csv")
+
+# ---- patchwork's default grid (wrap_plots -> ggplot2::wrap_dims) ------------
+dims_n <- t(vapply(1:60, function(n) ggplot2::wrap_dims(n), numeric(2)))
+w(data.frame(n = 1:60, nrow = dims_n[, 1], ncol = dims_n[, 2]), "wrap_dims.csv")
+
+# ---- grid's arrow length: an npc length is taken on min(width, height) -----
+# drawn into viewports of known size on an uncompressed pdf, whose path
+# operators give the head's vertices in points
+arrow_pdf <- tempfile(fileext = ".pdf")
+vps <- data.frame(w_in = c(4, 2, 3, 5), h_in = c(2, 4, 3, 1.5), npc = c(0.25, 0.1, 0.2, 0.3))
+pdf(arrow_pdf, width = 7, height = 6, compress = FALSE)
+for (i in seq_len(nrow(vps))) {
+  grid.newpage()
+  pushViewport(viewport(x = unit(1, "in"), y = unit(1, "in"), width = unit(vps$w_in[i], "in"),
+                        height = unit(vps$h_in[i], "in"), just = c(0, 0)))
+  grid.segments(0.1, 0.5, 0.9, 0.5, gp = gpar(fill = "black", lwd = 0.01),
+                arrow = arrow(length = unit(vps$npc[i], "npc"), type = "closed", angle = 20))
+}
+invisible(dev.off())
+ops <- readLines(arrow_pdf, warn = FALSE)
+ops <- ops[grepl("^[0-9.]+ [0-9.]+ [ml]$", ops, useBytes = TRUE)]
+xy <- do.call(rbind, lapply(strsplit(ops, " "), function(t) as.numeric(t[1:2])))
+# per page the shaft is one "x y m x y l S" line, then the closed head is
+# three lines: a back corner (m), the tip (l), the other back corner (l)
+stopifnot(nrow(xy) == 3 * nrow(vps))
+heads <- lapply(seq_len(nrow(vps)), function(i) xy[(i - 1) * 3 + 1:3, , drop = FALSE])
+vps$head_side_in <- vapply(heads, function(h) sqrt(sum((h[1, ] - h[2, ])^2)) / 72, numeric(1))
+vps$head_back_in <- vapply(heads, function(h) abs(h[2, 1] - h[1, 1]) / 72, numeric(1))
+w(vps, "arrow_npc.csv")
 
 # ---- density: contour levels and the KDE grid behind them ------------------
 p <- CellDimPlot(srt, "CellType", reduction = "UMAP", add_density = TRUE)
@@ -119,6 +184,9 @@ assignInNamespace("check_R", function(...) invisible(NULL), ns = "SCP")
 p <- VelocityPlot(srt, reduction = "UMAP", velocity = "stochastic", plot_type = "raw")
 d <- layer_of(p, "GeomSegment")
 w(d[, c("x", "y", "xend", "yend")], "velocity_raw.csv")
+# each arrow's head length, unit(length / global_size, "npc")
+k <- which(vapply(p$layers, function(l) inherits(l$geom, "GeomSegment"), logical(1)))[1]
+w(data.frame(head_npc = as.numeric(p$layers[[k]]$geom_params$arrow$length)), "velocity_raw_heads.csv")
 
 # ---- stat_by insets: StatPlot's per-group pies and the label positions -------
 sub <- CellStatPlot(srt, stat.by = "Phase", group.by = "CellType", plot_type = "pie",

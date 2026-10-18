@@ -34,13 +34,19 @@ from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
-from ..fetch import as_ordered_categorical, default_reduction, fetch_data, reduction_key
+from ..fetch import (
+    as_level_labels,
+    as_ordered_categorical,
+    default_reduction,
+    fetch_data,
+    reduction_key,
+)
 from ..io import read_paga
 from ..layout import LegendColumn, PanelGrid
-from ..palettes import discrete_palette
+from ..palettes import discrete_palette, level_colors, uns_palcolor
 from ..theme import halo, theme_scp
 from . import _dim_layers as layers
-from ._dim_geom import compute_velocity_on_grid
+from ._dim_geom import compute_velocity_on_grid, expand_range
 
 __all__ = [
     "graph_plot",
@@ -57,6 +63,9 @@ __all__ = [
 _PT = 72.27 / 25.4
 
 LegendPosition = Literal["none", "left", "right", "bottom", "top"]
+
+#: the colour SCP gives cells whose group is missing (R's grey80)
+_NA_GREY = "#CCCCCC"
 
 
 def _panel(ax: Axes | None, legend: LegendColumn | None, legend_position: LegendPosition,
@@ -86,9 +95,10 @@ def _labels(ax: Axes, kwargs: dict, *, own: bool, xlab: str, ylab: str,
 
     ``xlab`` / ``ylab`` / ``title`` in ``kwargs`` always win (an empty one
     suppresses the default and leaves the axes as it is).  The defaults
-    apply to a panel this function allocated, and to a borrowed ``ax`` only
-    where it has no label yet -- so a layer drawn over a ``cell_dim_plot``
-    panel leaves that panel's own labels alone.
+    apply to a panel this function allocated; on a borrowed ``ax`` the axis
+    titles are filled only where it has none yet, and the plot title never
+    -- R's overlay layers (``return_layer = TRUE``) carry no title, and the
+    host panel's own title or ``nCells`` subtitle must not be overprinted.
     """
     for k, default, get, set_ in (("xlab", xlab, ax.get_xlabel, ax.set_xlabel),
                                   ("ylab", ylab, ax.get_ylabel, ax.set_ylabel),
@@ -96,7 +106,7 @@ def _labels(ax: Axes, kwargs: dict, *, own: bool, xlab: str, ylab: str,
         if k in kwargs:
             if kwargs[k]:
                 set_(kwargs[k])
-        elif default and (own or not get()):
+        elif default and (own or (k != "title" and not get())):
             set_(default)
 
 
@@ -105,6 +115,9 @@ def shorten_segments(
     shorten_start: float = 0.0, shorten_end: float = 0.0, offset: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Port of ``segementsDf`` (``SCP-plot.R:6666``) — pure geometry, ported verbatim.
+
+    Ported from SCP by Hao Zhang, https://github.com/zhanghao-njmu/SCP
+    (GPL-3).
 
     Shortening pulls segment ends back so arrowheads do not sit under node
     circles.  ``offset`` displaces the whole segment perpendicular to itself,
@@ -315,7 +328,7 @@ def graph_plot(
         for i in range(len(names)):
             # R labels with the group's level index, or its name in situ
             txt = vals[i] if label_insitu else str(levels.index(vals[i]) + 1)
-            t = ax.text(X[i], Y[i], txt, ha="center", va="center", fontsize=8,
+            t = ax.text(X[i], Y[i], txt, ha="center", va="center", fontsize=3.5 * _PT,
                         color="white", fontweight="bold", zorder=5)
             halo(t, foreground="black", radius=0.1)
 
@@ -375,6 +388,7 @@ def paga_plot(
     node_size: float | str = 4.0,
     edge_threshold: float = 0.01,
     cells: Sequence[str] | None = None,
+    use_uns_colors: bool = True,
     ax: Axes | None = None,
     **kwargs,
 ) -> Axes:
@@ -399,6 +413,18 @@ def paga_plot(
 
     ``type="connectivities_tree"`` reads both triangles and disables the
     threshold, because the tree matrix is not symmetric-complete.
+    ``show_transition=True`` needs scvelo's velocity-based PAGA
+    (``scv.tl.paga``), which adds ``transitions_confidence``; without it the
+    plot warns that it is missing and draws no transitions, as R does
+    (``SCP-plot.R:6181``) and as ``cell_dim_plot(paga=...)`` does.
+
+    ``reduction`` is resolved as SCP resolves it (``"umap"``, ``"UMAP"`` and
+    ``"X_umap"`` all work; see :func:`scp.fetch.default_reduction`).  Nodes
+    take ``adata.uns[f"{groups}_colors"]`` when scanpy stored one and neither
+    ``node_palette`` nor ``node_palcolor`` was given (``use_uns_colors=False``
+    restores R's Paired colours).  Drawn into a borrowed ``ax``, no
+    ``"PAGA"`` title is set and existing axis titles are kept, as R's layer
+    adds none.
 
     **R bug, not reproduced.** ``PAGAPlot(cells = ...)`` intersects the
     *group* names with the cell names (``SCP-plot.R:6188``), which drops every
@@ -415,7 +441,7 @@ def paga_plot(
             f"{groups_key!r} has {len(levels)} levels"
         )
 
-    reduction = reduction or default_reduction(adata)
+    reduction = default_reduction(adata, pattern=reduction)
     key = reduction_key(reduction)
     emb = np.asarray(adata.obsm[reduction])
     xi, yi = dims[0] - 1, dims[1] - 1
@@ -430,18 +456,35 @@ def paga_plot(
     E = E[np.ix_(idx, idx)]
     transition = None
     if show_transition:
-        tr, _k, _c = read_paga(adata, type="transitions_confidence")
-        transition = np.asarray(tr.todense() if hasattr(tr, "todense") else tr,
-                                dtype=float)[np.ix_(idx, idx)]
+        if "transitions_confidence" not in adata.uns["paga"]:
+            warnings.warn(
+                "transitions_confidence need to be calculated first: show_transition needs "
+                "velocity-based PAGA (scvelo's scv.tl.paga), which adds "
+                "adata.uns['paga']['transitions_confidence']. Drawing no transitions.",
+                stacklevel=2,
+            )
+        else:
+            tr, _k, _c = read_paga(adata, type="transitions_confidence")
+            transition = np.asarray(tr.todense() if hasattr(tr, "todense") else tr,
+                                    dtype=float)[np.ix_(idx, idx)]
 
     # the tree matrix is not symmetric-complete, so read both triangles and
     # drop the threshold
     triangular: Literal["upper", "both"] = "both" if type == "connectivities_tree" else "upper"
     thresh = 0.0 if type == "connectivities_tree" else edge_threshold
 
-    kwargs.setdefault("title", "PAGA")
-    kwargs.setdefault("xlab", f"{key}{dims[0]}")
-    kwargs.setdefault("ylab", f"{key}{dims[1]}")
+    if (use_uns_colors and node_palette == "Paired" and "node_palcolor" not in kwargs
+            and uns_palcolor(adata, groups_key, levels)):
+        kwargs["node_palcolor"] = level_colors(adata, groups_key, levels, palette=node_palette,
+                                               palcolor=None, default_palette="Paired")
+    # a borrowed ax keeps its own title (R's PAGA layer carries none) and,
+    # where it has them, its own axis titles
+    if ax is None:
+        kwargs.setdefault("title", "PAGA")
+    if ax is None or not ax.get_xlabel():
+        kwargs.setdefault("xlab", f"{key}{dims[0]}")
+    if ax is None or not ax.get_ylabel():
+        kwargs.setdefault("ylab", f"{key}{dims[1]}")
     return graph_plot(node, E, transition=transition, node_group=groups_key,
                       node_palette=node_palette, node_size=node_size,
                       edge_threshold=thresh, use_triangular=triangular, ax=ax, **kwargs)
@@ -497,7 +540,7 @@ def lineage_plot(
     ``lineages`` are ``obs`` columns of pseudotime with NaN off-lineage,
     whatever produced them (scFates, Palantir, CellRank, pyslingshot).
     """
-    reduction = reduction or default_reduction(adata)
+    reduction = default_reduction(adata, pattern=reduction)
     key = reduction_key(reduction)
     lineages = list(lineages)
     emb = np.asarray(adata.obsm[reduction], dtype=float)[:, [dims[0] - 1, dims[1] - 1]]
@@ -532,6 +575,7 @@ def velocity_plot(
     group_by: str | None = None,
     group_palette: str = "Paired",
     group_palcolor: Sequence[str] | dict[str, str] | None = None,
+    use_uns_colors: bool = True,
     n_neighbors: int | None = None,
     density: float = 1.0,
     smooth: float = 0.5,
@@ -558,21 +602,28 @@ def velocity_plot(
     Port of ``VelocityPlot`` (``SCP-plot.R:6745``) by Hao Zhang,
     https://github.com/zhanghao-njmu/SCP.
 
-    Reads ``adata.obsm[f"{vkey}_{basis}"]`` — scvelo's own convention.  SCP
-    names the Seurat reduction ``"<mode>_<REDUCTION>"`` instead; that naming
-    is not ported.
+    ``basis`` is resolved as SCP resolves a reduction (``"umap"``, ``"UMAP"``
+    and ``"X_umap"`` all name ``obsm["X_umap"]``; see
+    :func:`scp.fetch.default_reduction`), then ``adata.obsm[f"{vkey}_{basis}"]``
+    is read -- scvelo's own convention.  SCP names the Seurat reduction
+    ``"<mode>_<REDUCTION>"`` instead; that naming is not ported.
 
     Only the velocity is drawn -- no cells -- so this is a layer: pass ``ax=``
-    to lay it over an existing panel.
+    to lay it over an existing panel; there it sets no ``"Cell velocity"``
+    title (R's layer carries none) and keeps the panel's axis titles.
 
     * ``raw``: one arrow per cell from its position to ``position + scale *
-      velocity`` (``ax.quiver`` in data units).  With ``group_by`` the
-      **arrows** take the group colours (``group_palette``) and the groups are
-      registered as a legend.  ``0 < density < 1`` draws a random
-      ``ceil(density * n)`` of them (seeded by ``seed``; numpy's generator, so
-      not R's draw).
+      velocity``, R's ``geom_segment`` with a closed ``arrow_angle`` head of
+      ``length / global_size`` npc -- the arrows ``cell_dim_plot(velocity=...)``
+      draws, from the same layer.  As in R, a head comes out longer than its
+      shaft on an embedding centred near zero, so large velocities read as
+      triangles.  With ``group_by`` the **arrows** take the group colours
+      (``group_palette``, or scanpy's ``uns[f"{group_by}_colors"]`` unless
+      ``use_uns_colors=False``) and the groups are registered as a legend.
+      ``0 < density < 1`` draws a random ``ceil(density * n)`` of them (seeded
+      by ``seed``; numpy's generator, so not R's draw).
     * ``grid``: the field from :func:`compute_velocity_on_grid` (R's port, in
-      numpy -- no scvelo needed), as arrows.
+      numpy -- no scvelo needed), as the same arrows.
     * ``stream``: streamlines through the same grid in stream mode, drawn by
       the overlay layer ``cell_dim_plot(velocity=...)`` uses: a
       ``streamline_bg_color`` casing, the line (``streamline_color``, or
@@ -583,14 +634,10 @@ def velocity_plot(
     ``n_neighbors=None`` means R's ``ceil(adata.n_obs / 50)``, counted over the
     whole object even when ``cells`` subsets it, as in R.
 
-    Divergence: R sizes each raw/grid arrowhead in proportion to its arrow
-    (``length / global_size`` npc); ``quiver`` heads scale with the shaft
-    width, so they are uniform here.  R bug, not reproduced: ``VelocityPlot``
-    adds its ``lab_layer`` twice (``SCP-plot.R:6941-6942``), which is harmless.
+    R bug, not reproduced: ``VelocityPlot`` adds its ``lab_layer`` twice
+    (``SCP-plot.R:6941-6942``), which is harmless.
     """
-    basis_key = basis if basis.startswith("X_") else f"X_{basis}"
-    if basis_key not in adata.obsm:
-        raise KeyError(f"{basis_key!r} not in adata.obsm")
+    basis_key = default_reduction(adata, pattern=basis)
     V_all = layers.velocity_embedding(adata, basis_key, vkey)
     if plot_type not in ("raw", "grid", "stream"):
         raise ValueError(f"plot_type must be 'raw', 'grid' or 'stream', not {plot_type!r}")
@@ -606,30 +653,35 @@ def velocity_plot(
 
     ax, legend, pg = _panel(ax, legend, legend_position)
 
-    if plot_type == "raw":
-        keep = np.arange(len(X))
-        if density is not None and 0 < density < 1:
-            keep = np.sort(rng.choice(len(X), size=math.ceil(density * len(X)), replace=False))
-        color: object = arrow_color
-        if group_by is not None:
-            cat = as_ordered_categorical(adata.obs[group_by])
-            levels = [str(x) for x in cat.cat.categories]
-            colors = discrete_palette(levels, palette=group_palette, palcolor=group_palcolor)
-            vals = np.asarray(cat).astype(object)[rows][keep]
-            color = [colors[str(v)] if not pd.isna(v) else "#CCCCCC" for v in vals]
-            if legend is not None and legend_position != "none":
-                present = {str(v) for v in vals if not pd.isna(v)}
-                legend.add(group_by, [
-                    Line2D([], [], color=colors[lv], linewidth=2 * _PT, label=lv)
-                    for lv in levels if lv in present])
-        ax.quiver(X[keep, 0], X[keep, 1], V[keep, 0] * scale, V[keep, 1] * scale,
-                  color=color, angles="xy", scale_units="xy", scale=1.0,
-                  width=0.0025, zorder=2)
-    elif plot_type == "grid":
-        gx, gv = compute_velocity_on_grid(X, V, density=density, smooth=smooth,
-                                          n_neighbors=k, min_mass=min_mass, scale=scale)
-        ax.quiver(gx[:, 0], gx[:, 1], gv[:, 0], gv[:, 1], color=arrow_color,
-                  angles="xy", scale_units="xy", scale=1.0, width=0.003, zorder=2)
+    if plot_type in ("raw", "grid"):
+        # the same arrows as cell_dim_plot(velocity=...): R's geom_segment with
+        # a closed head of length / global_size npc
+        cell_colors = None
+        if plot_type == "raw" and group_by is not None:
+            lab, levels = as_level_labels(adata.obs[group_by])
+            colors = level_colors(adata, group_by, levels, palette=group_palette,
+                                  palcolor=group_palcolor, default_palette="Paired",
+                                  use_uns_colors=use_uns_colors)
+            vals = lab.to_numpy()[rows]
+            cell_colors = [colors[v] if isinstance(v, str) else "#CCCCCC" for v in vals]
+        field, _m = layers.draw_velocity(
+            ax, X, V, plot_type=plot_type, cell_colors=cell_colors, arrow_color=arrow_color,
+            arrow_angle=arrow_angle, density=density, smooth=smooth, n_neighbors=k,
+            scale=scale, min_mass=min_mass, cutoff_perc=cutoff_perc,
+            streamline_width=streamline_width, streamline_alpha=streamline_alpha,
+            streamline_color=streamline_color, streamline_palette=streamline_palette,
+            streamline_palcolor=streamline_palcolor, streamline_bg_color=streamline_bg_color,
+            streamline_bg_stroke=streamline_bg_stroke, rng=rng)
+        if (group_by is not None and cell_colors is not None and legend is not None
+                and legend_position != "none"):
+            shown = {v for v in vals[field["row"].to_numpy()] if isinstance(v, str)}
+            legend.add(group_by, [
+                Line2D([], [], color=colors[lv], linewidth=2 * _PT, label=lv)
+                for lv in levels if lv in shown])
+        # an artist does not autoscale; the data it spans does
+        ends = np.r_[field[["x", "y"]].to_numpy(),
+                     field[["x", "y"]].to_numpy() + field[["u", "v"]].to_numpy()]
+        ax.update_datalim(ends[np.isfinite(ends).all(axis=1)])
     else:
         # the same layer, and the same grid, as cell_dim_plot(velocity=...)
         _field, mappable = layers.draw_velocity(
@@ -956,6 +1008,9 @@ def projection_plot(
     ref_reduction: str = "X_umap",
     pt_size: float = 0.8,
     stroke_highlight: float = 0.5,
+    use_uns_colors: bool = True,
+    legend_position: LegendPosition = "right",
+    legend: LegendColumn | None = None,
     ax: Axes | None = None,
     **kwargs,
 ) -> Axes:
@@ -982,10 +1037,23 @@ def projection_plot(
     every query cell outside the reference range to NA, and ggplot then drops
     them without a warning (111 of 362 query cells in the parity fixture).
     Here both axes are set to that union, so every query cell is drawn --
-    what R evidently intends.
+    what R evidently intends -- with ggplot's 5 % expansion on each side, as
+    every SCP panel has.
+
+    Legends, as R composes them beside the panel: ``"Ref: <ref_group>"``
+    (the reference levels present) and ``"Query: <query_group>"`` (keys with
+    a black ring, R's ``shape = 21`` override), stacked here where R places
+    them side by side.  Into a borrowed ``ax`` they are registered with
+    ``legend=`` if one is given.  Either group takes scanpy's
+    ``uns[f"{group}_colors"]`` when stored and the palette was left alone
+    (``use_uns_colors=False`` restores R's colours).  Both reductions are
+    resolved as SCP resolves one (:func:`scp.fetch.default_reduction`).
     """
-    ax, _legend, pg = _panel(ax, None, "none", panel_size=kwargs.get("panel_size", (3.5, 3.5)))
-    Xr =np.asarray(adata_ref.obsm[ref_reduction], dtype=float)
+    ax, legend, pg = _panel(ax, legend, legend_position,
+                            panel_size=kwargs.get("panel_size", (3.5, 3.5)))
+    ref_reduction = default_reduction(adata_ref, pattern=ref_reduction)
+    query_reduction = default_reduction(adata_query, pattern=query_reduction)
+    Xr = np.asarray(adata_ref.obsm[ref_reduction], dtype=float)
     Xq = np.asarray(adata_query.obsm[query_reduction], dtype=float)
 
     # Shared limits over BOTH objects, or the projection reads as a shift that
@@ -993,29 +1061,46 @@ def projection_plot(
     allx = np.concatenate([Xr[:, 0], Xq[:, 0]])
     ally = np.concatenate([Xr[:, 1], Xq[:, 1]])
 
+    def _group(a, col, default_palette, palette):
+        lab, levels = as_level_labels(a.obs[col])
+        colors = level_colors(a, col, levels, palette=palette, palcolor=None,
+                              default_palette=default_palette, use_uns_colors=use_uns_colors)
+        vals = lab.to_numpy()
+        cvec = [colors[v] if isinstance(v, str) else _NA_GREY for v in vals]
+        present = [lv for lv in levels if (vals == lv).any()]
+        return cvec, present, colors
+
+    handles: list[tuple[str, list]] = []
+    cref: list[str] | str = "#D9D9D9"
     if ref_group is not None:
-        cat = as_ordered_categorical(adata_ref.obs[ref_group])
-        levels = [str(x) for x in cat.cat.categories]
-        colors = discrete_palette(levels, palette=kwargs.get("palette", "Paired"))
-        cref: list[str] | str = [colors[str(v)] for v in np.asarray(cat).astype(str)]
-    else:
-        cref = "#D9D9D9"
+        cref, present, colors = _group(adata_ref, ref_group, "Paired",
+                                       kwargs.get("palette", "Paired"))
+        handles.append((f"Ref: {ref_group}", [
+            Line2D([], [], marker="o", linestyle="none", markersize=4 * _PT,
+                   markerfacecolor=colors[lv], markeredgecolor="none", label=lv)
+            for lv in present]))
     ax.scatter(Xr[:, 0], Xr[:, 1], s=pt_size * 6, c=cref, linewidths=0, zorder=1)
 
+    cq: list[str] | str = "black"
     if query_group is not None:
-        qcat = as_ordered_categorical(adata_query.obs[query_group])
-        qlev = [str(x) for x in qcat.cat.categories]
-        qcolors = discrete_palette(qlev, palette=kwargs.get("query_palette", "Set1"))
-        cq: list[str] | str = [qcolors[str(v)] for v in np.asarray(qcat).astype(str)]
-    else:
-        cq = "black"
+        cq, qpresent, qcolors = _group(adata_query, query_group, "Set1",
+                                       kwargs.get("query_palette", "Set1"))
+        # R overrides the query key to shape 21: a black ring round the fill
+        handles.append((f"Query: {query_group}", [
+            Line2D([], [], marker="o", linestyle="none", markersize=4 * _PT,
+                   markerfacecolor=qcolors[lv], markeredgecolor="black", label=lv)
+            for lv in qpresent]))
     # halo then fill, so query cells read on top of a dense reference
     ax.scatter(Xq[:, 0], Xq[:, 1], s=(pt_size + stroke_highlight) ** 2 * 10,
                c="black", linewidths=0, zorder=2)
     ax.scatter(Xq[:, 0], Xq[:, 1], s=pt_size ** 2 * 10, c=cq, linewidths=0, zorder=3)
 
-    ax.set_xlim(float(allx.min()), float(allx.max()))
-    ax.set_ylim(float(ally.min()), float(ally.max()))
+    if legend is not None and legend_position != "none":
+        for title_, hs in handles:
+            legend.add(title_, hs)
+
+    ax.set_xlim(*expand_range(float(allx.min()), float(allx.max())))
+    ax.set_ylim(*expand_range(float(ally.min()), float(ally.max())))
     ax.set_xlabel(kwargs.get("xlab", "Dim 1"))
     ax.set_ylabel(kwargs.get("ylab", "Dim 2"))
     if kwargs.get("title"):

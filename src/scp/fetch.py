@@ -20,6 +20,7 @@ Two rules carry most of the weight:
 
 from __future__ import annotations
 
+import math
 import re
 import warnings
 from collections.abc import Iterable, Sequence
@@ -37,6 +38,7 @@ import scipy.sparse as sp
 
 __all__ = [
     "as_ordered_categorical",
+    "as_level_labels",
     "reduction_key",
     "embedding_coord_map",
     "default_reduction",
@@ -72,6 +74,29 @@ def as_ordered_categorical(s: pd.Series, *, show_na: bool = False, na_label: str
     if show_na and cat.isna().any():
         cat = cat.cat.add_categories([na_label]).fillna(na_label)
     return cat
+
+
+def as_level_labels(s: pd.Series, *, show_na: bool = False,
+                    na_label: str = "NA") -> tuple[pd.Series, list[str]]:
+    """Per-cell string labels and the level order, for any column dtype.
+
+    :func:`as_ordered_categorical`, then every category rendered with
+    ``str`` -- so an integer, boolean, float or mixed column gives labels
+    (``"1"``, ``"True"``, ``"0.5"``) that compare equal to its levels, the
+    way the stat plots render them.  Missing values stay ``NaN`` (or become
+    ``na_label`` with ``show_na``).  Returns ``(labels, levels)``; labels
+    is an object Series on the input's index.  Two categories that render
+    to the same string (``1`` and ``"1"``) raise, since no label could tell
+    them apart.
+    """
+    cat = as_ordered_categorical(s, show_na=show_na, na_label=na_label)
+    levels = [str(c) for c in cat.cat.categories]
+    if len(set(levels)) != len(levels):
+        dup = sorted({lv for lv in levels if levels.count(lv) > 1})
+        raise ValueError(f"{s.name!r} has distinct values that print the same: {dup}")
+    codes = np.asarray(cat.cat.codes)
+    lab = np.array(levels + [np.nan], dtype=object)[np.where(codes < 0, len(levels), codes)]
+    return pd.Series(lab, index=cat.index, name=s.name), levels
 
 
 # --------------------------------------------------------------------------- #
@@ -150,27 +175,61 @@ def default_reduction(
     *,
     uns_key: str = "default_reduction",
 ) -> str:
-    """Pick an embedding when the user did not name one.
+    """Pick an embedding, or resolve a named one: ``SCP::DefaultReduction``.
 
-    Reproduces the priority of ``SCP::DefaultReduction``, including the two
-    behaviours that surprise people: a single qualifying reduction is returned
-    *without* consulting the priority list, and ties are broken by **fewest
-    columns** (so a 2D UMAP beats a 3D one, and a 2-column anything beats a
-    50-column PCA).
+    Port of ``DefaultReduction`` (``SCP-workflow.R:1034``) by Hao Zhang,
+    https://github.com/zhanghao-njmu/SCP.  Every plot resolves its
+    ``reduction`` through here, as SCP does (``DefaultReduction(srt, pattern =
+    reduction)``, ``SCP-plot.R:1394``), so ``"umap"``, ``"UMAP"`` and
+    ``"X_umap"`` all name ``adata.obsm["X_umap"]``.  The steps, over the
+    ``obsm`` entries with at least ``min_dim`` columns:
+
+    1. a single qualifying reduction is returned *without* consulting the
+       pattern;
+    2. the patterns (``pattern``, else ``adata.uns[uns_key]``, else
+       :data:`DEFAULT_REDUCTION_ORDER`), each also with ``f"{min_dim}D"``
+       appended, are tried as exact keys in order -- bare and ``X_``-prefixed;
+    3. otherwise every key containing any pattern, case-insensitively, and
+       failing that every key within R's ``agrep(max.distance = 0.1)`` of one
+       (an approximate substring match allowing ``ceil(0.1 * len(pattern))``
+       edits); failing that every candidate;
+    4. several hits are re-ordered by the default patterns and ``"2D"`` /
+       ``"3D"`` and the one with the **fewest columns** wins (so a 2-D UMAP
+       beats a 3-D one, and any 2-column embedding beats a 50-column PCA).
+
+    So ``pattern="UMAP", min_dim=3`` finds ``UMAP3D``, and patterns are
+    matched case-sensitively only in step 2: with keys ``PCA`` and ``pcaX``,
+    ``"pca"`` resolves to ``pcaX`` (fewer columns), as in R.  Pinned case by
+    case against SCP in ``tests/fixtures/parity/dim/default_reduction.csv``.
+
+    One divergence: an explicit ``pattern`` that names nothing -- no exact
+    key, no grep or agrep hit -- **warns** before falling back as R does
+    (R silently plots some other reduction).
     """
     cands = [
         k for k, v in adata.obsm.items()
         if np.asarray(v).ndim == 2 and np.asarray(v).shape[1] >= min_dim
     ]
+    explicit = [pattern] if isinstance(pattern, str) else (
+        list(pattern) if pattern is not None else [])
     if not cands:
         raise ValueError(f"No embedding in adata.obsm with at least {min_dim} dimensions.")
-    if len(cands) == 1:
-        return cands[0]
 
-    if isinstance(pattern, str):
-        pats: list[str] = [pattern]
-    elif pattern is not None:
-        pats = list(pattern)
+    def _fallback(found: str) -> str:
+        if explicit and not any(_pattern_hits(p, found) for p in explicit):
+            warnings.warn(
+                f"reduction {explicit[0] if len(explicit) == 1 else explicit!r} matches no "
+                f"embedding in adata.obsm ({list(adata.obsm)}); using {found!r}, as "
+                "SCP's DefaultReduction does.",
+                stacklevel=3,
+            )
+        return found
+
+    if len(cands) == 1:
+        return _fallback(cands[0])
+
+    if explicit:
+        pats: list[str] = list(explicit)
     elif uns_key in getattr(adata, "uns", {}):
         pats = [str(adata.uns[uns_key])]
     else:
@@ -181,13 +240,43 @@ def default_reduction(
         for k in (p, f"X_{p}"):
             if k in cands:
                 return k
-    hits: list[str] = []
-    for p in pats:  # then case-insensitive substring
-        for k in cands:
-            if p.lower() in k.lower() and k not in hits:
-                hits.append(k)
-    hits = hits or cands
-    return min(hits, key=lambda k: np.asarray(adata.obsm[k]).shape[1])
+    # then grep(ignore.case = TRUE), then agrep(max.distance = 0.1); R keeps
+    # duplicates in pattern order, which only matters through the tie-break
+    hits = [k for p in pats for k in cands if p.lower() in k.lower()]
+    if not hits:
+        hits = [k for p in pats for k in cands if _agrep(p, k)]
+    hits = hits or list(cands)
+    if len(hits) > 1:
+        ordered = [k for p in (*DEFAULT_REDUCTION_ORDER, "2D", "3D") for k in hits
+                   if p.lower() in k.lower()]
+        hits = ordered or hits  # R would return character(0) here; keep the hits
+    return _fallback(min(hits, key=lambda k: np.asarray(adata.obsm[k]).shape[1]))
+
+
+def _pattern_hits(pattern: str, key: str) -> bool:
+    """Whether ``key`` is one a pattern names, exactly or as R's grep / agrep would."""
+    return (key in (pattern, f"X_{pattern}") or pattern.lower() in key.lower()
+            or _agrep(pattern, key))
+
+
+def _agrep(pattern: str, x: str, max_distance: float = 0.1) -> bool:
+    """R's ``agrep(pattern, x, max.distance, ignore.case = TRUE)`` for one string.
+
+    An approximate *substring* match: ``pattern`` may sit anywhere in ``x``
+    with at most ``ceil(max_distance * len(pattern))`` insertions, deletions
+    or substitutions (Sellers' algorithm, the semantics of TRE's matcher).
+    """
+    p, s = pattern.lower(), x.lower()
+    k = math.ceil(max_distance * len(p))
+    prev = list(range(len(p) + 1))  # column for the empty prefix of s
+    best = prev[-1]
+    for ch in s:
+        cur = [0]  # a match may start anywhere in s
+        for i, pc in enumerate(p, start=1):
+            cur.append(min(prev[i] + 1, cur[i - 1] + 1, prev[i - 1] + (pc != ch)))
+        best = min(best, cur[-1])
+        prev = cur
+    return best <= k
 
 
 # --------------------------------------------------------------------------- #

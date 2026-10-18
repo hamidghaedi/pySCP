@@ -126,8 +126,14 @@ def read_paga(adata, *, type: str = "connectivities") -> tuple[np.ndarray, str, 
     ``groups``; scvelo adds ``transitions_confidence``.  Rows and columns are
     ordered by ``adata.obs[groups].cat.categories``.
     """
+    if "paga" not in adata.uns:
+        raise KeyError("adata.uns['paga'] not found; run scanpy's sc.tl.paga first.")
     paga = adata.uns["paga"]
     groups = str(paga["groups"])
+    if type not in paga:
+        hint = ("it is added by velocity-based PAGA, scvelo's scv.tl.paga"
+                if type == "transitions_confidence" else "re-run sc.tl.paga")
+        raise KeyError(f"adata.uns['paga'] has no {type!r}: {hint}.")
     mat = paga[type]
     mat = np.asarray(mat.todense()) if hasattr(mat, "todense") else np.asarray(mat)
     cats = list(adata.obs[groups].cat.categories)

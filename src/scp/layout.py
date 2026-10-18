@@ -55,15 +55,42 @@ Side = Literal["right", "left", "top", "bottom"]
 
 
 def grid_shape(n: int, nrow: int | None = None, ncol: int | None = None, byrow: bool = True) -> tuple[int, int]:
-    """patchwork's near-square default, with explicit overrides."""
+    """patchwork's default grid, with explicit overrides.
+
+    ``wrap_plots(nrow, ncol)`` lays its panels out with
+    ``ggplot2::wrap_dims``: with neither given, ``grDevices::n2mfrow(n)``
+    transposed, i.e. 1x1, 1x2, 1x3, 2x2, 2x3, 2x3, 3x3 (to 9), 3x4 (to 12),
+    then a near-square grid shrunk while it still fits (4x4, 4x5, 5x5 ...);
+    with one given, the other is ``ceil(n / given)``.
+    """
     if nrow and ncol:
         return nrow, ncol
     if nrow:
         return nrow, math.ceil(n / nrow)
     if ncol:
         return math.ceil(n / ncol), ncol
-    ncol = math.ceil(math.sqrt(n))
-    return math.ceil(n / ncol), ncol
+    r, c = _n2mfrow(max(int(n), 1))
+    return c, r
+
+
+def _n2mfrow(n: int) -> tuple[int, int]:
+    """``grDevices::n2mfrow(n, asp = 1)``: ``(rows, cols)`` for base graphics."""
+    if n <= 3:
+        return n, 1
+    if n <= 6:
+        return (n + 1) // 2, 2
+    if n <= 12:
+        return (n + 2) // 3, 3
+    r = math.ceil(math.sqrt(n))
+    rc = (r, math.ceil(n / r))
+    while rc[0] * rc[1] > n:
+        if (rc[0]) * (rc[1] - 1) >= n:
+            rc = (rc[0], rc[1] - 1)
+        elif (rc[0] - 1) * rc[1] >= n:
+            rc = (rc[0] - 1, rc[1])
+        else:
+            break
+    return rc
 
 
 def panel_size_for(

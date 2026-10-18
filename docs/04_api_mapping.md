@@ -22,7 +22,7 @@ body raises · **n/a** = nothing to port.
 | `PAGAPlot` | 6121 | `scp.pl.paga_plot` | done (verified vs R; `cells=` R bug not reproduced) | 11 |
 | `GraphPlot` | 6287 | `scp.pl.graph_plot` | done (verified vs R; curved lines, highlights, `node_alpha` not ported) | 11 |
 | `segementsDf` | 6666 | `scp.pl.shorten_segments` | done | 11 |
-| `VelocityPlot` | 6745 | `scp.pl.velocity_plot` | done (raw and grid verified vs R; the stream field verified, its drawing not checkable, metR) | 12 |
+| `VelocityPlot` | 6745 | `scp.pl.velocity_plot` | done (raw and grid verified vs R, arrowheads included: `length / global_size` npc, grid's `min(width, height)` npc rule pinned; raw and grid draw through the same arrow layer as `cell_dim_plot(velocity=)`; the stream field verified, its drawing not checkable, metR) | 12 |
 | `compute_velocity_on_grid` | 6963 | `scp.pl.compute_velocity_on_grid` | done — numpy port of SCP's (not scvelo's), shared by `velocity_plot` and `cell_dim_plot(velocity=)`; grid and stream verified vs R through both | 12 |
 | `GroupHeatmap` | 7911 | `scp.pl.group_heatmap` | done — matrices, `split_by`, `grouping_var`, splits and row/column orders verified vs R; enrichment tracks from a table / `enrichment_fn`; `cell_annotation` pies and violins and `add_violin` verified vs the `CellStatPlot` / `FeatureStatPlot` data R draws; `flip` verified (order and swap) | 7 |
 | `FeatureHeatmap` | 9114 | `scp.pl.feature_heatmap` | done — matrix and splits verified vs R (the sampling RNG differs); `flip` verified | 7 |
@@ -31,7 +31,7 @@ body raises · **n/a** = nothing to port.
 | `DynamicHeatmap` | 11020 | `scp.pl.dynamic_heatmap` | done — per-cell columns, joint z-score, row order and peaktime splits verified vs R given R's `DynamicFeatures`; `separate_annotation` ridges verified, curves drawn from R's fits; `flip` verified; `use_fitted` deliberately raises | 9 |
 | `DynamicPlot` | 12102 | `scp.pl.dynamic_plot` | done (points, lib-normalisation, panels verified vs R; the mgcv fit is not) | 9 |
 | `GroupTreePlot` | 12472 | — | **n/a — the R function is empty**; use `sc.tl.dendrogram` | — |
-| `ProjectionPlot` | 12511 | `scp.pl.projection_plot` | done (colours and positions verified vs R; R's dropping of out-of-range query cells not reproduced) | 13 |
+| `ProjectionPlot` | 12511 | `scp.pl.projection_plot` | done (colours, positions and the 5 % range expansion verified vs R; `Ref:` / `Query:` legends; R's dropping of out-of-range query cells not reproduced) | 13 |
 | `EnrichmentPlot` | 12727 | `scp.pl.enrichment_plot` | done (all 7 types; bar/dot/lollipop frames, labels, encodings and sizes verified vs R, see `docs/parity_audit.md`; network/enrichmap graphs, partitions and word tables verified vs R; GO wordcloud keywords substituted) | 14 |
 | `adjustlayout` | 13441 | `scp.pl.adjust_layout` | done (transcribed; step-2 sign bug fixed) | 14 |
 | `GSEAPlot` | 13563 | `scp.pl.gsea_plot` | done (all 6 types; line/bar selection, order, fill, alpha, peak, zero cross and heat strip verified vs R; comparison/network/enrichmap/wordcloud tables verified vs R) | 15 |
@@ -60,7 +60,7 @@ body raises · **n/a** = nothing to port.
 | `make_long` / `geom_sankey` (vendored `ggsankey.R`) | `scp.pl._stat_flow.sankey_layout` (node/flow geometry) | done |
 | `circlize::chordDiagram` (as `StatPlot` calls it) | `scp.pl._stat_flow.chord_layout` (sectors, link positions) | done |
 | `ggVennDiagram::process_data` (1.2.x shapes) | `scp.pl._stat_flow.venn_regions` + `scp.pl._venn_shapes` | done |
-| `DefaultReduction` | `scp.default_reduction` | done |
+| `DefaultReduction` | `scp.default_reduction` | done (every step, `agrep` included, verified vs R case by case; an explicit pattern that matches nothing warns) |
 | `FetchData` (SCP's own resolver) | `scp.fetch_data` | done |
 | `check_DataType` | `scp.fetch.infer_data_type` | done |
 | `drop_data` / `slim_data` | — n/a (no ggplot data duplication problem) | — |
@@ -95,6 +95,9 @@ body raises · **n/a** = nothing to port.
 | `feature_heatmap` | `**kwargs` replaced by the explicit `FeatureHeatmap` parameters (`split_by`, `cells`, `cell_order`, `libsize`, and the split / cluster / annotation / enrichment set shared with `group_heatmap`) | `**kwargs` silently swallowed misspelt options. `show_row_names` keeps its `True` default. |
 | `dynamic_heatmap` | `**kwargs` replaced by explicit parameters; added `dynamic_features`, `min_expcells`, `r_sq`, `dev_expl`, `padjust`, `feature_split`, `feature_split_by`, `fuzzification`, `cluster_*`, the annotation and enrichment sets; `split_method` default `"kmeans-peaktime"` -> `"mfuzz"`; `palette` default `"viridis"` | Both defaults are R's. `dynamic_features` carries `RunDynamicFeatures`' table (peak and valley times), since this package does not refit mgcv. `cell_bins` keeps R's meaning — the bins for `cell_density` thinning — rather than binning the columns. |
 | `dynamic_heatmap` | added `separate_annotation_palette="Paired"`, `separate_annotation_palcolor=None`; `dynamic_features` values may also be a mapping in SCP's `srt@tools` layout (`"DynamicFeatures"`, `"fitted_matrix"`, `"upr_matrix"`, `"lwr_matrix"`) | R's parameters for the now-ported `separate_annotation`. Its feature curves are `DynamicPlot`'s fitted values, which mgcv produces and this package does not refit, so they travel with the table as R stores them. |
+| `cell_dim_plot`, `cell_dim_plot_3d`, `paga_plot`, `velocity_plot`, `projection_plot` | added `use_uns_colors=True` | Python-only. The group colours come from scanpy's `adata.uns[f"{key}_colors"]` when it is stored, aligned with the categories, and the caller left `palette` at its default and `palcolor` unset (`scp.palettes.level_colors`). `False` gives R's palette colours exactly. A deliberate divergence from R, which knows no `uns`; see `docs/03_theme_and_palette.md` §2. |
+| `projection_plot` | added `legend_position="right"`, `legend=None` | R composes a `Ref: <ref_group>` and a `Query: <query_group>` legend beside the panel; these place them, or register them with a caller's `LegendColumn` when drawing into a borrowed `ax`, as the other trajectory layers do. |
+| every 2-D and 3-D dim plot, `paga_plot`, `lineage_plot`, `velocity_plot`, `projection_plot` | no signature change: `reduction` / `basis` / `*_reduction` are now resolved through `scp.default_reduction(adata, pattern=...)` (`min_dim=3` for the 3-D plots) | R calls `DefaultReduction(srt, pattern = reduction)` (`SCP-plot.R:1394`, `:2867`), so `"umap"`, `"UMAP"`, `"X_umap"` all work; indexing `obsm` directly raised a bare `KeyError`. |
 | `cell_cor_heatmap` | `nlabel` default `3` → `0`; `label_cutoff` default `None` → `0.0` | R's defaults (`SCP-plot.R:10128`): nothing is labelled unless asked, and a label needs a similarity of at least 0. `label_cutoff=None` still means no cutoff. |
 
 ## Argument renaming rules
