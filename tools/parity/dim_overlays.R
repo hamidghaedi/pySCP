@@ -161,4 +161,83 @@ pl <- FeatureDimPlot(srt, c("Tpt1", "Rps2", "Rpl8", "S_score"), reduction = "UMA
 d <- pl[[grep(":CoExp$", names(pl))]]$data
 w(data.frame(cell = rownames(d), CoExp = d$CoExp, value = d$value), "coexp.csv")
 
+# ---- stat_by insets of every type, as CellDimPlot pastes them ----------------
+# Last, because of the stub: SCP 0.5.6 composes its legends with cbind() on
+# gtables, which ggplot2 4 turns into a list matrix that add_grob() rejects,
+# so every CellDimPlot(stat.by = ) call fails at that final step. Skipping only
+# the legend lets the insets be traced; nothing they draw is touched.
+assignInNamespace("add_grob", function(gtable, grob, ...) gtable, ns = "SCP")
+srt <- pancreas_sub
+boxes <- list()
+trace("annotation_custom", where = asNamespace("SCP"), print = FALSE,
+      tracer = quote(assign("boxes", c(get("boxes", envir = .GlobalEnv),
+                                       list(c(xmin, xmax, ymin, ymax))), envir = .GlobalEnv)))
+inset_types <- c("pie", "ring", "bar", "rose", "trend", "area", "dot")
+box_df <- do.call(rbind, lapply(inset_types, function(pt) {
+  assign("boxes", list(), envir = .GlobalEnv)
+  p <- suppressWarnings(CellDimPlot(srt, "CellType", reduction = "UMAP", stat.by = "Phase",
+                                    stat_plot_type = pt, stat_plot_size = 0.2))
+  b <- do.call(rbind, get("boxes", envir = .GlobalEnv))
+  data.frame(type = pt, group = levels(srt$CellType), xmin = b[, 1], xmax = b[, 2],
+             ymin = b[, 3], ymax = b[, 4])
+}))
+untrace("annotation_custom", where = asNamespace("SCP"))
+w(box_df, "stat_inset_boxes.csv")
+
+# Each subplot as annotation_custom receives it: + theme_void(), built, with
+# every mark and label normalised to the panel range ggplot trained on that
+# one group (0 = left/bottom/start, 1 = right/top/end). For coord_polar the
+# x aesthetic is the radius under theta = "y" (pie, ring) and the angle under
+# theta = "x" (rose).
+nrm <- function(v, r) if (diff(r) == 0) rep(NA_real_, length(v)) else (v - r[1]) / diff(r)
+inset_cfg <- data.frame(
+  type = c("bar", "bar", "bar", "rose", "trend", "area", "dot", "pie", "ring"),
+  position = c("stack", "stack", "dodge", "stack", "stack", "stack", "stack", "stack", "stack"),
+  stat_type = c("percent", "count", "count", "percent", "percent", "percent", "count",
+                "percent", "count"))
+marks <- list(); labs <- list()
+for (k in seq_len(nrow(inset_cfg))) {
+  cf <- inset_cfg[k, ]
+  sub <- CellStatPlot(srt, stat.by = "Phase", group.by = "CellType", plot_type = cf$type,
+                      position = cf$position, stat_type = cf$stat_type, palette = "Set1",
+                      label = TRUE, label.size = 3, individual = TRUE, combine = FALSE)
+  for (grp in levels(srt$CellType)) {
+    q <- sub[[paste0("CellType:", grp, ":")]] + theme_void() + theme(legend.position = "none")
+    b <- suppressWarnings(ggplot_build(q))
+    pp <- b$layout$panel_params[[1]]
+    if (is.null(pp$theta.range)) {
+      xr <- pp$x.range; yr <- pp$y.range
+    } else if (q$coordinates$theta == "y") {
+      xr <- pp$r.range; yr <- pp$theta.range
+    } else {
+      xr <- pp$theta.range; yr <- pp$r.range
+    }
+    for (i in seq_along(q$layers)) {
+      geom <- class(q$layers[[i]]$geom)[1]
+      d <- b$data[[i]]
+      if (geom == "GeomTextRepel") {
+        d <- d[!is.na(d$x), ]
+        labs[[length(labs) + 1]] <- data.frame(cf, group = grp, label = d$label,
+                                                x = nrm(d$x, xr), y = nrm(d$y, yr))
+      } else if (geom %in% c("GeomCol", "GeomPoint", "GeomArea")) {
+        if (nrow(d) == 0) {
+          marks[[length(marks) + 1]] <- data.frame(cf, group = grp, geom = geom, fill = NA,
+                                                   x0 = NA, x1 = NA, y0 = NA, y1 = NA, size = NA)
+          next
+        }
+        if (geom == "GeomArea") next  # trend's ribbon: hidden under its own bar
+        d <- d[!is.na(d$fill), ]
+        pt <- geom == "GeomPoint"
+        marks[[length(marks) + 1]] <- data.frame(
+          cf, group = grp, geom = geom, fill = d$fill,
+          x0 = nrm(if (pt) d$x else d$xmin, xr), x1 = nrm(if (pt) d$x else d$xmax, xr),
+          y0 = nrm(if (pt) d$y else d$ymin, yr), y1 = nrm(if (pt) d$y else d$ymax, yr),
+          size = if (pt) d$size else NA)
+      }
+    }
+  }
+}
+w(do.call(rbind, marks), "stat_inset_marks.csv")
+w(do.call(rbind, labs), "stat_inset_labels.csv")
+
 message("wrote ", length(list.files(out)), " files to ", normalizePath(out))

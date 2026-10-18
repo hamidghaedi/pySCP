@@ -39,7 +39,9 @@ from matplotlib.path import Path
 from matplotlib.transforms import IdentityTransform
 
 from ..palettes import continuous_palette, discrete_palette
+from ..theme import halo
 from . import _dim_geom as geom
+from ._stat import draw_stat_inset, r_stat_label
 
 __all__ = [
     "mm_lw",
@@ -666,51 +668,46 @@ def draw_stat_insets(ax: Axes, centres: pd.DataFrame, table: pd.DataFrame,
 
     The inset spans ``x_range * size`` by ``y_range * size`` data units, as
     ``annotation_custom(xmin = x - x_range * size / 2, ...)`` does.  Pies
-    occupy 80 % of the inset, like ``coord_polar``; a ring keeps an inner hole
-    of 1 / 1.8 of the radius, from R's dummy ``"   "`` level.
+    occupy 80 % of the inset, like ``coord_polar``.  A ring's radius axis
+    holds R's dummy ``"   "`` level at 1 and the group's bar over 1.6-2.4, so
+    the hole is 0.6 / 1.4 of the radius (measured; not 1 / 1.8).  Labels sit
+    mid-wedge at the bar's centre: half the radius for a pie, 1 / 1.4 of it
+    for a ring.  Every other type is drawn by
+    :func:`scp.pl._stat.draw_stat_inset`, with the marks and labels
+    :func:`scp.pl.stat_plot` draws.
     """
     insets = []
     levels = list(table.index)
     for grp, row in centres.iterrows():
         if grp not in table.columns:
             continue
-        vals = np.nan_to_num(table[grp].to_numpy(dtype=float))
         w, h = x_range * size, y_range * size
         iax = ax.inset_axes((row["x"] - w / 2, row["y"] - h / 2, w, h), transform=ax.transData,
-                            zorder=Z_STAT)
+                            zorder=Z_STAT, projection="polar" if plot_type == "rose" else None)
         iax.set_axis_off()
-        cols = [colors[lv] for lv in levels]
-        if plot_type in ("pie", "ring"):
-            if vals.sum() <= 0:
-                continue
-            wedge = dict(edgecolor="black", linewidth=mm_lw(0.5), alpha=alpha)
-            if plot_type == "ring":
-                wedge["width"] = 1 - 1 / 1.8
-            total = float(vals.sum())
-
-            def _fmt(p: float, _t: float = total) -> str:
-                return f"{p:.1f}%" if stat_type == "percent" else f"{p * _t / 100:.0f}"
-
-            # matplotlib starts at 12 o'clock and runs anticlockwise, which puts
-            # the first level exactly where coord_polar's stacked bar ends it
-            iax.pie(vals, colors=cols, startangle=90, counterclock=True, wedgeprops=wedge,
-                    autopct=_fmt if label else None, textprops={"fontsize": label_size * 2})
-        elif plot_type == "bar":
-            if position == "stack":
-                bottom = 0.0
-                for lv, v in reversed(list(zip(levels, vals, strict=True))):
-                    iax.bar(0, v, bottom=bottom, width=0.8, color=colors[lv], alpha=alpha,
-                            edgecolor="black", linewidth=mm_lw(0.5))
-                    bottom += v
-                iax.set_xlim(-0.5, 0.5)
-                iax.set_ylim(0, max(bottom, 1e-12))
-            else:
-                k = len(levels)
-                wd = 0.9 / max(k, 1)
-                for i, (lv, v) in enumerate(zip(levels, vals, strict=True)):
-                    iax.bar(-0.45 + wd * (i + 0.5), v, width=wd, color=colors[lv],
-                            alpha=alpha, edgecolor="black", linewidth=mm_lw(0.5))
-                iax.set_xlim(-0.5, 0.5)
-                iax.set_ylim(0, max(float(vals.max()) * 1.1, 1e-12))
         insets.append(iax)
+        if plot_type not in ("pie", "ring"):
+            draw_stat_inset(iax, table[grp], colors, plot_type=plot_type, stat_type=stat_type,
+                            position=position, alpha=alpha, label=label, label_size=label_size)
+            continue
+        vals = np.nan_to_num(table[grp].to_numpy(dtype=float))
+        if vals.sum() <= 0:
+            continue
+        cols = [colors[lv] for lv in levels]
+        wedge = dict(edgecolor="black", linewidth=mm_lw(0.5), alpha=alpha)
+        if plot_type == "ring":
+            wedge["width"] = 0.8 / 1.4
+        # matplotlib starts at 12 o'clock and runs anticlockwise, which puts
+        # the first level exactly where coord_polar's stacked bar ends it
+        iax.pie(vals, colors=cols, startangle=90, counterclock=True, wedgeprops=wedge)
+        if label:
+            r = 0.5 if plot_type == "pie" else 1 / 1.4
+            mid = np.deg2rad(90 + 360 * (np.cumsum(vals) - vals / 2) / vals.sum())
+            for a, value in zip(mid, vals, strict=True):
+                if value <= 0:  # R prints the zeros too, piled at 12 o'clock
+                    continue
+                t = iax.text(r * np.cos(a), r * np.sin(a), r_stat_label(value, stat_type),
+                             ha="center", va="center", fontsize=label_size * 2,
+                             color="black")
+                halo(t, foreground="white", radius=0.1)
     return insets

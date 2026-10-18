@@ -1,0 +1,126 @@
+"type","position","stat_type","group","geom","fill","x0","x1","y0","y1","size"
+"bar","stack","percent","Ductal","GeomCol","#E41A1C",0,1,0.656903766,1,NA
+"bar","stack","percent","Ductal","GeomCol","#377EB8",0,1,0.213389121,0.656903766,NA
+"bar","stack","percent","Ductal","GeomCol","#4DAF4A",0,1,0,0.213389121,NA
+"bar","stack","percent","Ngn3 low EP","GeomCol","#E41A1C",0,1,0.444444444,1,NA
+"bar","stack","percent","Ngn3 low EP","GeomCol","#377EB8",0,1,0.209876543,0.444444444,NA
+"bar","stack","percent","Ngn3 low EP","GeomCol","#4DAF4A",0,1,0,0.209876543,NA
+"bar","stack","percent","Ngn3 high EP","GeomCol","#E41A1C",0,1,0.202380952,1,NA
+"bar","stack","percent","Ngn3 high EP","GeomCol","#377EB8",0,1,0.0535714286,0.202380952,NA
+"bar","stack","percent","Ngn3 high EP","GeomCol","#4DAF4A",0,1,0,0.0535714286,NA
+"bar","stack","percent","Pre-endocrine","GeomCol","#E41A1C",0,1,0.00666666667,1,NA
+"bar","stack","percent","Pre-endocrine","GeomCol","#377EB8",0,1,0,0.00666666667,NA
+"bar","stack","percent","Pre-endocrine","GeomCol","#4DAF4A",0,1,0,0,NA
+"bar","stack","percent","Endocrine","GeomCol","#E41A1C",0,1,0,1,NA
+"bar","stack","percent","Endocrine","GeomCol","#377EB8",0,1,0,0,NA
+"bar","stack","percent","Endocrine","GeomCol","#4DAF4A",0,1,0,0,NA
+"bar","stack","count","Ductal","GeomCol","#E41A1C",0,1,0.656903766,1,NA
+"bar","stack","count","Ductal","GeomCol","#377EB8",0,1,0.213389121,0.656903766,NA
+"bar","stack","count","Ductal","GeomCol","#4DAF4A",0,1,0,0.213389121,NA
+"bar","stack","count","Ngn3 low EP","GeomCol","#E41A1C",0,1,0.444444444,1,NA
+"bar","stack","count","Ngn3 low EP","GeomCol","#377EB8",0,1,0.209876543,0.444444444,NA
+"bar","stack","count","Ngn3 low EP","GeomCol","#4DAF4A",0,1,0,0.209876543,NA
+"bar","stack","count","Ngn3 high EP","GeomCol","#E41A1C",0,1,0.202380952,1,NA
+"bar","stack","count","Ngn3 high EP","GeomCol","#377EB8",0,1,0.0535714286,0.202380952,NA
+"bar","stack","count","Ngn3 high EP","GeomCol","#4DAF4A",0,1,0,0.0535714286,NA
+"bar","stack","count","Pre-endocrine","GeomCol","#E41A1C",0,1,0.00666666667,1,NA
+"bar","stack","count","Pre-endocrine","GeomCol","#377EB8",0,1,0,0.00666666667,NA
+"bar","stack","count","Pre-endocrine","GeomCol","#4DAF4A",0,1,0,0,NA
+"bar","stack","count","Endocrine","GeomCol","#E41A1C",0,1,0,1,NA
+"bar","stack","count","Endocrine","GeomCol","#377EB8",0,1,0,0,NA
+"bar","stack","count","Endocrine","GeomCol","#4DAF4A",0,1,0,0,NA
+"bar","dodge","count","Ductal","GeomCol","#E41A1C",0.177777778,0.377777778,0,0.703259005,NA
+"bar","dodge","count","Ductal","GeomCol","#377EB8",0.4,0.6,0,0.909090909,NA
+"bar","dodge","count","Ductal","GeomCol","#4DAF4A",0.622222222,0.822222222,0,0.437392796,NA
+"bar","dodge","count","Ngn3 low EP","GeomCol","#E41A1C",0.177777778,0.377777778,0,0.909090909,NA
+"bar","dodge","count","Ngn3 low EP","GeomCol","#377EB8",0.4,0.6,0,0.383838384,NA
+"bar","dodge","count","Ngn3 low EP","GeomCol","#4DAF4A",0.622222222,0.822222222,0,0.343434343,NA
+"bar","dodge","count","Ngn3 high EP","GeomCol","#E41A1C",0.177777778,0.377777778,0,0.909090909,NA
+"bar","dodge","count","Ngn3 high EP","GeomCol","#377EB8",0.4,0.6,0,0.169606513,NA
+"bar","dodge","count","Ngn3 high EP","GeomCol","#4DAF4A",0.622222222,0.822222222,0,0.0610583446,NA
+"bar","dodge","count","Pre-endocrine","GeomCol","#E41A1C",0.177777778,0.377777778,0,0.909090909,NA
+"bar","dodge","count","Pre-endocrine","GeomCol","#377EB8",0.4,0.6,0,0.00610128127,NA
+"bar","dodge","count","Pre-endocrine","GeomCol","#4DAF4A",0.622222222,0.822222222,0,0,NA
+"bar","dodge","count","Endocrine","GeomCol","#E41A1C",0.177777778,0.377777778,0,0.909090909,NA
+"bar","dodge","count","Endocrine","GeomCol","#377EB8",0.4,0.6,0,0,NA
+"bar","dodge","count","Endocrine","GeomCol","#4DAF4A",0.622222222,0.822222222,0,0,NA
+"rose","stack","percent","Ductal","GeomCol","#E41A1C",0,1,0.656903766,1,NA
+"rose","stack","percent","Ductal","GeomCol","#377EB8",0,1,0.213389121,0.656903766,NA
+"rose","stack","percent","Ductal","GeomCol","#4DAF4A",0,1,0,0.213389121,NA
+"rose","stack","percent","Ngn3 low EP","GeomCol","#E41A1C",0,1,0.444444444,1,NA
+"rose","stack","percent","Ngn3 low EP","GeomCol","#377EB8",0,1,0.209876543,0.444444444,NA
+"rose","stack","percent","Ngn3 low EP","GeomCol","#4DAF4A",0,1,0,0.209876543,NA
+"rose","stack","percent","Ngn3 high EP","GeomCol","#E41A1C",0,1,0.202380952,1,NA
+"rose","stack","percent","Ngn3 high EP","GeomCol","#377EB8",0,1,0.0535714286,0.202380952,NA
+"rose","stack","percent","Ngn3 high EP","GeomCol","#4DAF4A",0,1,0,0.0535714286,NA
+"rose","stack","percent","Pre-endocrine","GeomCol","#E41A1C",0,1,0.00666666667,1,NA
+"rose","stack","percent","Pre-endocrine","GeomCol","#377EB8",0,1,0,0.00666666667,NA
+"rose","stack","percent","Pre-endocrine","GeomCol","#4DAF4A",0,1,0,0,NA
+"rose","stack","percent","Endocrine","GeomCol","#E41A1C",0,1,0,1,NA
+"rose","stack","percent","Endocrine","GeomCol","#377EB8",0,1,0,0,NA
+"rose","stack","percent","Endocrine","GeomCol","#4DAF4A",0,1,0,0,NA
+"trend","stack","percent","Ductal","GeomCol","#E41A1C",0.000998003992,0.999001996,0.656903766,1,NA
+"trend","stack","percent","Ductal","GeomCol","#377EB8",0.000998003992,0.999001996,0.213389121,0.656903766,NA
+"trend","stack","percent","Ductal","GeomCol","#4DAF4A",0.000998003992,0.999001996,0,0.213389121,NA
+"trend","stack","percent","Ngn3 low EP","GeomCol","#E41A1C",0.000998003992,0.999001996,0.444444444,1,NA
+"trend","stack","percent","Ngn3 low EP","GeomCol","#377EB8",0.000998003992,0.999001996,0.209876543,0.444444444,NA
+"trend","stack","percent","Ngn3 low EP","GeomCol","#4DAF4A",0.000998003992,0.999001996,0,0.209876543,NA
+"trend","stack","percent","Ngn3 high EP","GeomCol","#E41A1C",0.000998003992,0.999001996,0.202380952,1,NA
+"trend","stack","percent","Ngn3 high EP","GeomCol","#377EB8",0.000998003992,0.999001996,0.0535714286,0.202380952,NA
+"trend","stack","percent","Ngn3 high EP","GeomCol","#4DAF4A",0.000998003992,0.999001996,0,0.0535714286,NA
+"trend","stack","percent","Pre-endocrine","GeomCol","#E41A1C",0.000998003992,0.999001996,0.00666666667,1,NA
+"trend","stack","percent","Pre-endocrine","GeomCol","#377EB8",0.000998003992,0.999001996,0,0.00666666667,NA
+"trend","stack","percent","Pre-endocrine","GeomCol","#4DAF4A",0.000998003992,0.999001996,0,0,NA
+"trend","stack","percent","Endocrine","GeomCol","#E41A1C",0.000998003992,0.999001996,0,1,NA
+"trend","stack","percent","Endocrine","GeomCol","#377EB8",0.000998003992,0.999001996,0,0,NA
+"trend","stack","percent","Endocrine","GeomCol","#4DAF4A",0.000998003992,0.999001996,0,0,NA
+"area","stack","percent","Ductal","GeomArea",NA,NA,NA,NA,NA,NA
+"area","stack","percent","Ngn3 low EP","GeomArea",NA,NA,NA,NA,NA,NA
+"area","stack","percent","Ngn3 high EP","GeomArea",NA,NA,NA,NA,NA,NA
+"area","stack","percent","Pre-endocrine","GeomArea",NA,NA,NA,NA,NA,NA
+"area","stack","percent","Endocrine","GeomArea",NA,NA,NA,NA,NA,NA
+"dot","stack","count","Ductal","GeomPoint","#E41A1C",0.5,0.5,0.1875,0.1875,10.5544411
+"dot","stack","count","Ductal","GeomPoint","#377EB8",0.5,0.5,0.5,0.5,12
+"dot","stack","count","Ductal","GeomPoint","#4DAF4A",0.5,0.5,0.8125,0.8125,8.32364216
+"dot","stack","count","Ngn3 low EP","GeomPoint","#E41A1C",0.5,0.5,0.1875,0.1875,12
+"dot","stack","count","Ngn3 low EP","GeomPoint","#377EB8",0.5,0.5,0.5,0.5,7.79743548
+"dot","stack","count","Ngn3 low EP","GeomPoint","#4DAF4A",0.5,0.5,0.8125,0.8125,7.37563557
+"dot","stack","count","Ngn3 high EP","GeomPoint","#E41A1C",0.5,0.5,0.1875,0.1875,12
+"dot","stack","count","Ngn3 high EP","GeomPoint","#377EB8",0.5,0.5,0.5,0.5,5.18321055
+"dot","stack","count","Ngn3 high EP","GeomPoint","#4DAF4A",0.5,0.5,0.8125,0.8125,3.10992633
+"dot","stack","count","Pre-endocrine","GeomPoint","#E41A1C",0.5,0.5,0.1875,0.1875,12
+"dot","stack","count","Pre-endocrine","GeomPoint","#377EB8",0.5,0.5,0.5,0.5,0.983078305
+"dot","stack","count","Pre-endocrine","GeomPoint","#4DAF4A",0.5,0.5,0.8125,0.8125,0
+"dot","stack","count","Endocrine","GeomPoint","#E41A1C",0.5,0.5,0.1875,0.1875,12
+"dot","stack","count","Endocrine","GeomPoint","#377EB8",0.5,0.5,0.5,0.5,0
+"dot","stack","count","Endocrine","GeomPoint","#4DAF4A",0.5,0.5,0.8125,0.8125,0
+"pie","stack","percent","Ductal","GeomCol","#E41A1C",0,1,0.656903766,1,NA
+"pie","stack","percent","Ductal","GeomCol","#377EB8",0,1,0.213389121,0.656903766,NA
+"pie","stack","percent","Ductal","GeomCol","#4DAF4A",0,1,0,0.213389121,NA
+"pie","stack","percent","Ngn3 low EP","GeomCol","#E41A1C",0,1,0.444444444,1,NA
+"pie","stack","percent","Ngn3 low EP","GeomCol","#377EB8",0,1,0.209876543,0.444444444,NA
+"pie","stack","percent","Ngn3 low EP","GeomCol","#4DAF4A",0,1,0,0.209876543,NA
+"pie","stack","percent","Ngn3 high EP","GeomCol","#E41A1C",0,1,0.202380952,1,NA
+"pie","stack","percent","Ngn3 high EP","GeomCol","#377EB8",0,1,0.0535714286,0.202380952,NA
+"pie","stack","percent","Ngn3 high EP","GeomCol","#4DAF4A",0,1,0,0.0535714286,NA
+"pie","stack","percent","Pre-endocrine","GeomCol","#E41A1C",0,1,0.00666666667,1,NA
+"pie","stack","percent","Pre-endocrine","GeomCol","#377EB8",0,1,0,0.00666666667,NA
+"pie","stack","percent","Pre-endocrine","GeomCol","#4DAF4A",0,1,0,0,NA
+"pie","stack","percent","Endocrine","GeomCol","#E41A1C",0,1,0,1,NA
+"pie","stack","percent","Endocrine","GeomCol","#377EB8",0,1,0,0,NA
+"pie","stack","percent","Endocrine","GeomCol","#4DAF4A",0,1,0,0,NA
+"ring","stack","count","Ductal","GeomCol","#E41A1C",0.428571429,1,0.656903766,1,NA
+"ring","stack","count","Ductal","GeomCol","#377EB8",0.428571429,1,0.213389121,0.656903766,NA
+"ring","stack","count","Ductal","GeomCol","#4DAF4A",0.428571429,1,0,0.213389121,NA
+"ring","stack","count","Ngn3 low EP","GeomCol","#E41A1C",0.428571429,1,0.444444444,1,NA
+"ring","stack","count","Ngn3 low EP","GeomCol","#377EB8",0.428571429,1,0.209876543,0.444444444,NA
+"ring","stack","count","Ngn3 low EP","GeomCol","#4DAF4A",0.428571429,1,0,0.209876543,NA
+"ring","stack","count","Ngn3 high EP","GeomCol","#E41A1C",0.428571429,1,0.202380952,1,NA
+"ring","stack","count","Ngn3 high EP","GeomCol","#377EB8",0.428571429,1,0.0535714286,0.202380952,NA
+"ring","stack","count","Ngn3 high EP","GeomCol","#4DAF4A",0.428571429,1,0,0.0535714286,NA
+"ring","stack","count","Pre-endocrine","GeomCol","#E41A1C",0.428571429,1,0.00666666667,1,NA
+"ring","stack","count","Pre-endocrine","GeomCol","#377EB8",0.428571429,1,0,0.00666666667,NA
+"ring","stack","count","Pre-endocrine","GeomCol","#4DAF4A",0.428571429,1,0,0,NA
+"ring","stack","count","Endocrine","GeomCol","#E41A1C",0.428571429,1,0,1,NA
+"ring","stack","count","Endocrine","GeomCol","#377EB8",0.428571429,1,0,0,NA
+"ring","stack","count","Endocrine","GeomCol","#4DAF4A",0.428571429,1,0,0,NA

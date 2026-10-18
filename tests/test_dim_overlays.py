@@ -6,6 +6,8 @@ assert what each layer must *be* -- present, at the right depth, on the
 right cells, with the right legend -- on the synthetic fixture.
 """
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -159,11 +161,28 @@ def test_stat_by_puts_one_inset_per_group_and_a_legend(ov):
         assert sum(w.theta2 - w.theta1 for w in wedges) == pytest.approx(360)
 
 
-@pytest.mark.parametrize("ptype", ["ring", "bar"])
-def test_stat_by_other_inset_types(ov, ptype):
-    fig = scp.pl.cell_dim_plot(ov, "leiden", stat_by="batch", stat_plot_type=ptype,
-                               split_by="batch", stat_plot_label=True)
-    assert all(len(ax.child_axes) == 4 for ax in fig.axes)
+@pytest.mark.parametrize("ptype", ["ring", "bar", "rose", "trend", "area", "dot"])
+@pytest.mark.parametrize("position", ["stack", "dodge"])
+def test_stat_by_other_inset_types(ov, ptype, position):
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        fig = scp.pl.cell_dim_plot(ov, "leiden", stat_by="batch", stat_plot_type=ptype,
+                                   stat_plot_position=position, split_by="batch",
+                                   stat_plot_label=True, stat_type="count")
+    assert [str(w.message).startswith("stat_plot_type='area'") for w in caught] == \
+        [True] * (ptype == "area")
+    panels = [ax for ax in fig.axes if ax.child_axes]
+    assert len(panels) == 2 and all(len(ax.child_axes) == 4 for ax in panels)
+    for iax in panels[0].child_axes:
+        assert not iax.axison
+        assert iax.name == ("polar" if ptype == "rose" else "rectilinear")
+        # every type labels its non-zero counts, which sum to the group size
+        labels = [float(t.get_text()) for t in iax.texts if t.get_text()]
+        assert labels and all(v > 0 for v in labels)
+    # one split's insets show only that split's cells: here, one batch level
+    first = [float(t.get_text()) for iax in panels[0].child_axes
+             for t in iax.texts if t.get_text()]
+    assert sum(first) == (ov.obs["batch"] == ov.obs["batch"].cat.categories[0]).sum()
 
 
 def test_lineages_draw_a_cased_curve_and_a_legend(ov):

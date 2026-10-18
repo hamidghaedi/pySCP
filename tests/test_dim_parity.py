@@ -8,6 +8,7 @@ than pixels.
 """
 
 import json
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -247,6 +248,151 @@ def test_stat_pies_sit_where_r_puts_them(panc):
         frac = [(p.theta2 - p.theta1) / 360 for p in wedges]
         want = rv[rv.group == grp].set_index("stat").loc[["G1", "S", "G2M"], "value"]
         assert np.allclose(frac, want.to_numpy(), atol=1e-7)
+
+
+def _insets(panc, ptype, position="stack", stat_type="percent", **kw):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # area's "no area" warning
+        fig = scp.pl.cell_dim_plot(panc, "CellType", stat_by="Phase", stat_plot_type=ptype,
+                                   stat_plot_position=position, stat_type=stat_type, **kw)
+    return fig.axes[0].child_axes
+
+
+def _norm(v, lim):
+    return (np.asarray(v, dtype=float) - lim[0]) / (lim[1] - lim[0])
+
+
+def _r_rows(name, ptype, position, stat_type, group):
+    r = _csv(name)
+    return r[(r.type == ptype) & (r.position == position) & (r.stat_type == stat_type)
+             & (r.group == group)]
+
+
+@pytest.mark.parametrize("ptype", ["pie", "ring", "bar", "rose", "trend", "area", "dot"])
+def test_every_inset_type_sits_in_rs_box(panc, ptype):
+    # the boxes CellDimPlot hands annotation_custom, traced in R per type
+    want = _csv("stat_inset_boxes.csv").query("type == @ptype")
+    insets = _insets(panc, ptype, stat_plot_size=0.2)
+    assert len(insets) == len(want) == 5
+    for iax, (_, row) in zip(insets, want.iterrows(), strict=True):
+        x0, y0, w, h = iax.get_axes_locator()._bounds
+        assert np.allclose([x0, x0 + w, y0, y0 + h],
+                           row[["xmin", "xmax", "ymin", "ymax"]].to_numpy(float), atol=1e-6)
+
+
+@pytest.mark.parametrize("ptype,position,stat_type", [
+    ("bar", "stack", "percent"), ("bar", "stack", "count"), ("bar", "dodge", "count"),
+    ("trend", "stack", "percent"),
+])
+def test_inset_bars_match_rs_panel(panc, ptype, position, stat_type):
+    from matplotlib.colors import to_hex
+    from matplotlib.patches import Rectangle
+
+    levels = panc.obs["CellType"].cat.categories
+    for grp, iax in zip(levels, _insets(panc, ptype, position, stat_type), strict=True):
+        assert not iax.axison  # theme_void
+        r = _r_rows("stat_inset_marks.csv", ptype, position, stat_type, grp)
+        r = r.assign(fill=r.fill.str.lower()).set_index("fill")
+        bars = [p for p in iax.patches if isinstance(p, Rectangle)]
+        assert len(bars) == len(r)
+        xl, yl = iax.get_xlim(), iax.get_ylim()
+        for b in bars:
+            want = r.loc[to_hex(b.get_facecolor())]
+            x0, x1 = _norm([b.get_x(), b.get_x() + b.get_width()], xl)
+            y0, y1 = _norm([b.get_y(), b.get_y() + b.get_height()], yl)
+            assert np.allclose([y0, y1], want[["y0", "y1"]].to_numpy(float), atol=1e-7)
+            assert np.isclose((x0 + x1) / 2, (want.x0 + want.x1) / 2, atol=1e-7)
+            # stacked bars fill R's expand = 0 range; dodged ones keep
+            # stat_plot's 0.95 of the slot where position_dodge2 leaves 0.9
+            k = 1 if position == "stack" else 0.95 / 0.9
+            assert np.isclose(x1 - x0, (want.x1 - want.x0) * k, rtol=1e-6)
+
+
+def test_inset_dots_match_rs_panel(panc):
+    from matplotlib.colors import to_hex
+
+    levels = panc.obs["CellType"].cat.categories
+    for grp, iax in zip(levels, _insets(panc, "dot", stat_type="count"), strict=True):
+        r = _r_rows("stat_inset_marks.csv", "dot", "stack", "count", grp)
+        r = r.assign(fill=r.fill.str.lower()).set_index("fill")
+        assert len(iax.collections) == len(r)
+        for pc in iax.collections:
+            want = r.loc[to_hex(pc.get_facecolor()[0])]
+            (x, y), = pc.get_offsets()
+            assert np.isclose(_norm(x, iax.get_xlim()), want.x0, atol=1e-7)
+            assert np.isclose(_norm(y, iax.get_ylim()), want.y0, atol=1e-7)
+            # scale_size_area(max_size = 12): the same 12 * sqrt(v / max)
+            assert np.isclose(np.sqrt(pc.get_sizes()[0]), want["size"], rtol=1e-6)
+
+
+def test_inset_polar_marks_match_rs_panel(panc):
+    from matplotlib.patches import Rectangle
+
+    levels = panc.obs["CellType"].cat.categories
+    marks = {t: _insets(panc, t, stat_type=st)
+             for t, st in [("rose", "percent"), ("pie", "percent"), ("ring", "count")]}
+    for i, grp in enumerate(levels):
+        # rose: coord_polar puts the radius range on 0..0.4 of the box, so each
+        # ring is 0.8 x its normalised thickness of the inset's half-width
+        r = _r_rows("stat_inset_marks.csv", "rose", "stack", "percent", grp)
+        iax = marks["rose"][i]
+        top = iax.get_ylim()[1]
+        bars = [p for p in iax.patches if isinstance(p, Rectangle)]
+        got = sorted(b.get_height() / top for b in bars)
+        assert np.allclose(got, sorted(0.8 * (r.y1 - r.y0)), atol=1e-7)
+        assert np.isclose(max((b.get_y() + b.get_height()) / top for b in bars), 0.8)
+        # pie and ring: theta is the stacked value, the radius R's bar extent
+        for t, st in [("pie", "percent"), ("ring", "count")]:
+            r = _r_rows("stat_inset_marks.csv", t, "stack", st, grp)
+            wedges = [p for p in marks[t][i].patches if hasattr(p, "theta1")]
+            assert np.allclose(sorted((w.theta2 - w.theta1) / 360 for w in wedges),
+                               sorted(r.y1 - r.y0), atol=1e-7)
+            for w in wedges:  # outer edge at 1; R's ring hole is 0.6 / 1.4
+                inner = 0.0 if w.width is None else 1 - w.width
+                assert np.allclose([inner, 1.0], [r.x0.iloc[0], r.x1.iloc[0]], atol=1e-7)
+
+
+def test_area_insets_are_empty_like_r(panc):
+    r = _csv("stat_inset_marks.csv").query("type == 'area'")
+    assert r.fill.isna().all() and len(r) == 5  # ggplot built no rows at all
+    with pytest.warns(UserWarning, match="no area"):
+        fig = scp.pl.cell_dim_plot(panc, "CellType", stat_by="Phase", stat_plot_type="area")
+    for iax in fig.axes[0].child_axes:
+        assert not iax.patches and not iax.collections and not iax.texts
+    assert all(not iax.patches for iax in _insets(panc, "area", stat_plot_label=True))
+
+
+@pytest.mark.parametrize("ptype,position,stat_type", [
+    ("bar", "stack", "percent"), ("bar", "stack", "count"), ("bar", "dodge", "count"),
+    ("trend", "stack", "percent"), ("area", "stack", "percent"), ("dot", "stack", "count"),
+    ("rose", "stack", "percent"), ("pie", "stack", "percent"), ("ring", "stack", "count"),
+])
+def test_inset_labels_match_r(panc, ptype, position, stat_type):
+    levels = panc.obs["CellType"].cat.categories
+    insets = _insets(panc, ptype, position, stat_type, stat_plot_label=True)
+    for grp, iax in zip(levels, insets, strict=True):
+        r = _r_rows("stat_inset_labels.csv", ptype, position, stat_type, grp)
+        r = r[~r.label.isin(["0", "0%"])]  # R also prints zeros; the port does not
+        texts = [t for t in iax.texts if t.get_text()]  # ax.pie adds empty ones
+        assert sorted(t.get_text() for t in texts) == sorted(r.label)
+        if ptype == "rose":
+            continue  # stat_plot's rose stacks the other way round (docstring)
+        got, want = [], []
+        for t in texts:
+            x, y = t.get_position()
+            if ptype in ("pie", "ring"):
+                # ax.pie's unit radius; anticlockwise from 12 o'clock is
+                # 1 - R's clockwise theta
+                frac = (np.degrees(np.arctan2(y, x)) - 90) % 360 / 360
+                got.append((t.get_text(), np.hypot(x, y), 1 - frac))
+            else:
+                got.append((t.get_text(), _norm(x, iax.get_xlim()), _norm(y, iax.get_ylim())))
+        for _, row in r.iterrows():
+            # R's x range is zero-wide for area, where the label is centred
+            want.append((row.label, 0.5 if np.isnan(row.x) else row.x, row.y))
+        got, want = sorted(got), sorted(want)
+        assert [g[0] for g in got] == [w[0] for w in want]
+        assert np.allclose([g[1:] for g in got], [w[1:] for w in want], atol=1e-7)
 
 
 def test_mark_enclosures_match_ggforce(panc):

@@ -7,7 +7,7 @@ body raises · **n/a** = nothing to port.
 
 | R (`SCP-plot.R`) | Line | Python | Status | Milestone |
 |---|---|---|---|---|
-| `CellDimPlot` | 1328 | `scp.pl.cell_dim_plot` | done (all overlays; `stat_plot_type` limited to pie/ring/bar; the lineage, PAGA and velocity layers share `lineage_plot`'s, `paga_plot`'s and `velocity_plot`'s code) | 2 |
+| `CellDimPlot` | 1328 | `scp.pl.cell_dim_plot` | done (all overlays; `stat_plot_type` takes all seven per-group StatPlot types — pie, ring, bar, rose, trend, area, dot — inset boxes, marks and labels verified vs R; sankey/chord/venn/upset raise, as they fail in SCP; the lineage, PAGA and velocity layers share `lineage_plot`'s, `paga_plot`'s and `velocity_plot`'s code) | 2 |
 | `FeatureDimPlot` | 2042 | `scp.pl.feature_dim_plot` | done (standard + blend, all overlays, `calculate_coexp`) | 3 |
 | `CellDimPlot3D` | 2843 | `scp.pl.cell_dim_plot_3d` | done (traces, NA trace, ranges, title, `cells.highlight` and `lineages` verified vs R) | 8 |
 | `FeatureDimPlot3D` | 3066 | `scp.pl.feature_dim_plot_3d` | done (incl. `calculate_coexp`, `split.by`, `cells.highlight`; values, title, ranges, split and highlight verified vs R; Spectral scale deliberate; R's empty `All.cells` split button fixed) | 8 |

@@ -44,6 +44,7 @@ from ..layout import LegendColumn, PanelGrid
 from ..palettes import NA_COLOR_DEFAULT, continuous_palette, discrete_palette
 from ..theme import Theme, halo, theme_scp
 from . import _dim_layers as layers
+from ._stat import INSET_TYPES
 
 __all__ = ["cell_dim_plot", "feature_dim_plot", "cell_dim_plot_3d", "feature_dim_plot_3d"]
 
@@ -339,7 +340,7 @@ def cell_dim_plot(
     streamline_bg_stroke: float = 0.5,
     stat_by: str | None = None,
     stat_type: Literal["percent", "count"] = "percent",
-    stat_plot_type: Literal["pie", "ring", "bar"] = "pie",
+    stat_plot_type: Literal["pie", "ring", "bar", "rose", "trend", "area", "dot"] = "pie",
     stat_plot_position: Literal["stack", "dodge"] = "stack",
     stat_plot_size: float = 0.15,
     stat_plot_palette: str = "Set1",
@@ -411,15 +412,39 @@ def cell_dim_plot(
     * ``add_mark="hull"`` ports ``concaveman``; it could not be checked
       against R because the parity environment lacks that package (see
       ``docs/07_milestones.md``).
-    * ``stat_plot_type`` supports the inset types that read at that size:
-      ``pie``, ``ring`` and ``bar``.
+    * ``stat_plot_type`` takes the seven types ``StatPlot`` draws one panel
+      per group for (``pie``, ``ring``, ``bar``, ``rose``, ``trend``,
+      ``area``, ``dot``), each labelled with ``stat_plot_label`` as R labels
+      it (zeros, which R piles at a segment boundary, are left out).  The
+      insets other than pie and ring are :func:`stat_plot`'s own marks (see
+      :func:`scp.pl._stat.draw_stat_inset`), so they share its departures
+      from R: ``rose`` stacks its first level innermost where ggplot puts it
+      outermost, leaves stat_plot's 5 % gap in what R draws as closed rings,
+      and ignores ``stat_plot_position``; dodged bars are 0.95 of their slot,
+      not ``position_dodge2``'s 0.9; dodged ``trend`` is plain dodged bars;
+      the alternating grey85 background R lays under dodged insets is not
+      drawn.  ``pie`` and ``ring`` also ignore ``stat_plot_position`` (R
+      dodges them into one partial ring per level).  ``area`` insets hold no
+      area, as in R (one group is one x position, which ``geom_area`` cannot
+      fill) -- only their labels -- and warn.  ``sankey``, ``chord``,
+      ``venn`` and ``upset`` raise: ``StatPlot`` keys those by split level,
+      so ``CellDimPlot`` finds no per-group subplot and fails (SCP 0.5.6:
+      ``node stack overflow`` for sankey and upset; chord stops in
+      ``table()`` for want of a second ``stat.by`` column).
     """
     rng = np.random.default_rng(seed)
     groups = [group_by] if isinstance(group_by, str) else list(group_by)
-    if stat_plot_type not in ("pie", "ring", "bar"):
-        raise NotImplementedError(
-            f"stat_plot_type={stat_plot_type!r} insets are not ported "
-            "(docs/porting_briefs/dim_plots.md §1.6); use 'pie', 'ring' or 'bar'."
+    if stat_by is not None and stat_plot_type not in INSET_TYPES:
+        raise ValueError(
+            f"stat_plot_type={stat_plot_type!r} has no per-group subplot to place: "
+            "StatPlot draws sankey, chord, venn and upset once per split level, so "
+            f"there is nothing to centre on a group. Use one of {', '.join(INSET_TYPES)}."
+        )
+    if stat_by is not None and stat_plot_type == "area":
+        warnings.warn(
+            "stat_plot_type='area' insets draw no area: each holds one group, a single "
+            "x position, which geom_area cannot fill (SCP's are empty too, bar labels).",
+            stacklevel=2,
         )
     if (paga or velocity) and split_by is not None:
         raise ValueError(

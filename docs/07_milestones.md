@@ -28,7 +28,7 @@ Landed, in SCP's layer order: `add_mark` (hull/ellipse/rect/circle) · `graph`
 edges (COO triplets into one `LineCollection`; the adjacency is never
 densified) · `add_density` (contours and the filled KDE raster) · `hex` ·
 `cells_highlight` validation and `alpha_highlight` · `stat_by` insets (pie,
-ring, bar) · `lineages` · `paga` · `velocity` (raw, grid, stream) · a
+ring, bar, rose, trend, area, dot) · `lineages` · `paga` · `velocity` (raw, grid, stream) · a
 `label_repel` pass. The numeric cores are in `pl/_dim_geom.py`, the layers in
 `pl/_dim_layers.py`.
 
@@ -64,7 +64,32 @@ and its standalone plot cannot drift apart; every fixture above still matches.
 Not verified against R, and why: the `hull` mark ports `concaveman`, which is
 not installed in the parity environment; the stream drawing is matplotlib's
 `streamplot`, not metR, so it is not a numeric match by construction (its
-input field is). `stat_plot_type` beyond pie/ring/bar raises.
+input field is).
+
+`stat_by` insets cover every type `StatPlot` draws one panel per group for.
+Pie and ring keep `Axes.pie`; bar, rose, trend, area and dot are drawn by
+`stat_plot`'s own mark and label code (`_draw_stat_geoms`, factored out of
+`_draw_stat_panel` with `stat_plot`'s output unchanged) inside an inset whose
+limits are the ranges ggplot trains on a single group. SCP 0.5.6 cannot run
+`CellDimPlot(stat.by = )` against ggplot2 4 at all -- its legend composition
+`cbind()`s gtables into a list matrix that `add_grob()` rejects -- so the dump
+skips that one step and traces `annotation_custom`. Against it: every type's
+inset box exact (to 1e-6, 35 boxes); bar, trend and dot marks to 1e-7 in
+panel-normalised units, dot sizes to 1e-6, pie and ring wedge fractions to
+1e-7; labels (text and position) for every type to 1e-7, the label text now
+R's `round(value * 100, 1)%`. Found: R's ring hole is 0.6 / 1.4 of the
+radius, not the 1 / 1.8 the inset used (fixed); `area` builds no rows for a
+single group, so its insets are empty in R and here, labels apart (warns);
+`sankey`, `chord`, `venn` and `upset` are keyed by split, not group, so R
+has no subplot to paste and fails (node stack overflow, or `table()` for
+chord) -- the port raises `ValueError`. Inherited from `stat_plot` and
+documented, not reproduced: rose stacks its first level innermost (R:
+outermost) with a 5 % gap where R closes the ring, and ignores `position`;
+dodged bars fill 0.95 of the slot (R 0.9); dodged trend is plain bars; pie
+and ring ignore `position`; R's zero labels and the grey85 stripes under
+dodged insets are not drawn. Adding labels to `stat_plot`'s dodged, dot and
+rose types (it ignored `label` there) and R's label text are the only
+changes to `stat_plot`'s output.
 
 ### 3 — `feature_dim_plot` — M ✅ done
 

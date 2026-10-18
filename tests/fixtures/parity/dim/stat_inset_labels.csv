@@ -1,0 +1,136 @@
+"type","position","stat_type","group","label","x","y"
+"bar","stack","percent","Ductal","34.3%",0.5,0.828451883
+"bar","stack","percent","Ductal","44.4%",0.5,0.435146444
+"bar","stack","percent","Ductal","21.3%",0.5,0.106694561
+"bar","stack","percent","Ngn3 low EP","55.6%",0.5,0.722222222
+"bar","stack","percent","Ngn3 low EP","23.5%",0.5,0.327160494
+"bar","stack","percent","Ngn3 low EP","21%",0.5,0.104938272
+"bar","stack","percent","Ngn3 high EP","79.8%",0.5,0.601190476
+"bar","stack","percent","Ngn3 high EP","14.9%",0.5,0.12797619
+"bar","stack","percent","Ngn3 high EP","5.4%",0.5,0.0267857143
+"bar","stack","percent","Pre-endocrine","99.3%",0.5,0.503333333
+"bar","stack","percent","Pre-endocrine","0.7%",0.5,0.00333333333
+"bar","stack","percent","Pre-endocrine","0%",0.5,0
+"bar","stack","percent","Endocrine","100%",0.5,0.5
+"bar","stack","percent","Endocrine","0%",0.5,0
+"bar","stack","percent","Endocrine","0%",0.5,0
+"bar","stack","count","Ductal","82",0.5,0.828451883
+"bar","stack","count","Ductal","106",0.5,0.435146444
+"bar","stack","count","Ductal","51",0.5,0.106694561
+"bar","stack","count","Ngn3 low EP","45",0.5,0.722222222
+"bar","stack","count","Ngn3 low EP","19",0.5,0.327160494
+"bar","stack","count","Ngn3 low EP","17",0.5,0.104938272
+"bar","stack","count","Ngn3 high EP","134",0.5,0.601190476
+"bar","stack","count","Ngn3 high EP","25",0.5,0.12797619
+"bar","stack","count","Ngn3 high EP","9",0.5,0.0267857143
+"bar","stack","count","Pre-endocrine","149",0.5,0.503333333
+"bar","stack","count","Pre-endocrine","1",0.5,0.00333333333
+"bar","stack","count","Pre-endocrine","0",0.5,0
+"bar","stack","count","Endocrine","362",0.5,0.5
+"bar","stack","count","Endocrine","0",0.5,0
+"bar","stack","count","Endocrine","0",0.5,0
+"bar","dodge","count","Ductal","82",0.25,0.703259005
+"bar","dodge","count","Ductal","106",0.5,0.909090909
+"bar","dodge","count","Ductal","51",0.75,0.437392796
+"bar","dodge","count","Ngn3 low EP","45",0.25,0.909090909
+"bar","dodge","count","Ngn3 low EP","19",0.5,0.383838384
+"bar","dodge","count","Ngn3 low EP","17",0.75,0.343434343
+"bar","dodge","count","Ngn3 high EP","134",0.25,0.909090909
+"bar","dodge","count","Ngn3 high EP","25",0.5,0.169606513
+"bar","dodge","count","Ngn3 high EP","9",0.75,0.0610583446
+"bar","dodge","count","Pre-endocrine","149",0.25,0.909090909
+"bar","dodge","count","Pre-endocrine","1",0.5,0.00610128127
+"bar","dodge","count","Pre-endocrine","0",0.75,0
+"bar","dodge","count","Endocrine","362",0.25,0.909090909
+"bar","dodge","count","Endocrine","0",0.5,0
+"bar","dodge","count","Endocrine","0",0.75,0
+"rose","stack","percent","Ductal","34.3%",0.5,0.828451883
+"rose","stack","percent","Ductal","44.4%",0.5,0.435146444
+"rose","stack","percent","Ductal","21.3%",0.5,0.106694561
+"rose","stack","percent","Ngn3 low EP","55.6%",0.5,0.722222222
+"rose","stack","percent","Ngn3 low EP","23.5%",0.5,0.327160494
+"rose","stack","percent","Ngn3 low EP","21%",0.5,0.104938272
+"rose","stack","percent","Ngn3 high EP","79.8%",0.5,0.601190476
+"rose","stack","percent","Ngn3 high EP","14.9%",0.5,0.12797619
+"rose","stack","percent","Ngn3 high EP","5.4%",0.5,0.0267857143
+"rose","stack","percent","Pre-endocrine","99.3%",0.5,0.503333333
+"rose","stack","percent","Pre-endocrine","0.7%",0.5,0.00333333333
+"rose","stack","percent","Pre-endocrine","0%",0.5,0
+"rose","stack","percent","Endocrine","100%",0.5,0.5
+"rose","stack","percent","Endocrine","0%",0.5,0
+"rose","stack","percent","Endocrine","0%",0.5,0
+"trend","stack","percent","Ductal","34.3%",0.5,0.828451883
+"trend","stack","percent","Ductal","44.4%",0.5,0.435146444
+"trend","stack","percent","Ductal","21.3%",0.5,0.106694561
+"trend","stack","percent","Ngn3 low EP","55.6%",0.5,0.722222222
+"trend","stack","percent","Ngn3 low EP","23.5%",0.5,0.327160494
+"trend","stack","percent","Ngn3 low EP","21%",0.5,0.104938272
+"trend","stack","percent","Ngn3 high EP","79.8%",0.5,0.601190476
+"trend","stack","percent","Ngn3 high EP","14.9%",0.5,0.12797619
+"trend","stack","percent","Ngn3 high EP","5.4%",0.5,0.0267857143
+"trend","stack","percent","Pre-endocrine","99.3%",0.5,0.503333333
+"trend","stack","percent","Pre-endocrine","0.7%",0.5,0.00333333333
+"trend","stack","percent","Pre-endocrine","0%",0.5,0
+"trend","stack","percent","Endocrine","100%",0.5,0.5
+"trend","stack","percent","Endocrine","0%",0.5,0
+"trend","stack","percent","Endocrine","0%",0.5,0
+"area","stack","percent","Ductal","34.3%",NA,0.828451883
+"area","stack","percent","Ductal","44.4%",NA,0.435146444
+"area","stack","percent","Ductal","21.3%",NA,0.106694561
+"area","stack","percent","Ngn3 low EP","55.6%",NA,0.722222222
+"area","stack","percent","Ngn3 low EP","23.5%",NA,0.327160494
+"area","stack","percent","Ngn3 low EP","21%",NA,0.104938272
+"area","stack","percent","Ngn3 high EP","79.8%",NA,0.601190476
+"area","stack","percent","Ngn3 high EP","14.9%",NA,0.12797619
+"area","stack","percent","Ngn3 high EP","5.4%",NA,0.0267857143
+"area","stack","percent","Pre-endocrine","99.3%",NA,0.503333333
+"area","stack","percent","Pre-endocrine","0.7%",NA,0.00333333333
+"area","stack","percent","Pre-endocrine","0%",NA,0
+"area","stack","percent","Endocrine","100%",NA,0.5
+"area","stack","percent","Endocrine","0%",NA,0
+"area","stack","percent","Endocrine","0%",NA,0
+"dot","stack","count","Ductal","82",0.5,0.1875
+"dot","stack","count","Ductal","106",0.5,0.5
+"dot","stack","count","Ductal","51",0.5,0.8125
+"dot","stack","count","Ngn3 low EP","45",0.5,0.1875
+"dot","stack","count","Ngn3 low EP","19",0.5,0.5
+"dot","stack","count","Ngn3 low EP","17",0.5,0.8125
+"dot","stack","count","Ngn3 high EP","134",0.5,0.1875
+"dot","stack","count","Ngn3 high EP","25",0.5,0.5
+"dot","stack","count","Ngn3 high EP","9",0.5,0.8125
+"dot","stack","count","Pre-endocrine","149",0.5,0.1875
+"dot","stack","count","Pre-endocrine","1",0.5,0.5
+"dot","stack","count","Pre-endocrine","0",0.5,0.8125
+"dot","stack","count","Endocrine","362",0.5,0.1875
+"dot","stack","count","Endocrine","0",0.5,0.5
+"dot","stack","count","Endocrine","0",0.5,0.8125
+"pie","stack","percent","Ductal","34.3%",0.5,0.828451883
+"pie","stack","percent","Ductal","44.4%",0.5,0.435146444
+"pie","stack","percent","Ductal","21.3%",0.5,0.106694561
+"pie","stack","percent","Ngn3 low EP","55.6%",0.5,0.722222222
+"pie","stack","percent","Ngn3 low EP","23.5%",0.5,0.327160494
+"pie","stack","percent","Ngn3 low EP","21%",0.5,0.104938272
+"pie","stack","percent","Ngn3 high EP","79.8%",0.5,0.601190476
+"pie","stack","percent","Ngn3 high EP","14.9%",0.5,0.12797619
+"pie","stack","percent","Ngn3 high EP","5.4%",0.5,0.0267857143
+"pie","stack","percent","Pre-endocrine","99.3%",0.5,0.503333333
+"pie","stack","percent","Pre-endocrine","0.7%",0.5,0.00333333333
+"pie","stack","percent","Pre-endocrine","0%",0.5,0
+"pie","stack","percent","Endocrine","100%",0.5,0.5
+"pie","stack","percent","Endocrine","0%",0.5,0
+"pie","stack","percent","Endocrine","0%",0.5,0
+"ring","stack","count","Ductal","82",0.714285714,0.828451883
+"ring","stack","count","Ductal","106",0.714285714,0.435146444
+"ring","stack","count","Ductal","51",0.714285714,0.106694561
+"ring","stack","count","Ngn3 low EP","45",0.714285714,0.722222222
+"ring","stack","count","Ngn3 low EP","19",0.714285714,0.327160494
+"ring","stack","count","Ngn3 low EP","17",0.714285714,0.104938272
+"ring","stack","count","Ngn3 high EP","134",0.714285714,0.601190476
+"ring","stack","count","Ngn3 high EP","25",0.714285714,0.12797619
+"ring","stack","count","Ngn3 high EP","9",0.714285714,0.0267857143
+"ring","stack","count","Pre-endocrine","149",0.714285714,0.503333333
+"ring","stack","count","Pre-endocrine","1",0.714285714,0.00333333333
+"ring","stack","count","Pre-endocrine","0",0.714285714,0
+"ring","stack","count","Endocrine","362",0.714285714,0.5
+"ring","stack","count","Endocrine","0",0.714285714,0
+"ring","stack","count","Endocrine","0",0.714285714,0

@@ -66,9 +66,12 @@ def test_force_guard_raises_instead_of_prompting(adata):
         scp.pl.cell_dim_plot(ad, "many")
 
 
-def test_unported_stat_plot_types_raise_with_a_pointer(adata):
-    with pytest.raises(NotImplementedError, match="dim_plots.md"):
-        scp.pl.cell_dim_plot(adata, "leiden", stat_by="batch", stat_plot_type="rose")
+@pytest.mark.parametrize("ptype", ["sankey", "chord", "venn", "upset"])
+def test_split_keyed_stat_plot_types_have_no_inset(adata, ptype):
+    # StatPlot keys these by split level, so CellDimPlot finds no per-group
+    # subplot; SCP 0.5.6 fails on them too
+    with pytest.raises(ValueError, match="no per-group subplot"):
+        scp.pl.cell_dim_plot(adata, "leiden", stat_by="batch", stat_plot_type=ptype)
 
 
 def test_declared_level_order_survives(adata):

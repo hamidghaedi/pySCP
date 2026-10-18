@@ -334,6 +334,12 @@ def stat_plot(
     ``individual=True`` draws one panel per (``split_by`` level, ``group_by``
     level) pair, each holding that single group, in R's order: group levels
     vary fastest within each split level (SCP-plot.R:4710).
+
+    ``label=True`` labels every type, as R's ``geom_text_repel(force = 0)``
+    does: mid-segment when stacked, on the bar top when dodged, on the dot,
+    mid-ring for rose; the text is R's ``round(value * 100, 1)`` percent or
+    the count.  R also prints zero values, piled at a segment boundary; those
+    are left out.
     """
     stat_cols = list(stat_by)
     flow_types = ("sankey", "chord", "venn", "upset")
@@ -465,17 +471,73 @@ def stat_plot(
     return pg.finish()
 
 
+_CARTESIAN = ("bar", "area", "trend", "dot")
+
+
 def _draw_stat_panel(ax, values, stat_levels, levels_x, colors, *, plot_type, stat_type,
                      position, alpha, label, label_size, flip, bg_by, block, group_by, theme):
     """Draw one panel of the aggregated table.
 
     The cartesian types go through :class:`~scp.pl._stat_feature._Ax`, so
     ``flip`` (R's ``coord_flip``) transposes every layer; the caller has
-    already reversed the group order, as R reverses the factor.
+    already reversed the group order, as R reverses the factor.  The marks
+    come from :func:`_draw_stat_geoms`, which :func:`draw_stat_inset` shares;
+    this adds what only a full panel has -- ticks, value limits, stripes.
     """
     n_x = len(levels_x)
     x = np.arange(n_x)
-    A = _Ax(ax, flip and plot_type in ("bar", "area", "trend", "dot"))
+    A = _Ax(ax, flip and plot_type in _CARTESIAN)
+    _draw_stat_geoms(A, values, stat_levels, colors, plot_type=plot_type, stat_type=stat_type,
+                     position=position, alpha=alpha, label=label, label_size=label_size,
+                     flip=flip)
+
+    if plot_type in ("bar", "area", "trend"):
+        A.set_pos_ticks(x, levels_x)
+        if stat_type == "percent" and position == "stack":
+            A.set_value_lim(0, 1)
+            A.value_axis.set_major_formatter(PercentFormatter(xmax=1))
+    elif plot_type == "dot":
+        A.set_pos_ticks(x, levels_x)
+        A.value_axis.set_ticks(range(len(stat_levels)))
+        A.value_axis.set_ticklabels(stat_levels)
+        A.set_value_lim(-0.6, len(stat_levels) - 0.4)
+    elif plot_type == "rose":
+        ax.set_xticks(x * 2 * np.pi / max(n_x, 1))
+        ax.set_xticklabels(levels_x, fontsize=7)
+        ax.set_yticklabels([])
+    elif plot_type in ("ring", "pie"):
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_ylim(0, 1)
+
+    # Background stripes exist only when position != "stack" (R sets bg_layer
+    # to NULL under stack, because the bars already tile the panel).
+    if bg_by is not None and position != "stack" and plot_type in _CARTESIAN:
+        bgcat = as_ordered_categorical(block[bg_by])
+        bg_levels = [str(c) for c in bgcat.cat.categories]
+        mapping = block.groupby(group_by, observed=True)[bg_by].first()
+        spread = block.groupby(group_by, observed=True)[bg_by].nunique()
+        if (spread > 1).any():
+            raise ValueError("`group_by` must be a part of `bg_by`")
+        bg_colors = discrete_palette(bg_levels, palette="Paired")
+        for i, lv in enumerate(levels_x):
+            b = mapping.get(lv)
+            if b is not None:
+                A.pos_span(i - 0.5, i + 0.5, color=bg_colors[str(b)], alpha=0.2,
+                           zorder=0, linewidth=0)
+
+
+def _draw_stat_geoms(A: _Ax, values: pd.DataFrame, stat_levels, colors, *, plot_type,
+                     stat_type, position, alpha, label, label_size, flip) -> None:
+    """The marks of one ``plot_type``: ``values`` is stat level x group.
+
+    Positions are ``0 .. n_groups - 1`` and sizes are physical (points), so
+    the same call draws a full panel or a ``cell_dim_plot`` inset; limits and
+    ticks are the caller's.
+    """
+    ax = A.ax
+    n_x = values.shape[1]
+    x = np.arange(n_x)
 
     if plot_type in ("bar", "area", "trend"):
         if position == "stack":
@@ -496,14 +558,6 @@ def _draw_stat_panel(ax, values, stat_levels, levels_x, colors, *, plot_type, st
                                    alpha=alpha / 2, edgecolor="#7F7F7F", linewidth=0.5)
                     A.bar(x, v, 0.6, bottom=bottom, color=colors[lv], alpha=alpha,
                           edgecolor="black", linewidth=0.5)
-                if label:
-                    for xi, (b, vv) in enumerate(zip(bottom, v, strict=True)):
-                        if vv <= 0:
-                            continue
-                        txt = f"{vv * 100:.1f}%" if stat_type == "percent" else f"{vv:g}"
-                        t = A.text(xi, b + vv / 2, txt, ha="center", va="center",
-                                   fontsize=label_size * 2, color="black")
-                        halo(t, foreground="white", radius=0.1)
                 bottom = bottom + v
         else:
             w = 0.8 / max(len(stat_levels), 1)
@@ -512,10 +566,6 @@ def _draw_stat_panel(ax, values, stat_levels, levels_x, colors, *, plot_type, st
                 off = (i - (len(stat_levels) - 1) / 2) * w
                 A.bar(x + off, v, w * 0.95, color=colors[lv], alpha=alpha,
                       edgecolor="black", linewidth=0.5)
-        A.set_pos_ticks(x, levels_x)
-        if stat_type == "percent" and position == "stack":
-            A.set_value_lim(0, 1)
-            A.value_axis.set_major_formatter(PercentFormatter(xmax=1))
 
     elif plot_type == "dot":
         # y is the CATEGORY, not the value: a dot matrix sized by the statistic
@@ -524,10 +574,6 @@ def _draw_stat_panel(ax, values, stat_levels, levels_x, colors, *, plot_type, st
             v = np.nan_to_num(values.loc[lv].to_numpy())
             A.scatter(x, np.full(n_x, yi), s=12 ** 2 * v / vmax, facecolor=colors[lv],
                       edgecolor="black", linewidth=0.5, alpha=alpha)
-        A.set_pos_ticks(x, levels_x)
-        A.value_axis.set_ticks(range(len(stat_levels)))
-        A.value_axis.set_ticklabels(stat_levels)
-        A.set_value_lim(-0.6, len(stat_levels) - 0.4)
 
     elif plot_type == "rose":
         # Nightingale rose: group levels around the circle, radius = value
@@ -539,9 +585,6 @@ def _draw_stat_panel(ax, values, stat_levels, levels_x, colors, *, plot_type, st
             ax.bar(theta, v, width=width * 0.95, bottom=bottom, color=colors[lv],
                    alpha=alpha, edgecolor="black", linewidth=0.5)
             bottom = bottom + v
-        ax.set_xticks(theta)
-        ax.set_xticklabels(levels_x, fontsize=7)
-        ax.set_yticklabels([])
 
     elif plot_type in ("ring", "pie"):
         # theta carries the value; ring reserves an inner hole, pie does not.
@@ -559,29 +602,127 @@ def _draw_stat_panel(ax, values, stat_levels, levels_x, colors, *, plot_type, st
                    linewidth=0.5)
             if label:
                 t = ax.text((edges[i] + edges[i + 1]) / 2, inner + (1 - inner) / 2,
-                            f"{frac[i] * 100:.1f}%" if stat_type == "percent"
-                            else f"{totals.iloc[i]:g}",
+                            r_stat_label(frac[i] if stat_type == "percent"
+                                         else totals.iloc[i], stat_type),
                             ha="center", va="center", fontsize=label_size * 2)
                 halo(t, foreground="white", radius=0.1)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_ylim(0, 1)
+    if label and plot_type not in ("ring", "pie"):
+        _draw_stat_labels(A, values, stat_levels, plot_type=plot_type, stat_type=stat_type,
+                          position=position, label_size=label_size)
 
-    # Background stripes exist only when position != "stack" (R sets bg_layer
-    # to NULL under stack, because the bars already tile the panel).
-    if bg_by is not None and position != "stack" and plot_type in ("bar", "area", "trend", "dot"):
-        bgcat = as_ordered_categorical(block[bg_by])
-        bg_levels = [str(c) for c in bgcat.cat.categories]
-        mapping = block.groupby(group_by, observed=True)[bg_by].first()
-        spread = block.groupby(group_by, observed=True)[bg_by].nunique()
-        if (spread > 1).any():
-            raise ValueError("`group_by` must be a part of `bg_by`")
-        bg_colors = discrete_palette(bg_levels, palette="Paired")
-        for i, lv in enumerate(levels_x):
-            b = mapping.get(lv)
-            if b is not None:
-                A.pos_span(i - 0.5, i + 0.5, color=bg_colors[str(b)], alpha=0.2,
-                           zorder=0, linewidth=0)
+
+def r_stat_label(value: float, stat_type: str) -> str:
+    """StatPlot's label text: ``paste0(round(value * 100, 1), "%")``, or the count."""
+    if stat_type == "percent":
+        return f"{round(float(value) * 100, 1):.15g}%"
+    return f"{float(value):.15g}"
+
+
+def _draw_stat_labels(A: _Ax, values: pd.DataFrame, stat_levels, *, plot_type, stat_type,
+                      position, label_size) -> None:
+    """``geom_text_repel(force = 0)``: one label per drawn value, where R puts it.
+
+    Stacked labels sit mid-segment (``position_stack(vjust = 0.5)``); dodged
+    ones on top of their bar, spread over 0.9 of the slot, which is where
+    ``position_dodge2`` puts a zero-width text (not quite over its 0.8-wide
+    bar); ``dot`` labels sit on the dot; ``rose`` labels mid-ring.  R also
+    prints the zeros, at the segment boundary; those are left out.
+    """
+    n_x = values.shape[1]
+    x = np.arange(n_x)
+
+    def put(p, v, value, polar=False):
+        if value <= 0:
+            return
+        txt = r_stat_label(value, stat_type)
+        kw = dict(ha="center", va="center", fontsize=label_size * 2, color="black")
+        t = A.ax.text(p, v, txt, **kw) if polar else A.text(p, v, txt, **kw)
+        halo(t, foreground="white", radius=0.1)
+
+    if plot_type in ("bar", "area", "trend") and position == "stack":
+        bottom = np.zeros(n_x)
+        for lv in reversed(stat_levels):
+            v = np.nan_to_num(values.loc[lv].to_numpy())
+            for xi in range(n_x):
+                put(xi, bottom[xi] + v[xi] / 2, v[xi])
+            bottom = bottom + v
+    elif plot_type in ("bar", "area", "trend"):
+        k = max(len(stat_levels), 1)
+        for i, lv in enumerate(stat_levels):
+            v = np.nan_to_num(values.loc[lv].to_numpy())
+            for xi in range(n_x):
+                put(xi + (i - (k - 1) / 2) * 0.9 / k, v[xi], v[xi])
+    elif plot_type == "dot":
+        for yi, lv in enumerate(stat_levels):
+            v = np.nan_to_num(values.loc[lv].to_numpy())
+            for xi in range(n_x):
+                put(xi, yi, v[xi])
+    elif plot_type == "rose":
+        theta = x * 2 * np.pi / max(n_x, 1)
+        bottom = np.zeros(n_x)
+        for lv in stat_levels:
+            v = np.nan_to_num(values.loc[lv].to_numpy())
+            for xi in range(n_x):
+                put(theta[xi], bottom[xi] + v[xi] / 2, v[xi], polar=True)
+            bottom = bottom + v
+
+
+# The inset types CellDimPlot can paste. Its StatPlot(individual = TRUE) call
+# returns one subplot per group only for these; the other four are keyed by
+# split level, so R finds no subplot to place (SCP-plot.R:1729).
+INSET_TYPES = ("pie", "ring", "bar", "rose", "trend", "area", "dot")
+
+
+def draw_stat_inset(ax, values: pd.Series, colors, *, plot_type: str, stat_type: str,
+                    position: str, alpha: float, label: bool, label_size: float) -> None:
+    """One group's ``StatPlot(individual = TRUE)`` panel, as ``CellDimPlot`` pastes it.
+
+    ``values`` is the group's column of the cross-tab, indexed by stat level.
+    The marks are :func:`_draw_stat_geoms`' -- the ones :func:`stat_plot`
+    draws -- and the axes take what ``+ theme_void()`` leaves of R's panel:
+    no axes, and the scale ranges ggplot trains on a single group.  Measured
+    on SCP 0.5.6 (``tools/parity/dim_overlays.R``):
+
+    * ``bar`` / ``trend``, stacked: ``scale_x_discrete(expand = c(0, 0))``
+      makes the bar (width 0.8, or trend's 0.6) fill the box, and the value
+      axis runs from 0 to the group's total.  Trend's ribbon sits exactly
+      under its bar; ``stat_align`` pads its ends by 0.1 % of the range,
+      which is the whole of R's x range.
+    * dodged: one discrete slot plus ggplot's 0.6 expansion, and
+      ``limits = c(0, max * 1.1)``.
+    * ``dot``: the same slot, and the stat levels at ``1 .. k`` expanded by
+      0.6.
+    * ``rose``: ``coord_polar`` scales the radius to 0.4 of the box, so the
+      stacked total reaches 80 % of its width.
+    * ``area`` draws no area: ``geom_area`` needs two x positions to make a
+      polygon, and an inset holds one group, so ggplot builds no rows.  Its
+      labels still print, centred, as R's text layer does.
+    """
+    levels = [str(lv) for lv in values.index]
+    v = np.nan_to_num(values.to_numpy(dtype=float))
+    ax.set_axis_off()
+    frame = pd.DataFrame({"g": v}, index=levels)
+    A = _Ax(ax, False)
+    if plot_type == "area":
+        if label:
+            _draw_stat_labels(A, frame, levels, plot_type=plot_type, stat_type=stat_type,
+                              position=position, label_size=label_size)
+    else:
+        _draw_stat_geoms(A, frame, levels, colors, plot_type=plot_type, stat_type=stat_type,
+                         position=position, alpha=alpha, label=label, label_size=label_size,
+                         flip=False)
+    if plot_type == "rose":
+        ax.set_ylim(0, (v.sum() or 1.0) / 0.8)
+    elif plot_type == "dot":
+        ax.set_xlim(-0.6, 0.6)
+        ax.set_ylim(-0.6, len(levels) - 0.4)
+    elif position == "stack":
+        half = {"bar": 0.4, "trend": 0.3 * 1.002}.get(plot_type, 0.5)
+        ax.set_xlim(-half, half)
+        ax.set_ylim(0, v.sum() or 1.0)
+    else:
+        ax.set_xlim(-0.6, 0.6)
+        ax.set_ylim(0, (v.max() or 1.0) * 1.1)
 
 
 def feature_cor_plot(
