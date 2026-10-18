@@ -614,19 +614,17 @@ percent of day-to-day use, and enough to publish `0.1.0`.
 
 ---
 
-## Status at the end of the first pass
+## Status
 
-Every milestone has landed at least its main path. What remains is listed here
-rather than left implicit:
+Every milestone has landed, every plot type and overlay SCP offers is ported,
+and every family has been compared with SCP 0.5.6 numerically
+(`docs/parity_audit.md`). What remains:
 
 | Not ported | Why |
 |---|---|
-| `sankey`, `chord` (`cell_stat_plot`) | no good Python equivalent; a bad one is worse than `NotImplementedError` |
-| significance brackets, `stack=True`, `plot_by="feature"` (`feature_stat_plot`) | the largest remaining piece of milestone 4 |
-| `network`, `enrichmap`, `wordcloud` (`enrichment_plot`) | need igraph layouts / a keyword-enrichment backend |
-| `dynamic_heatmap(use_fitted=True)`, mgcv-matched smooths | see the milestone 9 note: not reproducible with `pygam`, so not attempted |
-| `cell_cor_heatmap` cell annotations, `bulk_ref`, reductions, `features_type="DE"` | milestone 10 extras; the heatmap engine, enrichment tracks, `cluster_within_group2`, pies, violins, `separate_annotation` and `flip` have all landed |
-| `expression_stat_plot` | the DataFrame-level engine; the AnnData path covers the same grammar |
+| `dynamic_heatmap(use_fitted=True)`, mgcv-matched smooths | see the milestone 9 note: not reproducible with `pygam`; it raises rather than approximate. It could be made exact by accepting R's fitted matrices, as `separate_annotation` already does |
+| R arguments missing from the Python signatures | a signature comparison against SCP 0.5.6 found about 425 R parameters with no Python counterpart. Some are out of scope by design (the heatmaps' enrichment-computation arguments such as `IDtype`, `species`, `db_update`, since enrichment is an input here; ComplexHeatmap's `use_raster`, `raster_device`, `ht_params`). The rest are real gaps: the `feature_stat_plot` overlay styling (`box_color`, `pt.size`, `trend_color`, `stat_color`, `line_type`, ...), `cells.highlight` in `feature_stat_plot` / `feature_cor_plot` / `volcano_plot`, `legend.direction` almost everywhere, `title`/`xlab`/`ylab`/`aspect.ratio` in the trajectory plots, `graph_plot`/`paga_plot` highlighting, curved edges and arrow styles, heatmap name sides, rotations, titles and per-track palcolors, and `cell_cor_heatmap`'s `bulk_ref`, reduction inputs, `features_type="DE"` and cell annotations |
 
-Every one of these raises `NotImplementedError` naming its brief section, rather
-than silently doing something else.
+A missing argument is simply absent from the signature, so passing it raises
+`TypeError`; options that are declared but not drawn raise
+`NotImplementedError` naming their brief section.

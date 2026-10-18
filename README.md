@@ -331,10 +331,22 @@ position and facet order downstream.
 
 ## Status
 
-The first pass over the whole layer is complete: 27 of the 28 functions in
-`scp.pl` are implemented. Options that are not ported raise
-`NotImplementedError` naming the section of the porting brief that specifies
-them — see the table at the end of [`docs/07_milestones.md`](docs/07_milestones.md).
+All 28 functions in `scp.pl` are implemented, with every plot type and
+overlay SCP offers. One option is deliberately left out:
+`dynamic_heatmap(use_fitted=True)`, because mgcv's smoothing selection cannot
+be reproduced in Python; it raises rather than approximate.
+
+Every family has been compared with SCP 0.5.6 numerically, on the data
+behind each figure rather than on images: the R scripts in `tools/parity/`
+dump SCP's plot frames, and the tests compare against those pinned fixtures
+without needing R. [`docs/parity_audit.md`](docs/parity_audit.md) records what
+matches, to what precision, and every deliberate divergence (mostly R bugs
+fixed and documented in the docstrings).
+
+Not every R argument is exposed yet: some styling and label options (overlay
+colours and sizes, `legend.direction`, heatmap name sides and rotations, and
+a few `cell_cor_heatmap` inputs) are still missing from the Python
+signatures. See [`docs/07_milestones.md`](docs/07_milestones.md).
 
 This is pre-alpha: signatures may still move, and the package has not been
 released to PyPI.

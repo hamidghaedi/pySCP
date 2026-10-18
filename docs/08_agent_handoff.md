@@ -3,18 +3,18 @@
 You are picking up a port of the R package
 [SCP](https://github.com/zhanghao-njmu/SCP)'s plotting layer to Python/AnnData.
 
-**The first pass is complete.** 27 of the 28 functions in `scp.pl` are
-implemented and 117 tests pass. You are most likely here to do one of three
-things:
+**Every function is implemented and compared with R.** All 28 functions in
+`scp.pl` are ported, and over 900 tests pass, most of them against numbers
+dumped from SCP 0.5.6 by the scripts in `tools/parity/`
+(`docs/parity_audit.md` is the record). You are most likely here to do one of
+three things:
 
-1. **Port a remaining option.** The table at the end of `07_milestones.md`
-   lists everything deliberately left out, with the reason. Each raises
-   `NotImplementedError` naming its brief section.
-2. **Extend the parity notebook.** `notebooks/01_parity_foundation.ipynb`
-   compares both packages on `pancreas_sub`. Several implemented families have
-   no R-side comparison yet because they need SCP's own analysis pipeline —
-   adding those is high value, since every bug found so far was found this way.
-3. **Fix something the notebook exposes.** That has been the pattern: level
+1. **Expose a remaining R argument.** The table at the end of
+   `07_milestones.md` lists what is still missing from the Python signatures.
+2. **Pin something new against R.** Add to the relevant `tools/parity/*.R`
+   script, commit the small fixture it writes, and compare in a test; the
+   suite must never need R itself.
+3. **Fix something a comparison exposes.** That has been the pattern: level
    order, stacking direction, library-size scope and the dot-cell sizing were
    all caught by putting the two figures next to each other, and none of them
    raised.
