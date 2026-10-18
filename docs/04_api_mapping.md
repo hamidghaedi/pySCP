@@ -11,13 +11,13 @@ body raises · **n/a** = nothing to port.
 | `FeatureDimPlot` | 2042 | `scp.pl.feature_dim_plot` | done (standard + blend, all overlays, `calculate_coexp`) | 3 |
 | `CellDimPlot3D` | 2843 | `scp.pl.cell_dim_plot_3d` | done (traces, NA trace, ranges, title, `cells.highlight` and `lineages` verified vs R) | 8 |
 | `FeatureDimPlot3D` | 3066 | `scp.pl.feature_dim_plot_3d` | done (incl. `calculate_coexp`, `split.by`, `cells.highlight`; values, title, ranges, split and highlight verified vs R; Spectral scale deliberate; R's empty `All.cells` split button fixed) | 8 |
-| `FeatureStatPlot` | 3524 | `scp.pl.feature_stat_plot` | done (`flip`, `stack`, `plot_by='feature'`, significance layer and `calculate_coexp` verified vs R) | 4 |
+| `FeatureStatPlot` | 3524 | `scp.pl.feature_stat_plot` | done (`flip`, `stack`, `plot_by='feature'`, significance layer, `calculate_coexp` and log `y_trans` limits/breaks verified vs R) | 4 |
 | `ExpressionStatPlot` | 3723 | `scp.pl.expression_stat_plot` | done (the DataFrame engine; `flip` = `coord_flip` verified vs R, incl. `stack`, stripes, brackets and `plot_by='feature'`) | 4 |
-| `CellStatPlot` | 4463 | `scp.pl.cell_stat_plot` | done (11/11 types + `individual`; sankey/chord/venn/upset verified vs R; upset honours `split_by`; `flip` transposes the cartesian types) | 5 |
-| `StatPlot` | 4564 | `scp.pl.stat_plot` | done (11/11 types + `individual`; sankey/chord/venn/upset verified vs R; upset honours `split_by`; `flip` transposes the cartesian types) | 5 |
+| `CellStatPlot` | 4463 | `scp.pl.cell_stat_plot` | done (11/11 types + `individual`; sankey/chord/venn/upset and pie/ring (one band per group) verified vs R; upset honours `split_by`; `flip` transposes the cartesian types) | 5 |
+| `StatPlot` | 4564 | `scp.pl.stat_plot` | done (11/11 types + `individual`; sankey/chord/venn/upset and pie/ring (one band per group) verified vs R; upset honours `split_by`; `flip` transposes the cartesian types) | 5 |
 | `FeatureCorPlot` | 5232 | `scp.pl.feature_cor_plot` | done (incl. `calculate_coexp`, `split_by`; verified vs R) | 6 |
 | `CellDensityPlot` | 5679 | `scp.pl.cell_density_plot` | done | 6 |
-| `VolcanoPlot` | 7088 | `scp.pl.volcano_plot` | done | 6 |
+| `VolcanoPlot` | 7088 | `scp.pl.volcano_plot` | done (labels placed by a deterministic in-panel repulsion standing in for ggrepel) | 6 |
 | `LineagePlot` | 5918 | `scp.pl.lineage_plot` | done (curves, trim, whiskers, legend verified vs R) | 12 |
 | `PAGAPlot` | 6121 | `scp.pl.paga_plot` | done (verified vs R; `cells=` R bug not reproduced) | 11 |
 | `GraphPlot` | 6287 | `scp.pl.graph_plot` | done (verified vs R; curved lines, highlights, `node_alpha` not ported) | 11 |
@@ -72,6 +72,7 @@ body raises · **n/a** = nothing to port.
 |---|---|---|
 | `feature_stat_plot` | added `title`, `subtitle`, `xlab`, `ylab="Expression level"` | The scaffold signature omitted them; they are parameters of the R original and `ylab`'s default is visible on every panel. |
 | `expression_stat_plot` | the stub's `(data, *args, **kwargs)` became `feature_stat_plot`'s signature with `adata`→`data` and without `layer`, `use_raw`, `calculate_coexp` | It is the DataFrame engine, so the matrix-selection arguments belong to the wrapper; `CoExp` needs the gene matrix, which a frame does not carry. |
+| `stat_plot` | `stat_by: Sequence[str]` → `str \| Sequence[str]` | `cell_stat_plot` already took a lone column name; `stat_plot` turned one into a list of characters and failed with a misleading "several `stat_by` columns" error. Lists behave as before. |
 | `feature_cor_plot` | added `calculate_coexp=False` | A parameter of `FeatureCorPlot` the scaffold omitted. In R it always errors (undefined `status`); here it goes through `scp.fetch.calculate_coexp`. |
 | `feature_cor_plot` | added `adjust=1.0`, `nrow`, `ncol`, `byrow=True` | `FeatureCorPlot` parameters the scaffold omitted. `adjust` multiplies the diagonal violins' `bw.nrd0` bandwidth, as in `geom_violin`; the layout three place the one-matrix-per-level panels that `split_by` produces, which needed them once `split_by` stopped being ignored. |
 | `cell_density_plot` | added `y_min`, `y_max`, `y_nbreaks`, `keep_empty`, `aspect_ratio`, `legend_position`, `nrow`, `ncol`, `byrow` | Same omission; all nine are parameters of `CellDensityPlot` and the layout ones are needed for multi-feature figures. |

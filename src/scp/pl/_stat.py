@@ -25,6 +25,7 @@ from matplotlib.ticker import FuncFormatter, PercentFormatter
 from matplotlib.transforms import Bbox
 from scipy.stats import gaussian_kde, linregress
 
+from .._breaks import extended_breaks
 from ..fetch import as_ordered_categorical, fetch_data
 from ..fetch import calculate_coexp as calculate_coexp_fn
 from ..layout import LegendColumn, PanelGrid
@@ -272,7 +273,7 @@ def cell_stat_plot(
 def stat_plot(
     data: pd.DataFrame,
     *,
-    stat_by: Sequence[str],
+    stat_by: str | Sequence[str],
     group_by: str | None = None,
     split_by: str | None = None,
     bg_by: str | None = None,
@@ -323,13 +324,23 @@ def stat_plot(
     :func:`scp.pl._stat_flow.upset_layout` for how the upset bars are ordered.
     Like the other three, ``upset`` draws one block per ``split_by`` level.
 
-    ``flip=True`` is ``coord_flip`` for ``bar``, ``area``, ``trend`` and
-    ``dot``: the group order is reversed (first level on top), the panel and
-    its ``aspect_ratio`` turn, and every layer is transposed (SCP-plot.R:4771,
-    4955).  ``pie`` and ``rose`` start their polar angle at ``pi/2`` instead,
-    as in R.  ``ring`` does the same here; R adds ``coord_flip`` to it, which
-    replaces ``coord_polar`` and turns the ring into a flat bar with its dummy
-    hole level showing — not reproduced.
+    ``pie`` and ``ring`` are ``geom_col(width = 0.8) + coord_polar(theta =
+    "y")`` (SCP-plot.R:4866): one concentric band per group level, the first
+    innermost, the angle the stacked value (so in count mode a small group's
+    band does not close).  ``ring`` keeps R's dummy ``"   "`` level in the
+    innermost slot, which is the hole.  The group names sit on the left
+    (radial) axis -- which is how an ``individual`` pie carries its group --
+    and the angle breaks around the circle; see :func:`polar_stack_layout`.
+
+    ``flip=True`` reverses the group order for every type, as R reverses the
+    factor (SCP-plot.R:4771).  For ``bar``, ``area``, ``trend`` and ``dot``
+    it is also ``coord_flip``: the panel and its ``aspect_ratio`` turn, every
+    layer is transposed (4955), and the bottom axis -- now the values, or the
+    stat levels for ``dot`` -- keeps R's 45-degree ``axis.text.x``.  ``pie``
+    and ``rose`` start their polar angle at ``pi/2`` instead, as in R.
+    ``ring`` does the same here; R adds ``coord_flip`` to it, which replaces
+    ``coord_polar`` and turns the ring into a flat bar with its dummy hole
+    level showing — not reproduced.
 
     ``individual=True`` draws one panel per (``split_by`` level, ``group_by``
     level) pair, each holding that single group, in R's order: group levels
@@ -337,11 +348,14 @@ def stat_plot(
 
     ``label=True`` labels every type, as R's ``geom_text_repel(force = 0)``
     does: mid-segment when stacked, on the bar top when dodged, on the dot,
-    mid-ring for rose; the text is R's ``round(value * 100, 1)`` percent or
-    the count.  R also prints zero values, piled at a segment boundary; those
-    are left out.
+    mid-ring for rose, mid-segment of each band for pie and ring; the text is
+    R's ``round(value * 100, 1)`` percent or the count.  R also prints zero
+    values, piled at a segment boundary; those are left out.  Nothing else is
+    thinned: labels on small stacked segments collide, as they do in R.
     """
-    stat_cols = list(stat_by)
+    # a lone column name is one stat_by, as cell_stat_plot takes it -- list()
+    # would split the string into characters
+    stat_cols = [stat_by] if isinstance(stat_by, str) else list(stat_by)
     flow_types = ("sankey", "chord", "venn", "upset")
     if len(stat_cols) >= 2 and plot_type not in flow_types:
         raise ValueError(
@@ -423,7 +437,7 @@ def stat_plot(
     legend = LegendColumn(position=legend_position)
     pg = PanelGrid(len(keys), panel_size=panel_size, nrow=nrow, ncol=ncol, byrow=byrow,
                    keys=keys, theme=th, legend=legend,
-                   polar=plot_type in ("rose", "ring", "pie"))
+                   polar=plot_type == "rose")
 
     for key, sp, elements in panels:
         ax = pg.axes[key]
@@ -448,7 +462,9 @@ def stat_plot(
             # an individual panel whose one group is empty is left blank, as
             # R leaves it; a shared panel never loses every slot
             levels_x = kept if individual else (kept or levels_x)
-        if flip and plot_type not in ("pie", "rose"):
+        if flip:
+            # R reverses the group factor under flip for every type; only the
+            # coord_flip that follows is skipped for pie and rose
             levels_x = levels_x[::-1]
 
         if not levels_x:
@@ -486,6 +502,12 @@ def _draw_stat_panel(ax, values, stat_levels, levels_x, colors, *, plot_type, st
     """
     n_x = len(levels_x)
     x = np.arange(n_x)
+    if plot_type in ("ring", "pie"):
+        _draw_polar_stack(ax, values, stat_levels, levels_x, colors, ring=plot_type == "ring",
+                          stat_type=stat_type, alpha=alpha, label=label,
+                          label_size=label_size, flip=flip, theme=theme,
+                          group_title="" if group_by == "__all__" else group_by)
+        return
     A = _Ax(ax, flip and plot_type in _CARTESIAN)
     _draw_stat_geoms(A, values, stat_levels, colors, plot_type=plot_type, stat_type=stat_type,
                      position=position, alpha=alpha, label=label, label_size=label_size,
@@ -501,14 +523,17 @@ def _draw_stat_panel(ax, values, stat_levels, levels_x, colors, *, plot_type, st
         A.value_axis.set_ticks(range(len(stat_levels)))
         A.value_axis.set_ticklabels(stat_levels)
         A.set_value_lim(-0.6, len(stat_levels) - 0.4)
-    elif plot_type == "rose":
+    if flip and plot_type in _CARTESIAN:
+        # theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+        # styles the bottom axis whatever it holds, so after coord_flip the
+        # value axis (or, for dot, the stat levels) is the one turned
+        ax.tick_params(axis="x", labelrotation=45)
+        for t in ax.get_xticklabels():
+            t.set_ha("right")
+    if plot_type == "rose":
         ax.set_xticks(x * 2 * np.pi / max(n_x, 1))
         ax.set_xticklabels(levels_x, fontsize=7)
         ax.set_yticklabels([])
-    elif plot_type in ("ring", "pie"):
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_ylim(0, 1)
 
     # Background stripes exist only when position != "stack" (R sets bg_layer
     # to NULL under stack, because the bars already tile the panel).
@@ -587,25 +612,9 @@ def _draw_stat_geoms(A: _Ax, values: pd.DataFrame, stat_levels, colors, *, plot_
             bottom = bottom + v
 
     elif plot_type in ("ring", "pie"):
-        # theta carries the value; ring reserves an inner hole, pie does not.
-        # R prepends a dummy "   " level to the group factor to make the hole.
-        totals = values.sum(axis=1)
-        frac = (totals / totals.sum()).to_numpy() if totals.sum() else np.zeros(len(totals))
-        start = np.pi / 2 if flip else 0.0
-        inner = 0.45 if plot_type == "ring" else 0.0
-        edges = start + 2 * np.pi * np.concatenate([[0], np.cumsum(frac)])
-        for i, lv in enumerate(stat_levels):
-            if frac[i] <= 0:
-                continue
-            ax.bar((edges[i] + edges[i + 1]) / 2, 1 - inner, width=edges[i + 1] - edges[i],
-                   bottom=inner, color=colors[lv], alpha=alpha, edgecolor="black",
-                   linewidth=0.5)
-            if label:
-                t = ax.text((edges[i] + edges[i + 1]) / 2, inner + (1 - inner) / 2,
-                            r_stat_label(frac[i] if stat_type == "percent"
-                                         else totals.iloc[i], stat_type),
-                            ha="center", va="center", fontsize=label_size * 2)
-                halo(t, foreground="white", radius=0.1)
+        # a full panel goes through _draw_polar_stack; an inset through
+        # scp.pl._dim_layers.draw_stat_insets
+        raise ValueError(f"{plot_type!r} is drawn by _draw_polar_stack")
     if label and plot_type not in ("ring", "pie"):
         _draw_stat_labels(A, values, stat_levels, plot_type=plot_type, stat_type=stat_type,
                           position=position, label_size=label_size)
@@ -665,6 +674,130 @@ def _draw_stat_labels(A: _Ax, values: pd.DataFrame, stat_levels, *, plot_type, s
             for xi in range(n_x):
                 put(theta[xi], bottom[xi] + v[xi] / 2, v[xi], polar=True)
             bottom = bottom + v
+
+
+def _r_number(v: float) -> str:
+    """``scales::number`` on a whole break: thousands separated by a space."""
+    return f"{v:,.0f}".replace(",", " ") if float(v).is_integer() else f"{v:g}"
+
+
+def polar_stack_layout(values: pd.DataFrame, stat_levels: Sequence[str],
+                       levels_x: Sequence[str], *, ring: bool, flip: bool) -> dict:
+    """Where ``geom_col(width = 0.8, position = "stack") + coord_polar(theta = "y")``
+    puts every segment, in coord_polar's own units.
+
+    The group levels are the *radial* axis: each gets one concentric band
+    ``0.8`` wide on the discrete scale, which ``scale_x_discrete(expand = 0)``
+    trains to ``[0.6, n + 0.4]`` and coord_polar maps onto radii
+    ``[0, 0.4]`` of the panel -- so the first group is a full disc at the
+    centre (a pie) and the others are rings around it, 0.2 apart.  For
+    ``ring`` R prepends a dummy ``"   "`` level holding one all-NA row: it
+    keeps slot 1 on the scale (range ``[1, n + 1.4]``) and so reserves the
+    hole.  The value is the angle: ``[0, max stacked total]`` onto
+    ``[0, 2 pi]``, clockwise from twelve o'clock, offset by ``start`` (``pi /
+    2`` under ``flip``).  Within a band the stack fills from the last stat
+    level up, so the first level ends the circle.  Returns ``wedges`` (group,
+    level, value, r_in, r_out, theta_0, theta_1, label r and theta), the
+    radial breaks and the angular range.
+    """
+    off = 1 if ring else 0
+    pos = {g: i + 1 + off for i, g in enumerate(levels_x)}
+    r_lo, r_hi = (1.0 if ring else 0.6), len(levels_x) + off + 0.4
+
+    def r_of(x: float) -> float:
+        return 0.4 * (x - r_lo) / (r_hi - r_lo)
+
+    rows = []
+    tmax = 0.0
+    for g in levels_x:
+        bottom = 0.0
+        for lv in reversed(list(stat_levels)):
+            v = float(values.loc[lv, g])
+            if not np.isfinite(v):
+                continue  # R drops NA rows (an empty group under keep_empty)
+            rows.append((g, lv, v, bottom, bottom + v))
+            bottom += v
+        tmax = max(tmax, bottom)
+    span = tmax if tmax > 0 else 1.0
+    start = np.pi / 2 if flip else 0.0
+
+    def th_of(y: float) -> float:
+        return 2 * np.pi * y / span + start
+
+    wedges = [
+        dict(group=g, level=lv, value=v, r_in=r_of(pos[g] - 0.4), r_out=r_of(pos[g] + 0.4),
+             theta_0=th_of(y0), theta_1=th_of(y1), label_r=r_of(pos[g]),
+             label_theta=th_of((y0 + y1) / 2))
+        for g, lv, v, y0, y1 in rows
+    ]
+    r_breaks = ([("   ", r_of(1))] if ring else []) + [(g, r_of(pos[g])) for g in levels_x]
+    return {"wedges": wedges, "r_breaks": r_breaks, "theta_range": (0.0, span),
+            "start": start}
+
+
+def _draw_polar_stack(ax, values, stat_levels, levels_x, colors, *, ring, stat_type, alpha,
+                      label, label_size, flip, theme, group_title):
+    """``pie`` / ``ring``: one concentric band per group (SCP-plot.R:4866).
+
+    Drawn on an ordinary square axes in coord_polar's panel units -- centre
+    ``(0.5, 0.5)``, data out to radius 0.4, the angle labels on the dashed
+    circle at 0.45 -- so the radial axis can carry the group names on the
+    left, as ggplot's does.  See :func:`polar_stack_layout` for the geometry.
+    """
+    from matplotlib.patches import Circle, Wedge
+
+    lay = polar_stack_layout(values, stat_levels, levels_x, ring=ring, flip=flip)
+    c = 0.5
+
+    def xy(r: float, th: float) -> tuple[float, float]:
+        return c + r * np.sin(th), c + r * np.cos(th)
+
+    # panel.grid.major (grey80, dashed): spokes to 0.45 at the angle breaks,
+    # circles at the radial breaks and at 0.45
+    lo, span = lay["theta_range"]
+    breaks = [b for b in extended_breaks(lo, span) if lo - 1e-9 <= b <= span + 1e-9]
+    thetas = [2 * np.pi * b / span + lay["start"] for b in breaks]
+    grid = dict(color="#CCCCCC", linestyle=(0, (4, 4)), linewidth=0.5, zorder=0.5)
+    for th in thetas:
+        ax.plot(*zip(xy(0, th), xy(0.45, th), strict=True), **grid)
+    for r in [r for _lv, r in lay["r_breaks"]] + [0.45]:
+        ax.add_patch(Circle((c, c), r, fill=False, **grid))
+
+    for w in lay["wedges"]:
+        t0, t1 = np.degrees(w["theta_0"]), np.degrees(w["theta_1"])
+        ax.add_patch(Wedge((c, c), w["r_out"], 90 - t1, 90 - t0,
+                           width=None if w["r_in"] <= 0 else w["r_out"] - w["r_in"],
+                           facecolor=colors[w["level"]], alpha=alpha, edgecolor="black",
+                           linewidth=0.5, zorder=2))
+    if label:
+        # geom_text_repel(force = 0) mid-segment; R also prints the zeros,
+        # piled on a band's start, which the port leaves out (as for bars)
+        for w in lay["wedges"]:
+            if w["value"] <= 0:
+                continue
+            t = ax.text(*xy(w["label_r"], w["label_theta"]),
+                        r_stat_label(w["value"], stat_type), ha="center", va="center",
+                        fontsize=label_size * 2, color="black", zorder=4)
+            halo(t, foreground="white", radius=0.1)
+
+    # the angle labels: the two ends of a closed circle share one label
+    labs = [f"{b * 100:g}%" if stat_type == "percent" else _r_number(b) for b in breaks]
+    two_pi = 2 * np.pi
+    if thetas and (thetas[-1] % two_pi - thetas[0] % two_pi) % two_pi < 0.05:
+        labs[-1] = f"{labs[0]}/{labs[-1]}"
+        labs, thetas = labs[1:], thetas[1:]
+    for lab, th in zip(labs, thetas, strict=True):
+        ax.text(*xy(0.45, th), lab, ha="center", va="center",
+                fontsize=theme.size("axis.text"), zorder=3)
+
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.set_xticks([])
+    ax.set_yticks([c + r for _lv, r in lay["r_breaks"]])
+    ax.set_yticklabels([lv for lv, _r in lay["r_breaks"]])
+    # coord_polar(theta = "y") swaps the titles: the value's on the bottom
+    ax.set_xlabel("Count" if stat_type == "count" else "Percentage")
+    ax.set_ylabel(group_title)
 
 
 # The inset types CellDimPlot can paste. Its StatPlot(individual = TRUE) call
@@ -1091,6 +1224,110 @@ def cell_density_plot(
     return pg.finish()
 
 
+def repel_labels(x, y, texts: Sequence[str], *, xlim, ylim, size_in: tuple[float, float],
+                 fontsize: float, nudge_x=0.0, nudge_y=0.0, pad_pt: float = 1.5,
+                 point_pt: float = 2.5, max_iter: int = 500) -> tuple[np.ndarray, np.ndarray]:
+    """Label centres (data units) that keep clear of each other, of their own
+    points, and inside the panel -- a deterministic stand-in for ggrepel.
+
+    Works in points on the panel's fixed physical size (``size_in``, which
+    :class:`~scp.layout.PanelGrid` guarantees), so the result survives the
+    final layout pass.  Each label starts at its point plus the nudge; then,
+    round by round, every pair of overlapping label boxes is parted along the
+    axis of least overlap (the other axis when a panel edge blocks it, the
+    free label taking the whole step when its partner is against the edge),
+    and labels are eased off the labelled points.  Boxes are clamped so they
+    stay whole inside the panel, as ggrepel's ``xlim = ylim = NA`` keeps
+    them.  If points and labels cannot all be cleared, a last series of
+    rounds separates the labels alone.  No randomness: ties part by index.
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    n = len(texts)
+    W, H = size_in[0] * 72.0, size_in[1] * 72.0
+    sx, sy = W / (xlim[1] - xlim[0]), H / (ylim[1] - ylim[0])
+    anchors = np.column_stack([(x - xlim[0]) * sx, (y - ylim[0]) * sy])
+    nx = np.broadcast_to(np.asarray(nudge_x, dtype=float), (n,)) * sx
+    ny = np.broadcast_to(np.asarray(nudge_y, dtype=float), (n,)) * sy
+    w = np.array([_text_width(t, fontsize) for t in texts]) + 2 * pad_pt
+    h = np.full(n, fontsize * 1.2) + 2 * pad_pt
+    lo = np.column_stack([w / 2, h / 2])
+    hi = np.column_stack([W - w / 2, H - h / 2])
+    pos = np.clip(anchors + np.column_stack([nx, ny]), lo, np.maximum(hi, lo))
+
+    top = np.maximum(hi, lo)
+
+    def free(i: int, axis: int, sign: float) -> bool:
+        """Can label i still move that way, or is the panel edge in the way?"""
+        return bool(pos[i, axis] < top[i, axis] - 1e-6 if sign > 0
+                    else pos[i, axis] > lo[i, axis] + 1e-6)
+
+    def move(i: int, axis: int, amount: float) -> float:
+        before = pos[i, axis]
+        pos[i, axis] = min(max(before + amount, lo[i, axis]), top[i, axis])
+        return abs(pos[i, axis] - before)
+
+    # Rounds against labels and points; then, if a crowded spot has left two
+    # labels touching, rounds against labels alone -- a label may end up over
+    # a point, never over another label.
+    points = True
+    for it in range(2 * max_iter):
+        if it == max_iter:
+            points = False
+        moved = 0.0
+        for i in range(n):
+            for j in range(i + 1, n):
+                d = pos[i] - pos[j]
+                over = np.array([(w[i] + w[j]) / 2 - abs(d[0]), (h[i] + h[j]) / 2 - abs(d[1])])
+                if not (over > 0).all():
+                    continue
+                # i goes the way it already leans; a tie goes by index, so
+                # coincident labels part deterministically
+                sign = np.where(d > 0, 1.0, np.where(d < 0, -1.0, -1.0))
+                for axis in np.argsort(over, kind="stable"):  # least overlap first
+                    fi, fj = free(i, axis, sign[axis]), free(j, axis, -sign[axis])
+                    if not (fi or fj):
+                        continue
+                    share_i = 0.5 if (fi and fj) else (1.0 if fi else 0.0)
+                    amt = over[axis] + 1e-3
+                    moved = max(moved, move(i, axis, sign[axis] * amt * share_i),
+                                move(j, axis, -sign[axis] * amt * (1 - share_i)))
+                    break
+            for k in range(n if points else 0):
+                d = pos[i] - anchors[k]
+                over = np.array([w[i] / 2 + point_pt - abs(d[0]),
+                                 h[i] / 2 + point_pt - abs(d[1])])
+                if not (over > 0).all():
+                    continue
+                sign = np.where(d >= 0, 1.0, -1.0)
+                for axis in np.argsort(over, kind="stable"):
+                    if free(i, axis, sign[axis]):
+                        moved = max(moved, move(i, axis, sign[axis] * over[axis] * 0.5))
+                        break
+        if moved < 0.05:
+            if not points or not _overlaps(pos, w, h):
+                break
+            points = False
+    return pos[:, 0] / sx + xlim[0], pos[:, 1] / sy + ylim[0]
+
+
+def _overlaps(pos: np.ndarray, w: np.ndarray, h: np.ndarray) -> bool:
+    d = np.abs(pos[:, None, :] - pos[None, :, :])
+    hit = ((w[:, None] + w[None, :]) / 2 > d[..., 0]) & ((h[:, None] + h[None, :]) / 2 > d[..., 1])
+    np.fill_diagonal(hit, False)
+    return bool(hit.any())
+
+
+def _text_width(text: str, fontsize: float) -> float:
+    """Layout width of ``text`` in points (advances, as the renderer lays it out)."""
+    from matplotlib.font_manager import FontProperties
+    from matplotlib.textpath import TextToPath
+
+    w, _h, _d = TextToPath().get_text_width_height_descent(
+        text or " ", FontProperties(size=fontsize), ismath=False)
+    return float(w)
+
+
 def volcano_plot(
     de: pd.DataFrame,
     *,
@@ -1122,6 +1359,12 @@ def volcano_plot(
     down-regulated genes hang below zero and the axis is relabelled with
     ``abs``.  Points are colored by whichever metric is not on x, through a
     zero-anchored diverging ramp.
+
+    Labels follow R's ``geom_text_repel(force = 20, nudge_x = -/+ 5 % of the
+    x range)`` in intent rather than in coordinates: :func:`repel_labels`
+    places them deterministically, inside the panel and clear of each other,
+    with a grey leader back to each point.  ggrepel's simulated annealing is
+    seeded per draw and is not reproduced.
     """
     df = de.copy()
     if pct1_col in df.columns and pct2_col in df.columns:
@@ -1221,12 +1464,27 @@ def volcano_plot(
             upper = sub[sub["y"] >= 0].nlargest(nlabel, "distance")
             lower = sub[sub["y"] < 0].nlargest(nlabel, "distance")
             picks = pd.concat([upper, lower])
-        for _, row in picks.iterrows():
-            t = ax.annotate(str(row[gene_col]), (row["x"], row["y"]),
-                            textcoords="offset points", xytext=(4, 4),
-                            fontsize=7, color="black",
-                            arrowprops=None)
-            halo(t, foreground="white", radius=0.1)
+        if len(picks):
+            # geom_text_repel(force = 20, min.segment.length = 0,
+            # segment.colour = "grey40", nudge_x = -/+ 5 % of the x range for
+            # the upper / lower half): placed inside the panel and apart
+            ax.autoscale_view()
+            xlim, ylim = ax.get_xlim(), ax.get_ylim()
+            ax.set_xlim(xlim)
+            ax.set_ylim(ylim)
+            nudge = 0.05 * float(np.ptp(gx)) if gx.size else 0.0
+            px, py = picks["x"].to_numpy(dtype=float), picks["y"].to_numpy(dtype=float)
+            texts = [str(v) for v in picks[gene_col]]
+            lx, ly = repel_labels(px, py, texts, xlim=xlim, ylim=ylim,
+                                  size_in=(pg.panel_w, pg.panel_h), fontsize=7,
+                                  nudge_x=np.where(py >= 0, -nudge, nudge))
+            for txt, x0, y0, x1, y1 in zip(texts, px, py, lx, ly, strict=True):
+                t = ax.annotate(txt, (x0, y0), xytext=(x1, y1), textcoords="data",
+                                ha="center", va="center", fontsize=7, color="black",
+                                zorder=5, annotation_clip=False,
+                                arrowprops=dict(arrowstyle="-", color="#666666",
+                                                linewidth=0.5, shrinkA=1, shrinkB=1))
+                halo(t, foreground="white", radius=0.1)
 
         ax.set_xlabel(x_metric)
         ax.set_ylabel("-log10(p-adjust)")

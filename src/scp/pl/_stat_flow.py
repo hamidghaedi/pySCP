@@ -29,6 +29,7 @@ from matplotlib.colors import to_rgba
 from matplotlib.figure import Figure
 from matplotlib.patches import Patch, PathPatch, Polygon, Rectangle, Wedge
 from matplotlib.path import Path
+from matplotlib.textpath import TextPath
 
 from ..colors import blendcolors
 from ..fetch import as_ordered_categorical
@@ -461,7 +462,15 @@ def _arc(theta_from: float, theta_to: float, r: float, n_per_degree: float = 1.0
     return np.column_stack([r * np.cos(t), r * np.sin(t)])
 
 
-def _draw_chord(ax: Axes, sectors, links, colors, *, theme: Theme) -> None:
+def _text_width_pt(text: str, fontsize: float) -> float:
+    """Advance width of ``text`` in points, from the glyph outlines -- no renderer."""
+    if not text:
+        return 0.0
+    return float(TextPath((0, 0), text, size=fontsize).get_extents().width)
+
+
+def _draw_chord(ax: Axes, sectors, links, colors, *, theme: Theme,
+                side_in: float = 3.9) -> None:
     """Grid ring, axis ticks, sector names and the links, circlize-style.
 
     Radii follow the default ``annotationTrack = c("name", "grid", "axis")``:
@@ -470,30 +479,98 @@ def _draw_chord(ax: Axes, sectors, links, colors, *, theme: Theme) -> None:
     ``transparency = 0.2`` and outlined in black (``link.border = 1``).
     Each link edge is a quadratic Bezier whose control point is the centre --
     what ``getQuadraticPoints(h.ratio = 0.5, w = 1)`` reduces to.
+
+    The axis is ``circos.axis("top", labels.cex = 0.5)``: a major tick every
+    ~10 degrees of data, four minor ticks between, and labels facing inside
+    with ``niceFacing``.  ``labels.pos.adjust = TRUE`` is reproduced -- the
+    first and last label of a sector are pushed inward until they no longer
+    hang past its edge, which is what keeps one sector's last label off the
+    next one's "0".  Two departures, both because circlize sizes text for a
+    7-inch device and this panel is about half that (``side_in`` inches):
+
+    * labels are thinned to every k-th major tick, the smallest k at which
+      neighbouring labels clear each other (the ticks themselves all stay);
+    * a sector name that would run into its neighbour's is turned radial
+      (``facing = "clockwise"``, ``niceFacing``) instead of following the
+      circle; the panel's measured decorations make room for it.
     """
     r_link, r_in, r_out = 0.79, 0.80, 0.86
+    r_lab, r_name = r_out + 0.03, r_out + 0.12
+    tick_fs, name_fs = theme.size("text") * 0.5, theme.size("text") * 0.8
     sec = sectors.set_index("name")
     if len(sectors):
         unit = float((sectors.start_degree - sectors.end_degree).sum() / sectors.xmax.sum())
         step = _nice_step(unit * float(sectors.xmax.max()), float(sectors.xmax.max()))
     else:
-        step = 0.0
+        unit, step = 0.0, 0.0
+
+    # names: tangential where they fit beside their neighbours, else radial
+    names = list(sec.sort_values("start_degree", ascending=False).index)
+    width_pt = {n: _text_width_pt(str(n), name_fs) for n in names}
+    lim = 1.25
+    ppu = side_in * 72.0 / (2 * lim)  # points per canvas unit
+    mids = {n: (sec.loc[n].start_degree + sec.loc[n].end_degree) / 2 for n in names}
+    pad_pt = 2.0
+    along = {n: np.degrees((width_pt[n] + pad_pt) / ppu / r_name) / 2 for n in names}
+    # a radial name still takes its line height out of the arc
+    across = np.degrees((name_fs * 1.2 + pad_pt) / ppu / r_name) / 2
+    radial: set = set()
+
+    def half(n) -> float:
+        return across if n in radial else along[n]
+
+    while len(names) > 1:
+        worst, worst_over = None, 0.0
+        for i, a in enumerate(names):
+            b = names[(i + 1) % len(names)]
+            if a == b or (a in radial and b in radial):
+                continue
+            gap = (mids[a] - mids[b]) % 360  # clockwise layout: a before b
+            over = half(a) + half(b) - gap
+            if over > worst_over:
+                tangential = [n for n in (a, b) if n not in radial]
+                worst, worst_over = max(tangential, key=along.__getitem__), over
+        if worst is None:
+            break
+        radial.add(worst)
+
     for name, s in sec.iterrows():
         ax.add_patch(Wedge((0, 0), r_out, s.end_degree, s.start_degree, width=r_out - r_in,
                            facecolor=colors.get(name, "#BEBEBE"), edgecolor="none", zorder=2))
-        if step > 0:
-            ticks = np.arange(0.0, s.xmax + step * 1e-9, step)
-            for tv in ticks:
+        if step > 0 and s.xmax > 0:
+            deg_per_x = (s.start_degree - s.end_degree) / s.xmax
+            major = np.arange(0.0, s.xmax + step * 1e-9, step)
+            minor = [m0 + (m1 - m0) * k / 5 for m0, m1 in
+                     zip(major, [*major[1:], major[-1] + step], strict=True)
+                     for k in range(1, 5)]
+            for tv, ln in [(m, 0.02) for m in major] + [(m, 0.01) for m in minor
+                                                        if m <= s.xmax]:
                 th = np.deg2rad(_chord_theta(sectors, name, tv))
-                ax.plot([r_out * np.cos(th), (r_out + 0.02) * np.cos(th)],
-                        [r_out * np.sin(th), (r_out + 0.02) * np.sin(th)],
+                ax.plot([r_out * np.cos(th), (r_out + ln) * np.cos(th)],
+                        [r_out * np.sin(th), (r_out + ln) * np.sin(th)],
                         color="black", linewidth=0.5, zorder=2)
-                _tangent_text(ax, np.rad2deg(th), r_out + 0.03, f"{tv:g}",
-                              fontsize=theme.size("text") * 0.5)
+            labels = [f"{tv:g}" for tv in major]
+            widths = [_text_width_pt(t, tick_fs) for t in labels]
+            spacing = np.radians(step * deg_per_x) * r_lab * ppu
+            k = max(1, math.ceil((max(widths) + 2.0) / spacing)) if spacing > 0 else 1
+            keep = list(range(0, len(major), k))
+            for j, i in enumerate(keep):
+                x = float(major[i])
+                half_x = widths[i] / 2 / ppu / r_lab / np.radians(deg_per_x)
+                if j == 0:                       # labels.pos.adjust
+                    x += max(half_x - x, 0.0)
+                if j == len(keep) - 1 and len(keep) > 1:
+                    x -= max(half_x - (s.xmax - x), 0.0)
+                _tangent_text(ax, _chord_theta(sectors, name, x), r_lab, labels[i],
+                              fontsize=tick_fs)
             ax.add_patch(PathPatch(Path(_arc(s.end_degree, s.start_degree, r_out)),
                                    fill=False, edgecolor="black", linewidth=0.5, zorder=2))
-        mid = (s.start_degree + s.end_degree) / 2
-        _tangent_text(ax, mid, r_out + 0.12, name, fontsize=theme.size("text") * 0.8)
+        if name in radial:
+            # starts just beyond the tick labels
+            _radial_text(ax, mids[name], r_lab + (tick_fs * 1.2 + 2.0) / ppu, str(name),
+                         fontsize=name_fs)
+        else:
+            _tangent_text(ax, mids[name], r_name, str(name), fontsize=name_fs)
 
     total = float(links.value.abs().sum()) or 1.0
     for ln in links.itertuples(index=False):
@@ -506,7 +583,6 @@ def _draw_chord(ax: Axes, sectors, links, colors, *, theme: Theme) -> None:
         ax.add_patch(PathPatch(path,
                                facecolor=to_rgba(colors.get(ln.rn, "#BEBEBE"), 0.8),
                                edgecolor="black", linewidth=0.75, zorder=1))
-    lim = 1.25
     ax.set_xlim(-lim, lim)
     ax.set_ylim(-lim, lim)
     ax.set_aspect("equal", adjustable="box")
@@ -553,6 +629,17 @@ def _tangent_text(ax: Axes, theta_deg: float, r: float, text: str, *, fontsize: 
     t = np.deg2rad(th)
     ax.text(r * np.cos(t), r * np.sin(t), text, rotation=rot, rotation_mode="anchor",
             ha="center", va="bottom" if upper else "top", fontsize=fontsize, clip_on=False)
+
+
+def _radial_text(ax: Axes, theta_deg: float, r: float, text: str, *, fontsize: float) -> None:
+    """``facing = "clockwise", niceFacing = TRUE``: along the radius, reading
+    outward on the right half and inward-upright on the left."""
+    th = theta_deg % 360
+    right = th <= 90 or th > 270
+    t = np.deg2rad(th)
+    ax.text(r * np.cos(t), r * np.sin(t), text, rotation=th if right else th - 180,
+            rotation_mode="anchor", ha="left" if right else "right", va="center",
+            fontsize=fontsize, clip_on=False)
 
 
 # --------------------------------------------------------------------------- #
@@ -762,7 +849,7 @@ def flow_plot(
             tab = pd.crosstab(block[a], block[b]).reindex(index=r_lv, columns=c_lv,
                                                           fill_value=0)
             sectors, links = chord_layout(tab)
-            _draw_chord(ax, sectors, links, colors, theme=th)
+            _draw_chord(ax, sectors, links, colors, theme=th, side_in=side)
         else:
             mem = members.loc[rows]
             sets = {c: set(mem.index[mem[c].to_numpy()]) for c in stat_cols}
@@ -821,7 +908,7 @@ def upset_layout(members: pd.DataFrame, stat_cols: Sequence[str],
 
 
 def _draw_upset(bar_ax: Axes, mat_ax: Axes, bars: pd.DataFrame, sets: list[str], *,
-                label_size: float, theme: Theme) -> None:
+                label_size: float, theme: Theme, bar_h: float = 0.0) -> None:
     """One upset block: count bars over the combination matrix."""
     from matplotlib.colors import LinearSegmentedColormap, Normalize
 
@@ -838,12 +925,22 @@ def _draw_upset(bar_ax: Axes, mat_ax: Axes, bars: pd.DataFrame, sets: list[str],
     norm = Normalize(lo, hi if hi > lo else lo + 1)
     bar_ax.bar(xs, counts, width=0.5, color=[cmap(norm(c)) for c in counts],
                edgecolor="black", linewidth=0.5, zorder=2)
-    for x, c in zip(xs, counts, strict=True):
-        t = bar_ax.text(float(x), c, f"{int(c)}", ha="center", va="center",
-                        fontsize=label_size * pt, zorder=3)
-        halo(t, foreground="white", radius=0.1)
     top = counts.max() if n else 1.0
-    bar_ax.set_ylim(-0.05 * top, 1.05 * top)
+    y0, y1 = -0.05 * top, 1.05 * top
+    bar_ax.set_ylim(y0, y1)
+    # geom_text_repel(force = 0) leaves each count on its bar top but keeps
+    # the label box (text plus box.padding = 0.25 lines) inside the panel, so
+    # a small count is lifted clear of the bottom edge, with a black segment
+    # back to the bar (min.segment.length = 0)
+    fs = label_size * pt
+    half = (0.6 + 0.25 * 1.2) * fs / 72.0 / bar_h * (y1 - y0) if bar_h > 0 else 0.0
+    for x, c in zip(xs, counts, strict=True):
+        yl = float(min(max(c, y0 + half), y1 - half))
+        t = bar_ax.text(float(x), yl, f"{int(c)}", ha="center", va="center",
+                        fontsize=fs, zorder=3)
+        halo(t, foreground="white", radius=0.1)
+        if yl - c > half * 0.5:
+            bar_ax.plot([x, x], [c, yl - half * 0.6], color="black", linewidth=0.5, zorder=3)
     bar_ax.set_xlim(-0.6, n - 0.4)
     bar_ax.set_ylabel("Intersection size")
     bar_ax.set_axisbelow(True)
@@ -930,7 +1027,7 @@ def upset_plot(
         sub = spec.subgridspec(2, 1, height_ratios=[bar_h, mat_h], hspace=0.0)
         bar_ax = apply_theme(pg.fig.add_subplot(sub[0]), th)
         mat_ax = pg.fig.add_subplot(sub[1], sharex=bar_ax)
-        _draw_upset(bar_ax, mat_ax, bars, sets, label_size=label_size, theme=th)
+        _draw_upset(bar_ax, mat_ax, bars, sets, label_size=label_size, theme=th, bar_h=bar_h)
         if sp is not None:
             mat_ax.set_xlabel(str(sp))
     return pg.finish()

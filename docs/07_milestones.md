@@ -171,6 +171,17 @@ flipped bracket's label above the bracket's upper end; the port puts it beside
 the bracket. Making `col` match R also fixed its unflipped cell-axis range,
 which now follows R's (bars and finite stripe edges, padded by 0.6).
 
+`y_trans = "log10"` / `"log2"` now runs every layer on the transformed scale,
+as `scale_y_continuous(trans = ...)` does before the stats: values the
+transform makes non-finite (zeros, negatives) are dropped with ggplot's
+warning, the default limits are the kept values' extremes, the 5 % expansion
+is of the log range, and the breaks are `scales::log_breaks` labelled by
+`format()`. SCP itself stops on data with zeros (`'from' must be a finite
+number`); `layers_log.json` records that and SCP's figure once given
+`y.min` = the smallest positive value, which `tests/test_feature_stat_log.py`
+matches (limits, breaks, labels, violin extents, box quartiles) from the
+port's default call.
+
 ### 5 — `cell_stat_plot` / `stat_plot` — L ✅ done
 
 Brief: `porting_briefs/stat_plots.md` §2.
@@ -179,6 +190,19 @@ Landed: the aggregation core (complete cross-tab, empty cells retained,
 percent within group) plus all eleven `plot_type`s and `individual`. The
 cartesian and polar types were verified against R in
 `notebooks/01_parity_foundation.ipynb` §9.
+
+`pie` and `ring` are R's `geom_col(width = 0.8, position = "stack") +
+coord_polar(theta = "y")`: the group levels are the radial axis, one
+concentric band each (the first a full disc for `pie`; for `ring` the dummy
+`"   "` level holds the hole), the angle is the stacked value over
+`[0, max total]`, angle breaks are `scales::extended_breaks` labelled around
+the circle at 0.45 (the closed circle's ends sharing `0%/100%`), and the
+group names sit on the left axis. `tools/parity/cell_stat_polar.R` dumps
+seven cases' rectangles, labels and breaks from `ggplot_build`;
+`tests/test_cell_stat_polar.py` matches every wedge's radii and angles, fill,
+label text and position, and both axes to 1e-7. (Previously a grouped pie
+summed every group into one pie.) Under `flip` the group factor is now
+reversed for every type, as R does; R's zero-valued labels are still left out.
 
 `sankey`, `chord` and `venn` are hand-rolled in `pl/_stat_flow.py`, each as a
 pure layout function plus a renderer into the panel's `Axes`. They are pinned

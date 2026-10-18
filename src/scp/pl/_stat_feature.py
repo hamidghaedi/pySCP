@@ -23,7 +23,7 @@ import inspect
 import math
 import warnings
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
 import numpy as np
@@ -34,13 +34,14 @@ from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
-from matplotlib.ticker import FixedLocator, MaxNLocator
+from matplotlib.ticker import FixedFormatter, FixedLocator, MaxNLocator
 
 from ..fetch import as_ordered_categorical
 from ..layout import LegendColumn, PanelGrid
 from ..palettes import continuous_palette, discrete_palette
 from ..theme import theme_scp
 from . import _stat_sig as sig
+from ._scales import format_breaks, log_breaks
 
 __all__ = ["expression_stat_plot"]
 
@@ -110,6 +111,46 @@ def _parse_limit(spec, pool: np.ndarray) -> float:
     return float(spec)
 
 
+#: the log transforms ``y_trans`` accepts, by base
+_LOG_BASE = {"log10": 10.0, "log2": 2.0}
+
+
+def _kept(pool: np.ndarray, log_t: bool) -> np.ndarray:
+    """The values a log scale keeps (positive ones); all of them otherwise.
+    Never empty, so the caller can always take an extreme."""
+    if not log_t:
+        return pool
+    pos = pool[pool > 0]
+    return pos if pos.size else np.array([1.0])
+
+
+def _log(v, base: float):
+    """``log10`` / ``log2`` as the scale transform computes them, with the
+    non-finite results (``log(0) = -Inf``, ``log(-1) = NaN``) set to NaN: ggplot
+    drops those rows from every stat."""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t = np.log10(v) if base == 10 else np.log2(v)
+    return np.where(np.isfinite(t), t, np.nan)
+
+
+def _to_scale(P: _Panel, base: float) -> _Panel:
+    """``P`` on the transformed scale: values and limits through the log."""
+    fr = P.frame.copy()
+    fr["value"] = _log(fr["value"].to_numpy(dtype=float), base)
+    lo, hi = float(_log(P.y_lo, base)), float(_log(P.y_hi, base))
+    finite = fr["value"].to_numpy()
+    finite = finite[np.isfinite(finite)]
+    if not np.isfinite(lo):
+        # a "qNN" or explicit limit at or below zero: R errors here
+        # ('from' must be a finite number); fall back to the smallest kept value
+        warnings.warn(f"y limit {P.y_lo:g} is not positive on a log scale; using the "
+                      "smallest positive value instead", stacklevel=4)
+        lo = float(finite.min()) if finite.size else 0.0
+    if not np.isfinite(hi):
+        hi = float(finite.max()) if finite.size else 0.0
+    return replace(P, frame=fr, y_lo=lo, y_hi=hi)
+
+
 def _plan(
     data: pd.DataFrame,
     stat_by: list[str],
@@ -135,9 +176,17 @@ def _plan(
     force: bool,
     legend: _Legend,
     legend_on: bool,
+    y_trans: str = "identity",
 ) -> list[_Panel]:
-    """Everything ``ExpressionStatPlot`` decides before it draws."""
+    """Everything ``ExpressionStatPlot`` decides before it draws.
+
+    Limits stay on the data scale here; :func:`_draw_panel` moves the panel
+    onto the transformed scale.  Under a log ``y_trans`` the default limits are
+    the extremes of the values the transform keeps (the positive ones) --
+    the only ones ggplot's stats ever see.
+    """
     titles = titles or {}
+    log_t = y_trans in _LOG_BASE
     dat = data
     if cells is not None:
         dat = dat.loc[dat.index.intersection(pd.Index(cells))]
@@ -199,8 +248,9 @@ def _plan(
         # string errors whenever same.y.lims=TRUE; this uses the pool it meant.
         pool = values.to_numpy().ravel()
         pool = pool[np.isfinite(pool)]
-        y_max = float(pool.max()) if y_max is None else _parse_limit(y_max, pool)
-        y_min = float(pool.min()) if y_min is None else _parse_limit(y_min, pool)
+        kept = _kept(pool, log_t)
+        y_max = float(kept.max()) if y_max is None else _parse_limit(y_max, pool)
+        y_min = float(kept.min()) if y_min is None else _parse_limit(y_min, pool)
 
     if group_by == [None] and split_by is None:
         legend_on = False
@@ -222,6 +272,7 @@ def _plan(
         legend.colorbar = ("Median expression", ramp, lims)
 
     panels: list[_Panel] = []
+    indiv_levels: dict[str, set[str]] = {}
     for g in gcols:
         combos: list[tuple[list[str], list[str]]]
         if individual:
@@ -280,7 +331,12 @@ def _plan(
                         colors = discrete_palette(declared[g], palette=palette,
                                                   palcolor=palcolor)
                         color_of = _by_level(colors)
-                        if legend_on:
+                        if legend_on and individual:
+                            # R gives each one-group panel its own one-entry
+                            # legend; the shared column lists every level the
+                            # panels show, once (registered after the loop)
+                            indiv_levels.setdefault(g, set()).update(levels)
+                        elif legend_on:
                             legend.add(g if g != _ALL else "", [(lv, colors[lv]) for lv in levels])
                 else:  # expression
                     assert legend.colorbar is not None
@@ -297,8 +353,9 @@ def _plan(
                 finite = sub["value"].to_numpy()
                 finite = finite[np.isfinite(finite)]
                 pool = finite if finite.size else np.array([0.0])
-                hi = float(pool.max()) if y_max is None else _parse_limit(y_max, pool)
-                lo = float(pool.min()) if y_min is None else _parse_limit(y_min, pool)
+                kept = _kept(pool, log_t)
+                hi = float(kept.max()) if y_max is None else _parse_limit(y_max, pool)
+                lo = float(kept.min()) if y_min is None else _parse_limit(y_min, pool)
 
                 key = ":".join([str(f), g, ",".join(single_group), ",".join(sp_use)])
                 panels.append(_Panel(
@@ -310,6 +367,10 @@ def _plan(
                     xlab=xlab if xlab is not None else ("" if g == _ALL else g),
                     individual=individual, ncells=ncells,
                 ))
+        if g in indiv_levels:
+            colors = discrete_palette(declared[g], palette=palette, palcolor=palcolor)
+            legend.add(g if g != _ALL else "",
+                       [(lv, colors[lv]) for lv in declared[g] if lv in indiv_levels[g]])
     return panels
 
 
@@ -490,9 +551,6 @@ class _Ax:
     def get_pos_lim(self) -> tuple[float, float]:
         return self.ax.get_ylim() if self.flip else self.ax.get_xlim()
 
-    def set_value_log(self, base: float) -> None:
-        (self.ax.set_xscale if self.flip else self.ax.set_yscale)("log", base=base)
-
     def set_value_label(self, s: str) -> None:
         (self.ax.set_xlabel if self.flip else self.ax.set_ylabel)(s)
 
@@ -545,6 +603,11 @@ def _col_range(bounds: list[tuple[str, float, float, int]], n: int,
 def _draw_panel(ax, P: _Panel, o: dict, *, stacked: bool = False) -> dict:
     """Draw one ``ExpressionStatPlot`` panel into ``ax``; return what the layout needs."""
     plot_type = o["plot_type"]
+    base = _LOG_BASE.get(o["y_trans"])
+    if base is not None:
+        # scale_y_continuous(trans = ...) transforms before any stat runs: the
+        # densities, boxes, means and tests all live on the log scale
+        P = _to_scale(P, base)
     A = _Ax(ax, P.flip)
     o["_extra"] = {"dots": [], "trend": []}
     xpos = _positions(P)
@@ -679,6 +742,9 @@ def _draw_panel(ax, P: _Panel, o: dict, *, stacked: bool = False) -> dict:
     brackets: list[tuple] = []
     sig_rows: list[tuple] = []
     add_line = o["add_line"]
+    if add_line is not None and base is not None:
+        add_line = float(_log(float(add_line), base))
+        add_line = None if not np.isfinite(add_line) else add_line
     if plot_type != "col":
         if o["comparisons"] is True:
             rows = _sig_split(P, o)
@@ -720,17 +786,11 @@ def _draw_panel(ax, P: _Panel, o: dict, *, stacked: bool = False) -> dict:
     lo, hi = y_lo, y_hi
     if not (np.isfinite(lo) and np.isfinite(hi)):
         lo, hi = 0.0, 1.0
-    trans = o["y_trans"]
-    if trans in ("log2", "log10"):
-        base = 2.0 if trans == "log2" else 10.0
-        A.set_value_log(base)
-        tl, th = math.log(max(lo, 1e-300), base), math.log(max(hi, 1e-300), base)
-        d = 0.05 * ((th - tl) or 1.0)
-        A.set_value_lim(base ** (tl - d), base ** (th + d))
-    else:
-        # a zero-width range is expanded as if it were one unit wide (ggplot2 4)
-        d = 0.05 * ((hi - lo) or 1.0)
-        A.set_value_lim(lo - d, hi + d)
+    # (on the transformed scale when y_trans is a log: the expansion is 5 % of
+    # the log range, as ggplot expands the transformed limits)
+    # a zero-width range is expanded as if it were one unit wide (ggplot2 4)
+    d = 0.05 * ((hi - lo) or 1.0)
+    A.set_value_lim(lo - d, hi + d)
     span_d = A.get_value_lim()[1] - A.get_value_lim()[0]
 
     for x1, x2, ytop, ytip, lab, _p in brackets:
@@ -759,16 +819,32 @@ def _draw_panel(ax, P: _Panel, o: dict, *, stacked: bool = False) -> dict:
 
     if stacked:
         A.value_axis.set_major_locator(FixedLocator([y_lo, y_hi]))
+        # labels = round(c(y_min_use, y_max_use), 1), on the data scale
+        tick_lo, tick_hi = (y_lo, y_hi) if base is None else (base ** y_lo, base ** y_hi)
         if P.flip:
-            ax.set_xticklabels([_r_round1(y_lo), _r_round1(y_hi)], rotation=90)
+            ax.set_xticklabels([_r_round1(tick_lo), _r_round1(tick_hi)], rotation=90)
             labs = ax.get_xticklabels()
             labs[0].set_ha("left")
             labs[-1].set_ha("right")
         else:
-            ax.set_yticklabels([_r_round1(y_lo), _r_round1(y_hi)])
+            ax.set_yticklabels([_r_round1(tick_lo), _r_round1(tick_hi)])
             labs = ax.get_yticklabels()
             labs[0].set_va("bottom")
             labs[-1].set_va("top")
+    elif base is not None:
+        # scales::log_breaks(n = y.nbreaks) over the expanded range, labelled
+        # by format() on the data scale ("0.5" "1.0" "3.0" "5.0")
+        v0, v1 = A.get_value_lim()
+        breaks = [b for b in log_breaks(base ** v0, base ** v1, o["y_nbreaks"], base)
+                  if base ** v0 <= b <= base ** v1]
+        A.value_axis.set_major_locator(FixedLocator([float(_log(b, base)) for b in breaks]))
+        A.value_axis.set_major_formatter(FixedFormatter(format_breaks(breaks)))
+        ax.set_axisbelow(True)
+        A.value_grid(color="grey", linestyle=(0, (4, 4)), linewidth=_lw(0.5) * 0.6)
+        if P.flip:
+            ax.tick_params(axis="x", labelrotation=45)
+            for t in ax.get_xticklabels():
+                t.set_ha("right")
     else:
         A.value_axis.set_major_locator(MaxNLocator(o["y_nbreaks"]))
         ax.set_axisbelow(True)
@@ -1035,8 +1111,12 @@ def _layout_stack_flip(panels: list[_Panel], legend: _Legend, o: dict) -> Figure
         ordered.extend(by_row[g] + [None] * (ncol - len(by_row[g])))
     keys = [p.key if p is not None else f"__empty{i}" for i, p in enumerate(ordered)]
     w, h = o["panel_size"]
+    # R binds the panels with plot.margin = c(0, -0.5, 0, 0) mm over ggplot's
+    # 5.5 pt default, leaving 5.5 pt - 0.5 mm between neighbours: the room
+    # that keeps one column's top label off the next column's bottom one
+    gap_in = (5.5 - 0.5 * 72.27 / 25.4) / 72.27
     pg = PanelGrid(len(keys), panel_size=(h * 0.45, w), nrow=len(rows), ncol=ncol,
-                   byrow=True, keys=keys, theme=th, wspace=0.0,
+                   byrow=True, keys=keys, theme=th, wspace=gap_in,
                    legend=LegendColumn(position=o["legend_position"]))
     for ri, g in enumerate(rows):
         row_axes = [pg.axes[keys[ri * ncol + c]] for c in range(ncol)]
@@ -1178,6 +1258,15 @@ def expression_stat_plot(
       stripe edges, padded by ``scale_x_discrete``'s 0.6.
     * under ``stack``, each row is ``0.45 * panel_size[1]`` tall and the title
       is drawn once over the stack.
+    * ``individual=True`` panels share one legend listing every level they
+      show; R gives each one-group panel its own one-entry legend.
+    * ``y_trans="log10"`` / ``"log2"`` on data with zeros: R stops (the raw
+      minimum is the lower coord limit, ``log(0)`` is ``-Inf`` and the break
+      computation errors).  Here the values the transform makes non-finite
+      are dropped with ggplot's warning -- every layer, test and limit then
+      lives on the log scale, as ggplot's stats do -- and the default limits
+      are the kept values' extremes, which is what SCP draws when given that
+      ``y.min``.  Breaks are ``scales::log_breaks``, labelled by ``format()``.
     * ``seed`` is accepted for signature parity; jitter uses seed 11 as R's
       ``position_jitterdodge(seed = 11)`` does, so it cannot be changed there
       either.  Jitter positions are not R's — only the RNG seed is shared.
@@ -1266,7 +1355,15 @@ def expression_stat_plot(
                   individual=individual, palette=palette, palcolor=palcolor,
                   bg_palette=bg_palette, bg_palcolor=bg_palcolor, same_y_lims=same_y_lims,
                   y_min=y_min, y_max=y_max, sort=sort, force=force, legend=legend,
-                  legend_on=legend_position != "none")
+                  legend_on=legend_position != "none", y_trans=y_trans)
+    if y_trans in _LOG_BASE:
+        # ggplot's two warnings, once per call rather than once per panel
+        cols = [f for f in dict.fromkeys(feats) if f in data.columns]
+        vals = data[cols].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
+        n_bad = int((np.isfinite(vals) & (vals <= 0)).sum())
+        if n_bad:
+            warnings.warn(f"{y_trans} transformation introduced infinite values; removed "
+                          f"{n_bad} non-positive values from every layer", stacklevel=2)
 
     if plot_by == "feature":
         panels = _plan_by_feature(data, feats, groups, split_by, bg_by, cells, xlab, common)

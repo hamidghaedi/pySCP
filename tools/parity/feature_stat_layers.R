@@ -9,6 +9,15 @@
 #   layers_flip.json  the same for flip = TRUE (coord_flip), with both axes'
 #                 ranges, breaks and labels as drawn (after coord_flip the
 #                 horizontal axis is the value axis) and the stripe rectangles
+#   counts.csv    raw counts of Ins1 and Gcg per cell, for the log cases
+#   layers_log.json  y.trans = "log10" / "log2" on data with zeros: the panel
+#                 y range, breaks and labels on the transformed scale, each
+#                 group's violin extent and box statistics.  SCP stops on such
+#                 data (min() of the raw values is 0, so the coord limit is
+#                 -Inf and the break computation errors; the message is
+#                 recorded), so the cases pass y.min = the smallest positive
+#                 value -- the limit ggplot arrives at once the zeros the
+#                 transform turns into -Inf are dropped, as the port does
 #
 #   Rscript tools/parity/feature_stat_layers.R tests/fixtures/parity/feature_stat
 #
@@ -217,3 +226,58 @@ jsonlite::write_json(list(r_version = R.version.string,
                      file.path(out_dir, "layers_flip.json"), digits = NA, auto_unbox = TRUE,
                      null = "null", na = "null", force = TRUE)
 cat("wrote", file.path(out_dir, "layers_flip.json"), "\n")
+
+# ---- y.trans: log scales on data with zeros --------------------------------- #
+counts <- as.matrix(GetAssayData(pn, layer = "counts")[c("Ins1", "Gcg"), ])
+write.csv(data.frame(cell = colnames(pn), CellType = as.character(meta$CellType),
+                     t(counts), check.names = FALSE),
+          file.path(out_dir, "counts.csv"), row.names = FALSE)
+
+dump_log <- function(p) {
+  b <- ggplot_build(p)
+  pp <- b$layout$panel_params[[1]]
+  kinds <- vapply(p$layers, layer_kind, "")
+  out <- list(y_range = pp$y.range, y_breaks = pp$y$breaks, y_labels = pp$y$get_labels())
+  v <- which(grepl("GeomViolin", kinds))
+  if (length(v)) {
+    d <- b$data[[v[1]]]
+    out$violin <- do.call(rbind, lapply(split(d, d$x), function(g) {
+      data.frame(x = g$x[1], ymin = min(g$y), ymax = max(g$y))
+    }))
+  }
+  bx <- which(grepl("GeomBoxplot", kinds))
+  if (length(bx)) {
+    out$box <- b$data[[bx[1]]][, c("x", "ymin", "lower", "middle", "upper", "ymax")]
+  }
+  out
+}
+min_pos <- function(slot, genes) {
+  x <- as.matrix(GetAssayData(pn, layer = slot)[genes, , drop = FALSE])
+  min(x[x > 0])
+}
+run_log <- function(...) {
+  pl <- FeatureStatPlot(pn, ..., combine = FALSE)
+  list(names = names(pl), panels = lapply(pl, dump_log))
+}
+default_error <- tryCatch({
+  ggplot_build(FeatureStatPlot(pn, stat.by = "Ins1", group.by = "CellType", y.trans = "log10",
+                               slot = "counts"))
+  NA_character_
+}, error = function(e) conditionMessage(e))
+
+logs <- list()
+logs$log10_counts <- run_log(stat.by = "Ins1", group.by = "CellType", y.trans = "log10",
+  slot = "counts", y.min = min_pos("counts", "Ins1"))
+logs$log10_data <- run_log(stat.by = "Ins1", group.by = "CellType", y.trans = "log10",
+  y.min = min_pos("data", "Ins1"))
+logs$log2_box_counts <- run_log(stat.by = c("Ins1", "Gcg"), group.by = "CellType",
+  plot_type = "box", y.trans = "log2", slot = "counts",
+  y.min = min_pos("counts", c("Ins1", "Gcg")))
+
+jsonlite::write_json(list(r_version = R.version.string,
+                          scp_version = as.character(packageVersion("SCP")),
+                          ggplot2_version = as.character(packageVersion("ggplot2")),
+                          default_error = default_error, cases = logs),
+                     file.path(out_dir, "layers_log.json"), digits = NA, auto_unbox = TRUE,
+                     null = "null", na = "null", force = TRUE, dataframe = "columns")
+cat("wrote", file.path(out_dir, "layers_log.json"), "\n")
